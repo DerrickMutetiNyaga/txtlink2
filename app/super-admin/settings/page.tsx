@@ -92,6 +92,9 @@ export default function SuperAdminSettingsPage() {
   const [formData, setFormData] = useState<Partial<SystemSettings>>({})
   const [registeringUrls, setRegisteringUrls] = useState(false)
   const [simulating, setSimulating] = useState(false)
+  const [dlrTestMobile, setDlrTestMobile] = useState('')
+  const [dlrTestMessage, setDlrTestMessage] = useState('DLR test from TXTLINK')
+  const [dlrTestSending, setDlrTestSending] = useState(false)
   const [simulationData, setSimulationData] = useState({
     phoneNumber: '',
     amount: '',
@@ -522,6 +525,65 @@ export default function SuperAdminSettingsPage() {
                   Register DLR URL with HostPinnacle
                 </Button>
                 <span className="text-xs text-[#64748B]">One-time: tell HostPinnacle to send delivery reports to this app</span>
+              </div>
+              <div className="mt-4 p-4 rounded-lg border border-[#E5E7EB] bg-[#FAFAFA]">
+                <Label className="text-sm font-medium text-[#020617] mb-2 block">Test delivery reports</Label>
+                <p className="text-xs text-[#64748B] mb-3">Send a test SMS and check SMS History to see if status updates to Delivered/Failed when HostPinnacle sends the DLR.</p>
+                <div className="flex flex-wrap gap-3 items-end">
+                  <div>
+                    <Label className="text-xs text-[#64748B] mb-1 block">Phone number</Label>
+                    <Input
+                      placeholder="254712345678 or 0712345678"
+                      value={dlrTestMobile}
+                      onChange={(e) => setDlrTestMobile(e.target.value)}
+                      className="w-48 border-[#E5E7EB]"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs text-[#64748B] mb-1 block">Message (optional)</Label>
+                    <Input
+                      placeholder="DLR test from TXTLINK"
+                      value={dlrTestMessage}
+                      onChange={(e) => setDlrTestMessage(e.target.value)}
+                      className="w-56 border-[#E5E7EB]"
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={!dlrTestMobile.trim() || dlrTestSending}
+                    onClick={async () => {
+                      setDlrTestSending(true)
+                      try {
+                        const token = localStorage.getItem('token')
+                        const res = await fetch('/api/super-admin/dlr-webhook/send-test-sms', {
+                          method: 'POST',
+                          headers: {
+                            'Content-Type': 'application/json',
+                            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                          },
+                          body: JSON.stringify({
+                            mobile: dlrTestMobile.trim(),
+                            message: dlrTestMessage.trim() || undefined,
+                          }),
+                        })
+                        const data = await res.json()
+                        if (data.success) {
+                          alert(`Success: ${data.message}`)
+                        } else {
+                          alert(data.error || 'Send failed')
+                        }
+                      } catch (e: any) {
+                        alert(e.message || 'Request failed')
+                      } finally {
+                        setDlrTestSending(false)
+                      }
+                    }}
+                    className="bg-[#0F766E] hover:bg-[#115E59] text-white"
+                  >
+                    {dlrTestSending ? 'Sending…' : 'Send test SMS'}
+                  </Button>
+                </div>
               </div>
             </div>
           </div>

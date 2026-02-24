@@ -15,8 +15,8 @@ import { getPricingRule } from '@/lib/utils/pricing'
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET
 
 export async function POST(request: NextRequest) {
-  // Always return 200 to HostPinnacle so they don't show "400 Bad Request" or "refused".
-  const ok = (body: object = { received: true }) => NextResponse.json(body)
+  // Always return 200 so HostPinnacle does not show 400. Some gateways expect status/success in body.
+  const ok = (body: object = { received: true, status: 'ok', success: true }) => NextResponse.json(body)
 
   try {
     await connectDB()
