@@ -256,6 +256,14 @@ export async function POST(request: NextRequest) {
             data: hpResult.data,
           })
 
+          // Note: "success" means HostPinnacle accepted the message. Actual delivery to the
+          // handset is confirmed later via the DLR webhook (/api/sms/dlr). If messages
+          // do not reach recipients, check: sender ID approval on carrier, HostPinnacle
+          // account is live (not test), and DLR webhook for failure status.
+          if (hpResult.success && hpResult.data?.reason && hpResult.data.reason !== 'success') {
+            console.warn('HostPinnacle returned success but reason may indicate issue:', hpResult.data.reason)
+          }
+
           if (!hpResult.success) {
             const errorMsg = hpResult.error || hpResult.message || 'HostPinnacle API returned failure'
             console.error('SMS send failed:', {

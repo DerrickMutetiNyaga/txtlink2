@@ -482,7 +482,7 @@ export default function ContactPage() {
                   </p>
                   <div className="space-y-3">
                     <a
-                      href="tel:+254700000000"
+                      href="tel:+254794269051"
                       className="flex items-center gap-3 p-3.5 bg-white rounded-xl border border-[#E2E8F0] hover:border-[#0F766E] hover:bg-white hover:shadow-sm transition-all duration-200 group"
                     >
                       <div className="w-10 h-10 rounded-lg bg-[#ECFDF5] flex items-center justify-center group-hover:bg-[#0F766E]/10 transition-colors">
@@ -490,7 +490,7 @@ export default function ContactPage() {
                       </div>
                       <div>
                         <span className="text-sm font-semibold text-[#0B1220] block">Call Support</span>
-                        <span className="text-xs text-[#64748B]">+254 700 000 000</span>
+                        <span className="text-xs text-[#64748B]">+254 794 269 051</span>
                       </div>
                     </a>
                     <a

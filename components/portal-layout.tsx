@@ -30,6 +30,7 @@ import {
   Plus,
   TrendingUp,
   History,
+  FileBarChart,
 } from 'lucide-react'
 import { SmsCreditsWidget } from '@/components/app/SmsCreditsWidget'
 import { setupFetchInterceptor } from '@/lib/utils/fetch-interceptor'
@@ -102,10 +103,11 @@ export function PortalLayout({ children, activeSection }: PortalLayoutProps) {
   const navGroups: NavGroup[] = [
     {
       title: 'Messaging',
-      items: [
+        items: [
         { label: 'Dashboard', icon: LayoutDashboard, href: '/app/dashboard' },
         { label: 'Send SMS', icon: MessageSquare, href: '/app/send-sms', shortcut: '⌘K' },
         { label: 'SMS History', icon: History, href: '/app/smshistory' },
+        { label: 'Delivery Summary', icon: FileBarChart, href: '/app/delivery-summary' },
       ],
     },
     {

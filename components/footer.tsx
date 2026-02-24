@@ -9,7 +9,8 @@ import {
   Linkedin,
   Code,
   Shield,
-  CheckCircle2
+  CheckCircle2,
+  Phone
 } from 'lucide-react'
 
 export function Footer() {
@@ -264,6 +265,13 @@ export function Footer() {
               © {currentYear} TXTLINK. All rights reserved.
             </p>
             <div className="flex items-center gap-6">
+              <a
+                href="tel:+254794269051"
+                className="flex items-center gap-2 text-sm text-slate-600 hover:text-teal-600 transition-colors"
+              >
+                <Phone className="w-4 h-4" />
+                <span>Call Support: +254 794 269 051</span>
+              </a>
               <div className="flex items-center gap-4 text-xs text-slate-500">
                 <Link 
                   href="/legal/privacy" 

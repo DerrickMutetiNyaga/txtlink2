@@ -219,6 +219,9 @@ export default function SMSHistoryPage() {
             <div>
               <h1 className="text-xl font-semibold text-slate-900">SMS History</h1>
               <p className="text-sm text-slate-500">Dashboard / Overview</p>
+              <p className="text-xs text-slate-500 mt-1">
+                Delivered/Failed status is updated by HostPinnacle delivery reports (DLR)—so you can see if each message actually reached the recipient.
+              </p>
             </div>
 
             {/* Center: Search */}
