@@ -3,7 +3,9 @@
  * POST /api/sms/dlr
  *
  * Receives delivery status updates from HostPinnacle.
- * HostPinnacle "Update Webhook" sends: Transactionid, Messageid, ErrorCode, MobileNumber, ReceivedTime, DeliveredTime (POST, form or JSON).
+ * HostPinnacle "Update Webhook" parameters (use exact names):
+ * Transaction ID: Transactionid | Message ID: Messageid | Error Code: ErrorCode
+ * Mobile Number: mobileNo | Received Time: ReceivedTime | Delivered Time: DeliveredTime
  * If you use WEBHOOK_SECRET, add it to the URL in HostPinnacle: https://yourdomain.com/api/sms/dlr?secret=YOUR_SECRET
  */
 
@@ -37,6 +39,7 @@ export async function POST(request: NextRequest) {
     Transactionid: 'transactionId',
     Messageid: 'messageId',
     ErrorCode: 'errorCode',
+    mobileNo: 'mobileNumber',
     MobileNumber: 'mobileNumber',
     ReceivedTime: 'receivedTime',
     DeliveredTime: 'deliveredTime',
