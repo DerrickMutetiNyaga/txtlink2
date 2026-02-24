@@ -495,6 +495,34 @@ export default function SuperAdminSettingsPage() {
                   variant="default"
                 />
               </div>
+              <div className="mt-3 flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    try {
+                      const token = localStorage.getItem('token')
+                      const res = await fetch('/api/super-admin/dlr-webhook/register', {
+                        method: 'POST',
+                        headers: token ? { Authorization: `Bearer ${token}` } : {},
+                      })
+                      const data = await res.json()
+                      if (data.success) {
+                        alert('DLR webhook registered with HostPinnacle. Delivery status will now be updated from their side.')
+                      } else {
+                        alert(data.error || 'Registration failed')
+                      }
+                    } catch (e: any) {
+                      alert(e.message || 'Request failed')
+                    }
+                  }}
+                  className="border-[#E5E7EB]"
+                >
+                  Register DLR URL with HostPinnacle
+                </Button>
+                <span className="text-xs text-[#64748B]">One-time: tell HostPinnacle to send delivery reports to this app</span>
+              </div>
             </div>
           </div>
         </Card>
