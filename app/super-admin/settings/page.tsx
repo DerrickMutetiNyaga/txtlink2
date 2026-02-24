@@ -95,6 +95,9 @@ export default function SuperAdminSettingsPage() {
   const [dlrTestMobile, setDlrTestMobile] = useState('')
   const [dlrTestMessage, setDlrTestMessage] = useState('DLR test from TXTLINK')
   const [dlrTestSending, setDlrTestSending] = useState(false)
+  const [dlrTestResult, setDlrTestResult] = useState<{ success: true; transactionId: string } | { success: false; error: string } | null>(null)
+  const [dlrDeliveryStatus, setDlrDeliveryStatus] = useState<'sent' | 'delivered' | 'failed' | null>(null)
+  const [dlrCheckLoading, setDlrCheckLoading] = useState(false)
   const [simulationData, setSimulationData] = useState({
     phoneNumber: '',
     amount: '',
@@ -528,14 +531,18 @@ export default function SuperAdminSettingsPage() {
               </div>
               <div className="mt-4 p-4 rounded-lg border border-[#E5E7EB] bg-[#FAFAFA]">
                 <Label className="text-sm font-medium text-[#020617] mb-2 block">Test delivery reports</Label>
-                <p className="text-xs text-[#64748B] mb-3">Send a test SMS and check SMS History to see if status updates to Delivered/Failed when HostPinnacle sends the DLR.</p>
+                <p className="text-xs text-[#64748B] mb-3">Send a test SMS. Success and delivery status appear here—no need to open SMS History.</p>
                 <div className="flex flex-wrap gap-3 items-end">
                   <div>
                     <Label className="text-xs text-[#64748B] mb-1 block">Phone number</Label>
                     <Input
                       placeholder="254712345678 or 0712345678"
                       value={dlrTestMobile}
-                      onChange={(e) => setDlrTestMobile(e.target.value)}
+                      onChange={(e) => {
+                        setDlrTestMobile(e.target.value)
+                        setDlrTestResult(null)
+                        setDlrDeliveryStatus(null)
+                      }}
                       className="w-48 border-[#E5E7EB]"
                     />
                   </div>
@@ -554,6 +561,8 @@ export default function SuperAdminSettingsPage() {
                     disabled={!dlrTestMobile.trim() || dlrTestSending}
                     onClick={async () => {
                       setDlrTestSending(true)
+                      setDlrTestResult(null)
+                      setDlrDeliveryStatus(null)
                       try {
                         const token = localStorage.getItem('token')
                         const res = await fetch('/api/super-admin/dlr-webhook/send-test-sms', {
@@ -569,12 +578,13 @@ export default function SuperAdminSettingsPage() {
                         })
                         const data = await res.json()
                         if (data.success) {
-                          alert(`Success: ${data.message}`)
+                          setDlrTestResult({ success: true, transactionId: data.transactionId || '' })
+                          setDlrDeliveryStatus('sent')
                         } else {
-                          alert(data.error || 'Send failed')
+                          setDlrTestResult({ success: false, error: data.error || 'Send failed' })
                         }
                       } catch (e: any) {
-                        alert(e.message || 'Request failed')
+                        setDlrTestResult({ success: false, error: e.message || 'Request failed' })
                       } finally {
                         setDlrTestSending(false)
                       }
@@ -584,6 +594,51 @@ export default function SuperAdminSettingsPage() {
                     {dlrTestSending ? 'Sending…' : 'Send test SMS'}
                   </Button>
                 </div>
+                {dlrTestResult?.success && (
+                  <div className="mt-3 p-3 rounded-lg bg-emerald-50 border border-emerald-200">
+                    <p className="text-sm font-medium text-emerald-800">Test SMS sent successfully.</p>
+                    <p className="text-xs text-emerald-700 mt-1">When HostPinnacle sends the DLR, status will update below.</p>
+                    <div className="mt-2 flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={dlrCheckLoading}
+                        onClick={async () => {
+                          if (!dlrTestResult.success || !dlrTestResult.transactionId) return
+                          setDlrCheckLoading(true)
+                          try {
+                            const token = localStorage.getItem('token')
+                            const r = await fetch(
+                              `/api/super-admin/dlr-webhook/test-status?transactionId=${encodeURIComponent(dlrTestResult.transactionId)}`,
+                              { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+                            )
+                            const d = await r.json()
+                            if (d.status === 'delivered' || d.status === 'failed' || d.status === 'sent' || d.status === 'queued') {
+                              setDlrDeliveryStatus(d.status === 'queued' ? 'sent' : d.status)
+                            }
+                          } finally {
+                            setDlrCheckLoading(false)
+                          }
+                        }}
+                        className="border-emerald-300 text-emerald-800 hover:bg-emerald-100"
+                      >
+                        {dlrCheckLoading ? 'Checking…' : 'Check delivery status'}
+                      </Button>
+                      {dlrDeliveryStatus && (
+                        <span className={`text-sm font-medium ${dlrDeliveryStatus === 'delivered' ? 'text-emerald-700' : dlrDeliveryStatus === 'failed' ? 'text-red-700' : 'text-amber-700'}`}>
+                          {dlrDeliveryStatus === 'delivered' ? '✓ Delivered' : dlrDeliveryStatus === 'failed' ? '✗ Failed' : 'Sent (waiting for DLR)'}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+                {dlrTestResult && !dlrTestResult.success && (
+                  <div className="mt-3 p-3 rounded-lg bg-red-50 border border-red-200">
+                    <p className="text-sm font-medium text-red-800">Test failed</p>
+                    <p className="text-xs text-red-700 mt-1">{dlrTestResult.error}</p>
+                  </div>
+                )}
               </div>
             </div>
           </div>
