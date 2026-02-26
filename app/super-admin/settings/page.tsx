@@ -546,7 +546,7 @@ export default function SuperAdminSettingsPage() {
               )}
               <div className="mt-3 p-3 rounded-lg border border-amber-200 bg-amber-50">
                 <p className="text-xs font-medium text-amber-900">When webhook is disabled or fails: check in portal</p>
-                <p className="text-xs text-amber-800 mt-1">Log in at HostPinnacle with the same credentials as in your env (HOSTPINNACLE_USERID / HOSTPINNACLE_PASSWORD). Then go to <strong>SMS → SMS reports → Delivery report</strong> and match by Transaction ID.</p>
+                <p className="text-xs text-amber-800 mt-1">Log in at HostPinnacle with the same credentials as in your env (HOSTPINNACLE_USERID / HOSTPINNACLE_PASSWORD). Then go to <strong>SMS &gt; SMS reports &gt; Delivery report</strong> on the SMS portal and match by Transaction ID. (HostPinnacle team)</p>
                 <div className="mt-2 flex flex-wrap gap-4">
                   <a
                     href="https://smsportal.hostpinnacle.co.ke"

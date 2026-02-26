@@ -18,7 +18,7 @@ So: **to know if the SMS has truly been delivered on HostPinnacle’s side**, yo
 If the DLR webhook is not receiving callbacks (e.g. URL unreachable, firewall, or temporary outage), you can still see delivery status on HostPinnacle:
 
 1. Log in to the [HostPinnacle SMS Portal](https://smsportal.hostpinnacle.co.ke).
-2. Go to **SMS** → **SMS reports** → **Delivery report**.
+2. Go to **SMS &gt; SMS reports &gt; Delivery report** on the SMS portal (per HostPinnacle team).
 3. Use the report to see which messages were delivered or failed, and match by **Transaction ID** (stored in this app as `hpTransactionId` in SMS History).
 
 This is a **manual fallback**; it does not update this app's SMS History automatically.
