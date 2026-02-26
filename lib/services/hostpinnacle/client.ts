@@ -6,9 +6,6 @@
 const HOSTPINNACLE_BASE_URL = process.env.HOSTPINNACLE_BASE_URL || 'https://smsportal.hostpinnacle.co.ke'
 const HOSTPINNACLE_USERID = process.env.HOSTPINNACLE_USERID
 const HOSTPINNACLE_PASSWORD = process.env.HOSTPINNACLE_PASSWORD
-// Optional: if HostPinnacle gives you exact paths, set e.g. HOSTPINNACLE_REPORT_GET=/SMSApi/report/getdeliveryreport and HOSTPINNACLE_MIS_CHECK=/SMSApi/report/checkmis
-const HOSTPINNACLE_REPORT_GET = process.env.HOSTPINNACLE_REPORT_GET
-const HOSTPINNACLE_MIS_CHECK = process.env.HOSTPINNACLE_MIS_CHECK
 
 interface HostPinnacleRequestOptions {
   apiKey?: string
@@ -257,72 +254,6 @@ export async function createWebhook(params: {
   return requestForm('/SMSApi/webhook/create', body, params.options)
 }
 
-/**
- * Get delivery report for a date range (fallback when webhook is down).
- * HostPinnacle docs: Report → Get Delivery Report.
- * Tries multiple endpoint/action variants (their API format may vary).
- */
-export async function getDeliveryReport(params: {
-  fromDate: string // YYYY-MM-DD
-  toDate: string // YYYY-MM-DD
-  options?: HostPinnacleRequestOptions
-}): Promise<HostPinnacleResponse> {
-  const baseBody: Record<string, string> = {
-    fromdate: params.fromDate,
-    todate: params.toDate,
-    output: 'json',
-  }
-  if (HOSTPINNACLE_REPORT_GET) {
-    const res = await requestForm(HOSTPINNACLE_REPORT_GET, baseBody, params.options)
-    if (res.success || res.error) return res
-  }
-  const endpointsToTry: { path: string; body: Record<string, string> }[] = [
-    { path: '/SMSApi/report/getdeliveryreport', body: { ...baseBody } },
-    { path: '/SMSApi/getdeliveryreport', body: { ...baseBody } },
-    { path: '/SMSApi/report/read', body: { ...baseBody } },
-    { path: '/SMSApi/report', body: { ...baseBody, action: 'getdeliveryreport' } },
-    { path: '/SMSApi/report', body: { ...baseBody, action: 'get-delivery-report' } },
-  ]
-  for (const { path, body } of endpointsToTry) {
-    const res = await requestForm(path, body, params.options)
-    if (res.success) return res
-    if (res.error && !res.error.toLowerCase().includes('invalid action')) return res
-  }
-  return await requestForm('/SMSApi/report/getdeliveryreport', baseBody, params.options)
-}
-
-/**
- * Check delivery status for a single transaction (MIS = Message Information Status).
- * HostPinnacle docs: Report → Check MIS by Transaction ID.
- * Tries multiple endpoint/action variants (their API format may vary).
- */
-export async function checkMisByTransactionId(params: {
-  transactionId: string
-  options?: HostPinnacleRequestOptions
-}): Promise<HostPinnacleResponse> {
-  const baseBody: Record<string, string> = {
-    transactionid: params.transactionId,
-    output: 'json',
-  }
-  if (HOSTPINNACLE_MIS_CHECK) {
-    const res = await requestForm(HOSTPINNACLE_MIS_CHECK, baseBody, params.options)
-    if (res.success || res.error) return res
-  }
-  const endpointsToTry: { path: string; body: Record<string, string> }[] = [
-    { path: '/SMSApi/report/checkmis', body: { ...baseBody } },
-    { path: '/SMSApi/checkmis', body: { ...baseBody } },
-    { path: '/SMSApi/mis/check', body: { ...baseBody } },
-    { path: '/SMSApi/report', body: { ...baseBody, action: 'checkmis' } },
-    { path: '/SMSApi/report', body: { ...baseBody, action: 'check-mis-by-transaction-id' } },
-  ]
-  for (const { path, body } of endpointsToTry) {
-    const res = await requestForm(path, body, params.options)
-    if (res.success) return res
-    if (res.error && !res.error.toLowerCase().includes('invalid action')) return res
-  }
-  return await requestForm('/SMSApi/report/checkmis', baseBody, params.options)
-}
-
 export const hostPinnacleClient = {
   createSubUser,
   addCredits,
@@ -330,7 +261,5 @@ export const hostPinnacleClient = {
   readSenderIds,
   sendSms,
   createWebhook,
-  getDeliveryReport,
-  checkMisByTransactionId,
 }
 

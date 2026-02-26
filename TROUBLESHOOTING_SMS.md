@@ -40,7 +40,6 @@ If the app shows **"SMS sent successfully"** but the recipient does **not** rece
 - In the app, open **SMS History** and check the **status** of the message (e.g. **delivered** vs **failed**).
 - If you have **WebhookLog** or similar logging, check for DLR callbacks with `status: failed` or an error reason.
 - Ensure the **DLR webhook URL** is registered in HostPinnacle and that it is reachable (no firewall blocking, correct HTTPS URL).
-- **When the webhook fails:** You can still see delivery status on HostPinnacle. Log in to the [SMS Portal](https://smsportal.hostpinnacle.co.ke), go to **SMS &gt; SMS reports &gt; Delivery report** on the SMS portal, and match messages by **Transaction ID** (same as in SMS History). This is a manual fallback; it does not update the app automatically.
 
 ---
 

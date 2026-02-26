@@ -98,18 +98,6 @@ export default function SuperAdminSettingsPage() {
   const [dlrTestResult, setDlrTestResult] = useState<{ success: true; transactionId: string } | { success: false; error: string } | null>(null)
   const [dlrDeliveryStatus, setDlrDeliveryStatus] = useState<'sent' | 'delivered' | 'failed' | null>(null)
   const [dlrCheckLoading, setDlrCheckLoading] = useState(false)
-  const [dlrSyncLoading, setDlrSyncLoading] = useState(false)
-  const [dlrSyncResult, setDlrSyncResult] = useState<{
-    success: boolean
-    message?: string
-    updated?: number
-    checked?: number
-    error?: string
-    pendingCount?: number
-    reportApiError?: string
-    reportListLength?: number
-    sampleMisResponse?: Record<string, unknown>
-  } | null>(null)
   const [simulationData, setSimulationData] = useState({
     phoneNumber: '',
     amount: '',
@@ -540,96 +528,6 @@ export default function SuperAdminSettingsPage() {
                   Register DLR URL with HostPinnacle
                 </Button>
                 <span className="text-xs text-[#64748B]">One-time: tell HostPinnacle to send delivery reports to this app</span>
-              </div>
-              {!formData.deliveryReportWebhookEnabled && (
-                <p className="text-xs text-amber-800 mt-2">Webhook is off — delivery reports will not be pushed to this app. Check status in the HostPinnacle portal below.</p>
-              )}
-              <div className="mt-3 p-3 rounded-lg border border-amber-200 bg-amber-50">
-                <p className="text-xs font-medium text-amber-900">When webhook is disabled or fails: check in portal</p>
-                <p className="text-xs text-amber-800 mt-1">Log in at HostPinnacle with the same credentials as in your env (HOSTPINNACLE_USERID / HOSTPINNACLE_PASSWORD). Then go to <strong>SMS &gt; SMS reports &gt; Delivery report</strong> on the SMS portal and match by Transaction ID. (HostPinnacle team)</p>
-                <div className="mt-2 flex flex-wrap gap-4">
-                  <a
-                    href="https://smsportal.hostpinnacle.co.ke"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-amber-700 hover:text-amber-900 underline"
-                  >
-                    Open HostPinnacle SMS Portal →
-                  </a>
-                  <a
-                    href="https://smsportal.hostpinnacle.co.ke/user/webhook/?action=manage"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-amber-700 hover:text-amber-900 underline"
-                  >
-                    Manage webhook (disable URL here to stop callbacks) →
-                  </a>
-                </div>
-                <div className="mt-3 pt-3 border-t border-amber-200">
-                  <p className="text-xs font-medium text-amber-900 mb-2">Sync delivery reports from HostPinnacle API</p>
-                  <p className="text-xs text-amber-800 mb-2">Use this until the webhook is fixed. Fetches delivery status via Report API and updates SMS History.</p>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={dlrSyncLoading}
-                    className="border-amber-300 text-amber-800 hover:bg-amber-100"
-                    onClick={async () => {
-                      setDlrSyncLoading(true)
-                      setDlrSyncResult(null)
-                      try {
-                        const token = localStorage.getItem('token')
-                        const res = await fetch('/api/super-admin/dlr-sync', {
-                          method: 'POST',
-                          headers: token ? { Authorization: `Bearer ${token}` } : {},
-                        })
-                        const data = await res.json()
-                        setDlrSyncResult({
-                          success: data.success,
-                          message: data.message,
-                          updated: data.updated,
-                          checked: data.checked,
-                          error: data.error,
-                          pendingCount: data.pendingCount,
-                          reportApiError: data.reportApiError,
-                          reportListLength: data.reportListLength,
-                          sampleMisResponse: data.sampleMisResponse,
-                        })
-                      } catch (e: any) {
-                        setDlrSyncResult({ success: false, error: e.message || 'Request failed' })
-                      } finally {
-                        setDlrSyncLoading(false)
-                      }
-                    }}
-                  >
-                    {dlrSyncLoading ? 'Syncing…' : 'Sync delivery reports now'}
-                  </Button>
-                  {dlrSyncResult && (
-                    <div className={`mt-2 p-2 rounded text-xs ${dlrSyncResult.success ? 'bg-emerald-50 text-emerald-800' : 'bg-red-50 text-red-800'}`}>
-                      {dlrSyncResult.success ? (
-                        <>
-                          {dlrSyncResult.message}
-                          {(dlrSyncResult.updated != null || dlrSyncResult.checked != null) && (
-                            <span className="block mt-1">Updated: {dlrSyncResult.updated ?? 0}, checked: {dlrSyncResult.checked ?? 0}</span>
-                          )}
-                          {dlrSyncResult.pendingCount != null && dlrSyncResult.updated === 0 && (
-                            <span className="block mt-1 text-amber-700">{dlrSyncResult.pendingCount} pending sent. {dlrSyncResult.reportApiError ? `Report API: ${dlrSyncResult.reportApiError}` : 'Try again in a minute or check HostPinnacle portal.'}</span>
-                          )}
-                          {dlrSyncResult.sampleMisResponse && dlrSyncResult.updated === 0 && (
-                            <details className="mt-2 text-amber-800">
-                              <summary className="cursor-pointer font-medium">Sample response from HostPinnacle (for debugging)</summary>
-                              <pre className="mt-1 p-2 bg-amber-100 rounded text-[10px] overflow-auto max-h-32">
-                                {JSON.stringify(dlrSyncResult.sampleMisResponse, null, 2)}
-                              </pre>
-                            </details>
-                          )}
-                        </>
-                      ) : (
-                        dlrSyncResult.error
-                      )}
-                    </div>
-                  )}
-                </div>
               </div>
               <div className="mt-4 p-4 rounded-lg border border-[#E5E7EB] bg-[#FAFAFA]">
                 <Label className="text-sm font-medium text-[#020617] mb-2 block">Test delivery reports</Label>
