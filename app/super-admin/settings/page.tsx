@@ -108,6 +108,7 @@ export default function SuperAdminSettingsPage() {
     pendingCount?: number
     reportApiError?: string
     reportListLength?: number
+    sampleMisResponse?: Record<string, unknown>
   } | null>(null)
   const [simulationData, setSimulationData] = useState({
     phoneNumber: '',
@@ -592,6 +593,7 @@ export default function SuperAdminSettingsPage() {
                           pendingCount: data.pendingCount,
                           reportApiError: data.reportApiError,
                           reportListLength: data.reportListLength,
+                          sampleMisResponse: data.sampleMisResponse,
                         })
                       } catch (e: any) {
                         setDlrSyncResult({ success: false, error: e.message || 'Request failed' })
@@ -612,6 +614,14 @@ export default function SuperAdminSettingsPage() {
                           )}
                           {dlrSyncResult.pendingCount != null && dlrSyncResult.updated === 0 && (
                             <span className="block mt-1 text-amber-700">{dlrSyncResult.pendingCount} pending sent. {dlrSyncResult.reportApiError ? `Report API: ${dlrSyncResult.reportApiError}` : 'Try again in a minute or check HostPinnacle portal.'}</span>
+                          )}
+                          {dlrSyncResult.sampleMisResponse && dlrSyncResult.updated === 0 && (
+                            <details className="mt-2 text-amber-800">
+                              <summary className="cursor-pointer font-medium">Sample response from HostPinnacle (for debugging)</summary>
+                              <pre className="mt-1 p-2 bg-amber-100 rounded text-[10px] overflow-auto max-h-32">
+                                {JSON.stringify(dlrSyncResult.sampleMisResponse, null, 2)}
+                              </pre>
+                            </details>
                           )}
                         </>
                       ) : (

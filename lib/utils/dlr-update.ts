@@ -42,10 +42,19 @@ export async function applyDlrToMessage(
   } else if (statusLower.includes('fail') || statusLower.includes('reject') || statusLower === 'error') {
     mappedStatus = 'failed'
   } else {
-    // Many gateways use numeric codes: 1 = delivered, 2/3/4 = failed
+    // Numeric codes and carrier-style codes (GSM 3GPP / HostPinnacle)
     const code = status.trim()
-    if (code === '1' || code === '10' || code === 'delivered') mappedStatus = 'delivered'
-    else if (['2', '3', '4', '5', '6', '7', '8', '9'].includes(code) || code === 'failed' || code === 'rejected') mappedStatus = 'failed'
+    const codeLower = statusLower.trim()
+    if (
+      code === '1' || code === '10' || codeLower === 'delivered' || codeLower === 'delivrd' ||
+      codeLower === 'success' || codeLower === 'delivery successful' || codeLower === 'accepted'
+    ) mappedStatus = 'delivered'
+    else if (
+      ['2', '3', '4', '5', '6', '7', '8', '9'].includes(code) || codeLower === 'failed' || codeLower === 'rejected' ||
+      codeLower === 'undeliv' || codeLower === 'undelivered' || codeLower === 'rejectd' || codeLower === 'expired' ||
+      codeLower === 'rejected' || codeLower === 'error'
+    ) mappedStatus = 'failed'
+    else if (codeLower === 'submitted' || codeLower === 'enroute' || codeLower === 'pending' || codeLower === 'sent' || code === '0') return null
     else return null
   }
 

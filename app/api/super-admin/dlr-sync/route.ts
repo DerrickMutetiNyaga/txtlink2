@@ -97,14 +97,19 @@ export async function POST(request: NextRequest) {
     }
 
     // 2) Fallback: Check MIS by Transaction ID for each sent message
+    let sampleMisResponse: Record<string, unknown> | null = null
     for (const msg of sentMessages) {
       const txnId = String(msg.hpTransactionId || '').trim()
       if (!txnId) continue
       try {
         const mis = await hostPinnacleClient.checkMisByTransactionId({ transactionId: txnId })
         checked++
-        if (!mis.success || !mis.data) continue
+        if (!mis.success || !mis.data) {
+          if (checked === 1 && mis.data != null) sampleMisResponse = mis.data as Record<string, unknown>
+          continue
+        }
         const data = mis.data as Record<string, unknown>
+        if (sampleMisResponse == null) sampleMisResponse = { ...data }
         const applied = await applyDlrToMessage(msg as any, {
           ...data,
           transactionId: txnId,
@@ -135,6 +140,7 @@ export async function POST(request: NextRequest) {
       reportApiSuccess: reportSuccess,
       reportApiError: reportError ?? undefined,
       reportListLength: reportList.length,
+      sampleMisResponse: updated === 0 && checked > 0 ? sampleMisResponse : undefined,
       errors: errors.length ? errors.slice(0, 20) : undefined,
     })
   } catch (err: any) {
