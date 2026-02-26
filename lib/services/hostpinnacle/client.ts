@@ -254,6 +254,48 @@ export async function createWebhook(params: {
   return requestForm('/SMSApi/webhook/create', body, params.options)
 }
 
+/**
+ * Get delivery report for a date range (fallback when webhook is down).
+ * HostPinnacle docs: Report → Get Delivery Report.
+ * Tries getdeliveryreport first, then report/read if needed.
+ */
+export async function getDeliveryReport(params: {
+  fromDate: string // YYYY-MM-DD
+  toDate: string // YYYY-MM-DD
+  options?: HostPinnacleRequestOptions
+}): Promise<HostPinnacleResponse> {
+  const body: Record<string, string> = {
+    fromdate: params.fromDate,
+    todate: params.toDate,
+    output: 'json',
+  }
+  let res = await requestForm('/SMSApi/report/getdeliveryreport', body, params.options)
+  if (!res.success && res.error) {
+    res = await requestForm('/SMSApi/report/read', body, params.options)
+  }
+  return res
+}
+
+/**
+ * Check delivery status for a single transaction (MIS = Message Information Status).
+ * HostPinnacle docs: Report → Check MIS by Transaction ID.
+ * Tries checkmis first, then mis/check if needed.
+ */
+export async function checkMisByTransactionId(params: {
+  transactionId: string
+  options?: HostPinnacleRequestOptions
+}): Promise<HostPinnacleResponse> {
+  const body: Record<string, string> = {
+    transactionid: params.transactionId,
+    output: 'json',
+  }
+  let res = await requestForm('/SMSApi/report/checkmis', body, params.options)
+  if (!res.success && res.error) {
+    res = await requestForm('/SMSApi/mis/check', body, params.options)
+  }
+  return res
+}
+
 export const hostPinnacleClient = {
   createSubUser,
   addCredits,
@@ -261,5 +303,7 @@ export const hostPinnacleClient = {
   readSenderIds,
   sendSms,
   createWebhook,
+  getDeliveryReport,
+  checkMisByTransactionId,
 }
 
