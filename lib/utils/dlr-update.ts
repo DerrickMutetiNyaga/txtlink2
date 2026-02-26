@@ -27,10 +27,10 @@ export async function applyDlrToMessage(
   smsMessage: ISmsMessage & { _id: any; userId: any },
   data: DlrData
 ): Promise<{ status: MappedStatus; updateData: Record<string, unknown> } | null> {
-  const status = (data.status ?? data.Status ?? data.delivery_status ?? data.dlrstatus ?? '').toString()
+  const status = (data.status ?? data.Status ?? data.delivery_status ?? data.dlrstatus ?? data.statuscode ?? data.StatusCode ?? '').toString()
   const statusLower = status.toLowerCase()
-  const deliveredTime = data.deliveredTime ?? data.DeliveredTime ?? data.deliveredTime
-  const errorCode = data.errorCode ?? data.ErrorCode ?? data.errorCode
+  const deliveredTime = data.deliveredTime ?? data.DeliveredTime ?? data.deliveredtime
+  const errorCode = data.errorCode ?? data.ErrorCode ?? data.errorcode
 
   let mappedStatus: MappedStatus = 'sent'
   if (deliveredTime != null && String(deliveredTime) !== '') {
@@ -42,7 +42,11 @@ export async function applyDlrToMessage(
   } else if (statusLower.includes('fail') || statusLower.includes('reject') || statusLower === 'error') {
     mappedStatus = 'failed'
   } else {
-    return null
+    // Many gateways use numeric codes: 1 = delivered, 2/3/4 = failed
+    const code = status.trim()
+    if (code === '1' || code === '10' || code === 'delivered') mappedStatus = 'delivered'
+    else if (['2', '3', '4', '5', '6', '7', '8', '9'].includes(code) || code === 'failed' || code === 'rejected') mappedStatus = 'failed'
+    else return null
   }
 
   const updateData: Record<string, unknown> = { status: mappedStatus }

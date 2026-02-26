@@ -99,7 +99,16 @@ export default function SuperAdminSettingsPage() {
   const [dlrDeliveryStatus, setDlrDeliveryStatus] = useState<'sent' | 'delivered' | 'failed' | null>(null)
   const [dlrCheckLoading, setDlrCheckLoading] = useState(false)
   const [dlrSyncLoading, setDlrSyncLoading] = useState(false)
-  const [dlrSyncResult, setDlrSyncResult] = useState<{ success: boolean; message?: string; updated?: number; checked?: number; error?: string } | null>(null)
+  const [dlrSyncResult, setDlrSyncResult] = useState<{
+    success: boolean
+    message?: string
+    updated?: number
+    checked?: number
+    error?: string
+    pendingCount?: number
+    reportApiError?: string
+    reportListLength?: number
+  } | null>(null)
   const [simulationData, setSimulationData] = useState({
     phoneNumber: '',
     amount: '',
@@ -580,6 +589,9 @@ export default function SuperAdminSettingsPage() {
                           updated: data.updated,
                           checked: data.checked,
                           error: data.error,
+                          pendingCount: data.pendingCount,
+                          reportApiError: data.reportApiError,
+                          reportListLength: data.reportListLength,
                         })
                       } catch (e: any) {
                         setDlrSyncResult({ success: false, error: e.message || 'Request failed' })
@@ -597,6 +609,9 @@ export default function SuperAdminSettingsPage() {
                           {dlrSyncResult.message}
                           {(dlrSyncResult.updated != null || dlrSyncResult.checked != null) && (
                             <span className="block mt-1">Updated: {dlrSyncResult.updated ?? 0}, checked: {dlrSyncResult.checked ?? 0}</span>
+                          )}
+                          {dlrSyncResult.pendingCount != null && dlrSyncResult.updated === 0 && (
+                            <span className="block mt-1 text-amber-700">{dlrSyncResult.pendingCount} pending sent. {dlrSyncResult.reportApiError ? `Report API: ${dlrSyncResult.reportApiError}` : 'Try again in a minute or check HostPinnacle portal.'}</span>
                           )}
                         </>
                       ) : (

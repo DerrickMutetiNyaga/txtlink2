@@ -63,9 +63,12 @@ export async function POST(request: NextRequest) {
     })
 
     const reportList = normalizeReportList(reportResult)
+    const reportSuccess = reportResult.success
+    const reportError = reportResult.error
+
     if (reportList.length > 0) {
       for (const row of reportList) {
-        const txnId = String(row.transactionId ?? row.Transactionid ?? row.transactionid ?? '').trim()
+        const txnId = String(row.transactionId ?? row.Transactionid ?? row.transactionid ?? row.TransactionId ?? '').trim()
         if (!txnId) continue
         const msg = sentMessages.find((m) => String(m.hpTransactionId) === txnId)
         if (!msg) continue
@@ -103,11 +106,12 @@ export async function POST(request: NextRequest) {
         if (!mis.success || !mis.data) continue
         const data = mis.data as Record<string, unknown>
         const applied = await applyDlrToMessage(msg as any, {
+          ...data,
           transactionId: txnId,
-          status: data.status ?? data.Status,
-          deliveredTime: data.deliveredTime ?? data.DeliveredTime ?? data.deliveredtime,
-          errorCode: data.errorCode ?? data.ErrorCode,
-          errorMessage: data.errorMessage ?? data.errormessage,
+          status: data.status ?? data.Status ?? data.statuscode ?? data.StatusCode,
+          deliveredTime: data.deliveredTime ?? data.DeliveredTime ?? data.deliveredtime ?? data.DeliveredTime,
+          errorCode: data.errorCode ?? data.ErrorCode ?? data.errorcode,
+          errorMessage: data.errorMessage ?? data.errormessage ?? data.message,
         })
         if (applied) {
           await SmsMessage.findByIdAndUpdate(msg._id, applied.updateData)
@@ -121,9 +125,16 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: 'Synced via Check MIS by Transaction ID.',
+      message: updated > 0
+        ? 'Synced via Check MIS by Transaction ID.'
+        : 'No delivery status changes found. HostPinnacle may still be processing, or the Report API returned no match.',
       updated,
       checked,
+      pendingCount: sentMessages.length,
+      reportApiUsed: false,
+      reportApiSuccess: reportSuccess,
+      reportApiError: reportError ?? undefined,
+      reportListLength: reportList.length,
       errors: errors.length ? errors.slice(0, 20) : undefined,
     })
   } catch (err: any) {
@@ -142,13 +153,18 @@ export async function POST(request: NextRequest) {
 }
 
 function normalizeReportList(result: { success: boolean; data?: any }): any[] {
-  if (!result.success || result.data == null) return []
+  if (result.data == null) return []
   const d = result.data
   if (Array.isArray(d)) return d
   if (Array.isArray(d.report)) return d.report
+  if (Array.isArray(d.Report)) return d.Report
   if (Array.isArray(d.data)) return d.data
   if (Array.isArray(d.list)) return d.list
   if (Array.isArray(d.reports)) return d.reports
+  if (Array.isArray(d.deliveryReport)) return d.deliveryReport
+  if (Array.isArray(d.deliveryreport)) return d.deliveryreport
   if (d.response && Array.isArray(d.response)) return d.response
+  if (d.response && typeof d.response === 'object' && Array.isArray(d.response.report)) return d.response.report
+  if (d.response && typeof d.response === 'object' && Array.isArray(d.response.data)) return d.response.data
   return []
 }
