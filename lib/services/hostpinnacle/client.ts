@@ -42,9 +42,9 @@ async function getHostPinnacleSettings() {
         password: systemSettings.hostpinnaclePassword || process.env.HOSTPINNACLE_PASSWORD,
         apiKey: systemSettings.hostpinnacleApiKey || process.env.HOSTPINNACLE_API_KEY,
         statusEndpoint: systemSettings.hostpinnacleStatusEndpoint || process.env.HOSTPINNACLE_STATUS_ENDPOINT || '/SMSApi/report/status',
-        timeout: systemSettings.hostpinnacleTimeout || parseInt(process.env.HOSTPINNACLE_TIMEOUT || '60000'),
-        smsSendTimeout: systemSettings.hostpinnacleSmsSendTimeout || parseInt(process.env.HOSTPINNACLE_SMS_SEND_TIMEOUT || '90000'),
-        statusTimeout: systemSettings.hostpinnacleStatusTimeout || parseInt(process.env.HOSTPINNACLE_STATUS_TIMEOUT || '30000'),
+        timeout: systemSettings.hostpinnacleTimeout || parseInt(process.env.HOSTPINNACLE_TIMEOUT || '30000'),
+        smsSendTimeout: systemSettings.hostpinnacleSmsSendTimeout || parseInt(process.env.HOSTPINNACLE_SMS_SEND_TIMEOUT || '45000'),
+        statusTimeout: systemSettings.hostpinnacleStatusTimeout || parseInt(process.env.HOSTPINNACLE_STATUS_TIMEOUT || '15000'),
         cachedAt: Date.now(),
       }
       return settingsCache
@@ -60,9 +60,9 @@ async function getHostPinnacleSettings() {
     password: process.env.HOSTPINNACLE_PASSWORD,
     apiKey: process.env.HOSTPINNACLE_API_KEY,
     statusEndpoint: process.env.HOSTPINNACLE_STATUS_ENDPOINT || '/SMSApi/report/status',
-    timeout: parseInt(process.env.HOSTPINNACLE_TIMEOUT || '60000'),
-    smsSendTimeout: parseInt(process.env.HOSTPINNACLE_SMS_SEND_TIMEOUT || '90000'),
-    statusTimeout: parseInt(process.env.HOSTPINNACLE_STATUS_TIMEOUT || '30000'),
+    timeout: parseInt(process.env.HOSTPINNACLE_TIMEOUT || '30000'),
+    smsSendTimeout: parseInt(process.env.HOSTPINNACLE_SMS_SEND_TIMEOUT || '45000'),
+    statusTimeout: parseInt(process.env.HOSTPINNACLE_STATUS_TIMEOUT || '15000'),
     cachedAt: Date.now(),
   }
   return settingsCache
@@ -409,13 +409,13 @@ export async function sendSms(params: {
     output: 'json',
   }
 
-  const maxRetries = params.retries ?? 2
+  const maxRetries = params.retries ?? 1 // Reduced from 2 to 1 for faster failure
   let lastError: HostPinnacleResponse | null = null
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     const result = await requestForm('/SMSApi/send', body, {
       ...params.options,
-      timeout: (await getHostPinnacleSettings()).smsSendTimeout, // Use longer timeout for SMS send
+      timeout: (await getHostPinnacleSettings()).smsSendTimeout, // Use timeout for SMS send
     })
 
     // If successful, return immediately
@@ -429,8 +429,8 @@ export async function sendSms(params: {
       attempt < maxRetries
     ) {
       lastError = result
-      // Wait before retrying (exponential backoff: 2s, 4s)
-      const waitTime = Math.min(2000 * Math.pow(2, attempt), 10000)
+      // Wait before retrying (reduced backoff: 1s, 2s)
+      const waitTime = Math.min(1000 * Math.pow(2, attempt), 5000)
       console.log(`SMS send timeout, retrying in ${waitTime}ms (attempt ${attempt + 1}/${maxRetries + 1})...`)
       await new Promise((resolve) => setTimeout(resolve, waitTime))
       continue

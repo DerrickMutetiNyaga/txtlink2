@@ -316,13 +316,22 @@ export async function POST(request: NextRequest) {
               sentAt: new Date(),
             })
 
-            // Dispatch status check job (matching PHP: waits 10 seconds then checks status)
+            // Dispatch status check job - check immediately, then retry after delay if needed
             // Import and call the status check function asynchronously
             Promise.resolve().then(async () => {
               try {
                 const { checkSmsStatusForMessage } = await import('@/lib/services/sms/status-job')
-                // Wait 10 seconds before checking (matching PHP sleep(10))
-                await checkSmsStatusForMessage(smsMessage._id.toString(), 10)
+                // Check immediately first (no wait) - status might be available right away
+                await checkSmsStatusForMessage(smsMessage._id.toString(), 0)
+                
+                // If still processing, check again after 5 seconds (reduced from 10)
+                setTimeout(async () => {
+                  try {
+                    await checkSmsStatusForMessage(smsMessage._id.toString(), 0)
+                  } catch (retryError) {
+                    console.error('Failed to retry SMS status check:', retryError)
+                  }
+                }, 5000)
               } catch (statusError) {
                 console.error('Failed to check SMS status:', statusError)
                 // Don't fail the send if status check fails

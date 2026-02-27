@@ -467,9 +467,9 @@ const SystemSettingsSchema = new Schema<ISystemSettings>(
     hostpinnaclePassword: { type: String }, // Will be encrypted
     hostpinnacleApiKey: { type: String }, // Will be encrypted
     hostpinnacleStatusEndpoint: { type: String, default: '/SMSApi/report/status' },
-    hostpinnacleTimeout: { type: Number, default: 60000 }, // 60 seconds
-    hostpinnacleSmsSendTimeout: { type: Number, default: 90000 }, // 90 seconds
-    hostpinnacleStatusTimeout: { type: Number, default: 30000 }, // 30 seconds
+    hostpinnacleTimeout: { type: Number, default: 30000 }, // 30 seconds (reduced from 60s)
+    hostpinnacleSmsSendTimeout: { type: Number, default: 45000 }, // 45 seconds (reduced from 90s)
+    hostpinnacleStatusTimeout: { type: Number, default: 15000 }, // 15 seconds (reduced from 30s)
     
     updatedBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   },

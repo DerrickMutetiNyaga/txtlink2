@@ -1187,33 +1187,33 @@ export default function SuperAdminSettingsPage() {
                   <Label className="text-xs font-medium text-[#64748B] mb-1 block">Default Timeout</Label>
                   <Input
                     type="number"
-                    value={formData.hostpinnacleTimeout || settings?.hostpinnacleTimeout || 60000}
-                    onChange={(e) => setFormData({ ...formData, hostpinnacleTimeout: parseInt(e.target.value) || 60000 })}
+                    value={formData.hostpinnacleTimeout || settings?.hostpinnacleTimeout || 30000}
+                    onChange={(e) => setFormData({ ...formData, hostpinnacleTimeout: parseInt(e.target.value) || 30000 })}
                     className="border-[#E5E7EB] bg-white text-[#020617]"
                   />
-                  <p className="text-xs text-[#64748B] mt-1">Default: 60000ms (60s)</p>
+                  <p className="text-xs text-[#64748B] mt-1">Default: 30000ms (30s)</p>
                 </div>
 
                 <div>
                   <Label className="text-xs font-medium text-[#64748B] mb-1 block">SMS Send Timeout</Label>
                   <Input
                     type="number"
-                    value={formData.hostpinnacleSmsSendTimeout || settings?.hostpinnacleSmsSendTimeout || 90000}
-                    onChange={(e) => setFormData({ ...formData, hostpinnacleSmsSendTimeout: parseInt(e.target.value) || 90000 })}
+                    value={formData.hostpinnacleSmsSendTimeout || settings?.hostpinnacleSmsSendTimeout || 45000}
+                    onChange={(e) => setFormData({ ...formData, hostpinnacleSmsSendTimeout: parseInt(e.target.value) || 45000 })}
                     className="border-[#E5E7EB] bg-white text-[#020617]"
                   />
-                  <p className="text-xs text-[#64748B] mt-1">Default: 90000ms (90s)</p>
+                  <p className="text-xs text-[#64748B] mt-1">Default: 45000ms (45s)</p>
                 </div>
 
                 <div>
                   <Label className="text-xs font-medium text-[#64748B] mb-1 block">Status Check Timeout</Label>
                   <Input
                     type="number"
-                    value={formData.hostpinnacleStatusTimeout || settings?.hostpinnacleStatusTimeout || 30000}
-                    onChange={(e) => setFormData({ ...formData, hostpinnacleStatusTimeout: parseInt(e.target.value) || 30000 })}
+                    value={formData.hostpinnacleStatusTimeout || settings?.hostpinnacleStatusTimeout || 15000}
+                    onChange={(e) => setFormData({ ...formData, hostpinnacleStatusTimeout: parseInt(e.target.value) || 15000 })}
                     className="border-[#E5E7EB] bg-white text-[#020617]"
                   />
-                  <p className="text-xs text-[#64748B] mt-1">Default: 30000ms (30s)</p>
+                  <p className="text-xs text-[#64748B] mt-1">Default: 15000ms (15s)</p>
                 </div>
               </div>
             </div>
