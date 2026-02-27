@@ -155,11 +155,16 @@ class SMSQueue {
       })
 
       // Schedule status check after 10 seconds
-      setTimeout(() => {
-        checkSmsStatusForMessage(item.messageId, 0).catch(err => {
-          console.error(`Failed to check status for message ${item.messageId}:`, err)
-        })
-      }, 10000)
+      // Only check if messageId is a valid MongoDB ObjectId
+      if (mongoose.Types.ObjectId.isValid(item.messageId)) {
+        setTimeout(() => {
+          checkSmsStatusForMessage(item.messageId, 0).catch(err => {
+            console.error(`Failed to check status for message ${item.messageId}:`, err)
+          })
+        }, 10000)
+      } else {
+        console.warn(`Skipping status check for invalid messageId: ${item.messageId}`)
+      }
 
       return { success: true }
     } catch (error: any) {

@@ -45,6 +45,12 @@ export async function checkSmsStatusForMessage(messageId: string, waitSeconds = 
   console.log('Message ID:', messageId)
   console.log('Wait seconds before check:', waitSeconds)
   
+  // Validate that messageId is a valid MongoDB ObjectId
+  if (!mongoose.Types.ObjectId.isValid(messageId)) {
+    console.error('❌ Invalid messageId format (not a valid ObjectId):', messageId)
+    return
+  }
+  
   const smsMessage = await SmsMessage.findById(messageId).populate('userId', 'email')
 
   if (!smsMessage) {
