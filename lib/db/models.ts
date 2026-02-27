@@ -112,6 +112,20 @@ export interface ISmsMessage {
   costPerSegment: number
   totalCost: number
   hpTransactionId?: string // HostPinnacle transaction ID
+  externalMsgId?: string // Alias for provider's message ID (for status API)
+  providerStatus?: string // Raw status returned by provider (DELIVERED/SUBMITTED/FAILED/etc)
+  deliveryCause?: string // Failure/delivery cause from provider
+  statusCheckAttempts?: number // How many times background status job has checked
+  creditDeducted?: boolean // Guard flag to prevent double credit deduction
+  channel?: string // e.g. 'sms'
+  email?: string // User email snapshot (for admin notifications)
+  externalMsgId?: string // Alias for provider's message ID (for status API)
+  providerStatus?: string // Raw status returned by provider (DELIVERED/SUBMITTED/FAILED/etc)
+  deliveryCause?: string // Failure/delivery cause from provider
+  statusCheckAttempts?: number // How many times background status job has checked
+  creditDeducted?: boolean // Guard flag to prevent double credit deduction
+  channel?: string // e.g. 'sms'
+  email?: string // User email snapshot (for admin notifications)
   status: 'queued' | 'sent' | 'delivered' | 'failed'
   errorCode?: string
   errorMessage?: string
@@ -140,6 +154,13 @@ const SmsMessageSchema = new Schema<ISmsMessage>(
     costPerSegment: { type: Number, required: true },
     totalCost: { type: Number, required: true },
     hpTransactionId: { type: String },
+  externalMsgId: { type: String },
+  providerStatus: { type: String },
+  deliveryCause: { type: String },
+  statusCheckAttempts: { type: Number, default: 0 },
+  creditDeducted: { type: Boolean, default: false },
+  channel: { type: String },
+  email: { type: String },
     status: { type: String, enum: ['queued', 'sent', 'delivered', 'failed'], default: 'queued' },
     errorCode: { type: String },
     errorMessage: { type: String },

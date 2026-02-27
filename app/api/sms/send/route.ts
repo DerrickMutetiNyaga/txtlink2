@@ -207,6 +207,11 @@ export async function POST(request: NextRequest) {
         parts: segments,
         chargedKes: totalCostKes,
         status: 'queued',
+        providerStatus: 'PROCESSING',
+        statusCheckAttempts: 0,
+        creditDeducted: true, // Credits are deducted in this transaction
+        channel: 'sms',
+        email: dbUser.email,
       }], { session })
 
       await session.commitTransaction()
@@ -298,7 +303,9 @@ export async function POST(request: NextRequest) {
 
             await SmsMessage.findByIdAndUpdate(smsMessage._id, {
               hpTransactionId: transactionId,
+              externalMsgId: transactionId,
               status: 'sent',
+              providerStatus: 'SUBMITTED',
               sentAt: new Date(),
             })
           }

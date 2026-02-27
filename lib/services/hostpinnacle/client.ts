@@ -8,6 +8,9 @@ const HOSTPINNACLE_USERID = process.env.HOSTPINNACLE_USERID
 const HOSTPINNACLE_PASSWORD = process.env.HOSTPINNACLE_PASSWORD
 // Prefer API key based authentication when available, as recommended by HostPinnacle docs
 const HOSTPINNACLE_API_KEY = process.env.HOSTPINNACLE_API_KEY
+// Status endpoint can be customized via env to match HostPinnacle docs
+const HOSTPINNACLE_STATUS_ENDPOINT =
+  process.env.HOSTPINNACLE_STATUS_ENDPOINT || '/SMSApi/readstatus'
 
 interface HostPinnacleRequestOptions {
   apiKey?: string
@@ -141,6 +144,22 @@ async function requestForm(
 }
 
 /**
+ * Read SMS delivery status by message ID (msgid)
+ * HostPinnacle requires at least: userid, password/apiKey, msgid, output=json
+ */
+export async function readSmsStatus(params: {
+  msgid: string
+  options?: HostPinnacleRequestOptions
+}): Promise<HostPinnacleResponse> {
+  const body: Record<string, string> = {
+    msgid: params.msgid,
+    output: 'json',
+  }
+
+  return requestForm(HOSTPINNACLE_STATUS_ENDPOINT, body, params.options)
+}
+
+/**
  * Create a sub-user (customer) in HostPinnacle
  */
 export async function createSubUser(params: {
@@ -266,6 +285,7 @@ export const hostPinnacleClient = {
   createSenderId,
   readSenderIds,
   sendSms,
+  readSmsStatus,
   createWebhook,
 }
 
