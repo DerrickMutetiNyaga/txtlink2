@@ -309,6 +309,19 @@ export async function POST(request: NextRequest) {
               providerStatus: 'SUBMITTED',
               sentAt: new Date(),
             })
+
+            // Dispatch status check job (matching PHP: waits 10 seconds then checks status)
+            // Import and call the status check function asynchronously
+            Promise.resolve().then(async () => {
+              try {
+                const { checkSmsStatusForMessage } = await import('@/lib/services/sms/status-job')
+                // Wait 10 seconds before checking (matching PHP sleep(10))
+                await checkSmsStatusForMessage(smsMessage._id.toString(), 10)
+              } catch (statusError) {
+                console.error('Failed to check SMS status:', statusError)
+                // Don't fail the send if status check fails
+              }
+            })
           }
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : String(error)

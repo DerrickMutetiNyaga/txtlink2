@@ -9,8 +9,9 @@ const HOSTPINNACLE_PASSWORD = process.env.HOSTPINNACLE_PASSWORD
 // Prefer API key based authentication when available, as recommended by HostPinnacle docs
 const HOSTPINNACLE_API_KEY = process.env.HOSTPINNACLE_API_KEY
 // Status endpoint can be customized via env to match HostPinnacle docs
+// PHP example uses /SMSApi/report/status with uuid parameter
 const HOSTPINNACLE_STATUS_ENDPOINT =
-  process.env.HOSTPINNACLE_STATUS_ENDPOINT || '/SMSApi/readstatus'
+  process.env.HOSTPINNACLE_STATUS_ENDPOINT || '/SMSApi/report/status'
 
 interface HostPinnacleRequestOptions {
   apiKey?: string
@@ -144,19 +145,43 @@ async function requestForm(
 }
 
 /**
- * Read SMS delivery status by message ID (msgid)
- * HostPinnacle requires at least: userid, password/apiKey, msgid, output=json
+ * Read SMS delivery status by message ID (uuid/msgid)
+ * HostPinnacle requires at least: userid, password/apiKey, uuid (or msgid), output=json
+ * PHP example uses 'uuid' parameter, but we support both for compatibility
  */
 export async function readSmsStatus(params: {
-  msgid: string
+  msgid?: string
+  uuid?: string
   options?: HostPinnacleRequestOptions
 }): Promise<HostPinnacleResponse> {
   const body: Record<string, string> = {
-    msgid: params.msgid,
     output: 'json',
   }
 
-  return requestForm(HOSTPINNACLE_STATUS_ENDPOINT, body, params.options)
+  // Use uuid if provided (matching PHP example), otherwise use msgid
+  if (params.uuid) {
+    body.uuid = params.uuid
+  } else if (params.msgid) {
+    body.msgid = params.msgid
+    // Also try uuid with the same value (some endpoints accept both)
+    body.uuid = params.msgid
+  } else {
+    return {
+      success: false,
+      error: 'Either msgid or uuid must be provided',
+    }
+  }
+
+  // Ensure userid is always sent for status checks to avoid error 213
+  const authOptions = { ...params.options }
+  if (!authOptions.userId && HOSTPINNACLE_USERID) {
+    authOptions.userId = HOSTPINNACLE_USERID
+  }
+  if (!authOptions.password && HOSTPINNACLE_PASSWORD) {
+    authOptions.password = HOSTPINNACLE_PASSWORD
+  }
+
+  return requestForm(HOSTPINNACLE_STATUS_ENDPOINT, body, authOptions)
 }
 
 /**

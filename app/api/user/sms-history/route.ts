@@ -136,12 +136,12 @@ export async function GET(request: NextRequest) {
         ))
       )
 
-      const baseFailureReason =
-        msg.status === 'failed'
-          ? (isInvalidPhone 
-              ? 'Invalid number'
-              : (msg.errorMessage || msg.errorCode || 'Unknown error'))
-          : undefined
+      // Use deliveryCause (from status check) if available, otherwise fall back to errorMessage
+      const failureReason = msg.status === 'failed'
+        ? (isInvalidPhone 
+            ? 'Invalid number'
+            : ((msg as any).deliveryCause || msg.errorMessage || msg.errorCode || 'Unknown error'))
+        : undefined
 
       return {
         id: msg._id?.toString(),
@@ -151,23 +151,23 @@ export async function GET(request: NextRequest) {
         campaign: 'SMS Campaign', // You might want to add campaign field to the model
         message: msg.message,
         status: msg.status,
-        failureReason: isInvalidPhone ? 'Invalid number' : normalizeFailureReason(baseFailureReason),
+        failureReason: isInvalidPhone ? 'Invalid number' : normalizeFailureReason(failureReason),
         messageId: msg.hpTransactionId || msg._id?.toString(),
         sentAt: msg.sentAt || msg.createdAt,
         cost: msg.totalCost || 0,
-        retryCount: 0, // You might want to add retry tracking
+        retryCount: (msg as any).statusCheckAttempts || 0,
         lastAttemptAt: msg.failedAt || msg.sentAt || null,
         toNumbers: msg.toNumbers,
         segments: msg.segments || 1,
       }
     })
 
-    // Get failure insights
+    // Get failure insights (use deliveryCause if available, otherwise errorMessage)
     const failureReasons = await SmsMessage.aggregate([
       { $match: { userId, status: 'failed' } },
       {
         $group: {
-          _id: '$errorMessage',
+          _id: { $ifNull: ['$deliveryCause', '$errorMessage'] },
           count: { $sum: 1 },
         },
       },
