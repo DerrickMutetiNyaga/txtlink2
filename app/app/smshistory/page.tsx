@@ -147,8 +147,18 @@ export default function SMSHistoryPage() {
       return
     }
 
+    let intervalId: NodeJS.Timeout | null = null
+    let isChecking = false
+    let shouldStop = false
+
     // Check status of this message
     const checkMessageStatus = async () => {
+      // Stop if flag is set or if checking
+      if (shouldStop || isChecking) {
+        return
+      }
+
+      isChecking = true
       try {
         const token = localStorage.getItem('token')
         const response = await fetch(`/api/sms/status?messageId=${pendingMessage.messageId}`, {
@@ -160,8 +170,8 @@ export default function SMSHistoryPage() {
         if (response.ok) {
           const data = await response.json()
           
-          // Update the specific message in state without reloading
-          if (data.completed || data.status !== pendingMessage.status) {
+          // Update the specific message in state without reloading the page
+          if (data.status !== pendingMessage.status) {
             setSmsHistory(prev => prev.map(msg => 
               msg.messageId === pendingMessage.messageId
                 ? {
@@ -172,25 +182,67 @@ export default function SMSHistoryPage() {
                 : msg
             ))
             
-            // Update stats if status changed to final state
+            // If message is completed (delivered or failed), stop checking
             if (data.completed && (data.status === 'delivered' || data.status === 'failed')) {
-              // Refresh stats after a short delay to ensure DB is updated
-              setTimeout(() => {
-                fetchSMSHistory(false) // Refresh stats only
-              }, 500)
+              shouldStop = true
+              if (intervalId) {
+                clearInterval(intervalId)
+                intervalId = null
+              }
+              
+              // Update stats from current state (no page reload)
+              setSmsHistory(prev => {
+                const total = prev.length
+                const delivered = prev.filter(m => m.status === 'delivered').length
+                const failed = prev.filter(m => m.status === 'failed').length
+                const pending = prev.filter(m => ['sent', 'queued', 'pending'].includes(m.status)).length
+                
+                setDeliveryStats({
+                  delivered: { 
+                    count: delivered, 
+                    percentage: total > 0 ? Math.round((delivered / total) * 100) : 0 
+                  },
+                  failed: { 
+                    count: failed, 
+                    percentage: total > 0 ? Math.round((failed / total) * 100) : 0 
+                  },
+                  pending: { 
+                    count: pending, 
+                    percentage: total > 0 ? Math.round((pending / total) * 100) : 0 
+                  },
+                })
+                
+                return prev
+              })
+              return
             }
           }
         }
       } catch (error) {
         console.error('Failed to check message status:', error)
+      } finally {
+        isChecking = false
       }
     }
 
     // Check immediately, then every 10 seconds
     checkMessageStatus()
-    const intervalId = setInterval(checkMessageStatus, 10000)
+    intervalId = setInterval(() => {
+      if (!shouldStop) {
+        checkMessageStatus()
+      } else {
+        if (intervalId) {
+          clearInterval(intervalId)
+        }
+      }
+    }, 10000)
 
-    return () => clearInterval(intervalId)
+    return () => {
+      shouldStop = true
+      if (intervalId) {
+        clearInterval(intervalId)
+      }
+    }
   }, [smsHistory, fetchSMSHistory])
 
   const getStatusBadge = (status: string) => {
@@ -290,12 +342,6 @@ export default function SMSHistoryPage() {
               <p className="text-xs text-slate-500 mt-1">
                 Delivered/Failed status is updated by HostPinnacle delivery reports (DLR)—so you can see if each message actually reached the recipient.
               </p>
-              {smsHistory.some((msg) => msg.status === 'sent' || msg.status === 'queued' || msg.status === 'pending') && (
-                <p className="text-xs text-emerald-600 mt-1 flex items-center gap-1">
-                  <RefreshCw className="w-3 h-3 animate-spin" />
-                  Auto-checking status every 10 seconds (one message at a time until completion)...
-                </p>
-              )}
             </div>
 
             {/* Center: Search */}

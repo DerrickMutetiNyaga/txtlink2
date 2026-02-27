@@ -10,7 +10,7 @@ import connectDB from '@/lib/db/connect'
 import { SmsMessage, User, UserSenderId } from '@/lib/db/models'
 import { requireAuth } from '@/lib/auth/middleware'
 import { calculateSegments153, getEffectivePricePerCreditKes } from '@/lib/utils/credits'
-import { smsQueue, createQueueItems } from '@/lib/services/sms/queue-service'
+import { advancedSmsQueue } from '@/lib/services/sms/advanced-queue'
 import mongoose from 'mongoose'
 
 // Format phone number to E.164
@@ -169,7 +169,7 @@ export async function POST(request: NextRequest) {
         status: 'queued',
       })
 
-      // Process queue asynchronously (fire and forget)
+      // Enqueue for background processing (fire and forget - non-blocking)
       Promise.resolve().then(async () => {
         try {
           // Create queue items
@@ -181,14 +181,18 @@ export async function POST(request: NextRequest) {
             userId: userObjectId,
             segments,
             priority: 0,
+            retryCount: 0,
           }))
 
-          // Process queue with progress tracking
-          await smsQueue.enqueueBulk(queueItems, (completed, total, failed) => {
-            console.log(`Bulk send progress: ${completed}/${total} (${failed} failed)`)
-          })
+          // Enqueue for background processing (returns immediately)
+          const result = await advancedSmsQueue.enqueueBulk(queueItems)
+          console.log(`Bulk send queued: ${result.queued} messages for user ${userObjectId}`)
+          
+          if (result.errors.length > 0) {
+            console.error(`Bulk send errors: ${result.errors.length}`, result.errors)
+          }
         } catch (error) {
-          console.error('Error processing bulk SMS queue:', error)
+          console.error('Error enqueueing bulk SMS:', error)
         }
       })
 

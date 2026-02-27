@@ -260,20 +260,38 @@ export async function checkSmsStatusForMessage(messageId: string, waitSeconds = 
 
 /**
  * Batch job: check status for all messages that are still in-flight.
+ * Optimized for high volume - processes in batches with concurrency control.
  */
-export async function checkPendingSmsStatuses(limit = 50) {
+export async function checkPendingSmsStatuses(limit = 100) {
   const pendingMessages = await SmsMessage.find({
-    status: { $in: ['queued', 'sent'] },
+    status: { $in: ['queued', 'sent', 'processing'] },
     statusCheckAttempts: { $lt: MAX_STATUS_ATTEMPTS },
   })
-    .sort({ createdAt: -1 })
+    .sort({ createdAt: 1 }) // Oldest first
     .limit(limit)
+    .lean()
 
-  for (const msg of pendingMessages) {
-    try {
-      await checkSmsStatusForMessage(msg._id!.toString())
-    } catch (e) {
-      console.error('Error checking SMS status for message', msg._id, e)
+  if (pendingMessages.length === 0) {
+    return
+  }
+
+  // Process in batches of 10 concurrently to avoid overwhelming the API
+  const batchSize = 10
+  for (let i = 0; i < pendingMessages.length; i += batchSize) {
+    const batch = pendingMessages.slice(i, i + batchSize)
+    
+    // Process batch concurrently
+    await Promise.allSettled(
+      batch.map(msg => 
+        checkSmsStatusForMessage(msg._id!.toString(), 0).catch(e => {
+          console.error('Error checking SMS status for message', msg._id, e)
+        })
+      )
+    )
+
+    // Small delay between batches to avoid rate limiting
+    if (i + batchSize < pendingMessages.length) {
+      await new Promise(resolve => setTimeout(resolve, 100))
     }
   }
 }
