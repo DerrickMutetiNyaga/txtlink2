@@ -403,6 +403,16 @@ export interface ISystemSettings {
   mpesaEnvironment?: 'sandbox' | 'production'
   mpesaEnabled?: boolean
   
+  // HostPinnacle Configuration
+  hostpinnacleBaseUrl?: string
+  hostpinnacleUserId?: string
+  hostpinnaclePassword?: string // Encrypted
+  hostpinnacleApiKey?: string // Encrypted
+  hostpinnacleStatusEndpoint?: string
+  hostpinnacleTimeout?: number // Default timeout in milliseconds
+  hostpinnacleSmsSendTimeout?: number // SMS send timeout in milliseconds
+  hostpinnacleStatusTimeout?: number // Status check timeout in milliseconds
+  
   updatedBy: mongoose.Types.ObjectId
   createdAt: Date
   updatedAt: Date
@@ -450,6 +460,16 @@ const SystemSettingsSchema = new Schema<ISystemSettings>(
     mpesaCallbackUrl: { type: String },
     mpesaEnvironment: { type: String, enum: ['sandbox', 'production'], default: 'sandbox' },
     mpesaEnabled: { type: Boolean, default: false },
+    
+    // HostPinnacle Configuration
+    hostpinnacleBaseUrl: { type: String, default: 'https://smsportal.hostpinnacle.co.ke' },
+    hostpinnacleUserId: { type: String },
+    hostpinnaclePassword: { type: String }, // Will be encrypted
+    hostpinnacleApiKey: { type: String }, // Will be encrypted
+    hostpinnacleStatusEndpoint: { type: String, default: '/SMSApi/report/status' },
+    hostpinnacleTimeout: { type: Number, default: 60000 }, // 60 seconds
+    hostpinnacleSmsSendTimeout: { type: Number, default: 90000 }, // 90 seconds
+    hostpinnacleStatusTimeout: { type: Number, default: 30000 }, // 30 seconds
     
     updatedBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   },

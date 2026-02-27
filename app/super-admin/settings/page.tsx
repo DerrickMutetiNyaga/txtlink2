@@ -76,6 +76,16 @@ interface SystemSettings {
   mpesaCallbackUrl?: string
   mpesaEnvironment?: 'sandbox' | 'production'
   mpesaEnabled?: boolean
+  
+  // HostPinnacle Configuration
+  hostpinnacleBaseUrl?: string
+  hostpinnacleUserId?: string
+  hostpinnaclePassword?: string
+  hostpinnacleApiKey?: string
+  hostpinnacleStatusEndpoint?: string
+  hostpinnacleTimeout?: number
+  hostpinnacleSmsSendTimeout?: number
+  hostpinnacleStatusTimeout?: number
 }
 
 export default function SuperAdminSettingsPage() {
@@ -87,6 +97,11 @@ export default function SuperAdminSettingsPage() {
     consumerKey: false,
     consumerSecret: false,
     passkey: false,
+  })
+  const [showHostPinnacleCredentials, setShowHostPinnacleCredentials] = useState({
+    userId: false,
+    password: false,
+    apiKey: false,
   })
   const [dangerAction, setDangerAction] = useState<string | null>(null)
   const [formData, setFormData] = useState<Partial<SystemSettings>>({})
@@ -1053,6 +1068,162 @@ export default function SuperAdminSettingsPage() {
               </div>
             </div>
           )}
+        </Card>
+
+        {/* SECTION 6.5: HOSTPINNACLE CONFIGURATION */}
+        <Card className="bg-white border-[#E5E7EB] rounded-xl shadow-sm p-6">
+          <div className="mb-6">
+            <div className="flex items-center gap-3 mb-2">
+              <Phone className="w-6 h-6 text-emerald-600" />
+              <h2 className="text-xl font-semibold text-[#020617]">HostPinnacle SMS Gateway Configuration</h2>
+            </div>
+            <p className="text-sm text-[#64748B]">Configure HostPinnacle API credentials and connection settings</p>
+          </div>
+
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <Label className="text-sm font-medium text-[#020617] mb-2 block">Base URL</Label>
+                <Input
+                  value={formData.hostpinnacleBaseUrl || settings?.hostpinnacleBaseUrl || 'https://smsportal.hostpinnacle.co.ke'}
+                  onChange={(e) => setFormData({ ...formData, hostpinnacleBaseUrl: e.target.value })}
+                  placeholder="https://smsportal.hostpinnacle.co.ke"
+                  className="border-[#E5E7EB] bg-white text-[#020617]"
+                />
+                <p className="text-xs text-[#64748B] mt-1">HostPinnacle API base URL</p>
+              </div>
+
+              <div>
+                <Label className="text-sm font-medium text-[#020617] mb-2 block">Status Endpoint</Label>
+                <Input
+                  value={formData.hostpinnacleStatusEndpoint || settings?.hostpinnacleStatusEndpoint || '/SMSApi/report/status'}
+                  onChange={(e) => setFormData({ ...formData, hostpinnacleStatusEndpoint: e.target.value })}
+                  placeholder="/SMSApi/report/status"
+                  className="border-[#E5E7EB] bg-white text-[#020617]"
+                />
+                <p className="text-xs text-[#64748B] mt-1">Endpoint path for SMS status checks</p>
+              </div>
+            </div>
+
+            <Separator />
+
+            <div>
+              <Label className="text-sm font-medium text-[#020617] mb-3 block">Authentication</Label>
+              <p className="text-xs text-[#64748B] mb-4">Use either API Key (recommended) or User ID + Password</p>
+              
+              <div className="space-y-4">
+                <div>
+                  <Label className="text-sm font-medium text-[#020617] mb-2 block">API Key (Recommended)</Label>
+                  <div className="relative">
+                    <Input
+                      type={showHostPinnacleCredentials.apiKey ? 'text' : 'password'}
+                      value={formData.hostpinnacleApiKey || settings?.hostpinnacleApiKey || ''}
+                      onChange={(e) => setFormData({ ...formData, hostpinnacleApiKey: e.target.value })}
+                      placeholder="Enter API key"
+                      className="border-[#E5E7EB] bg-white text-[#020617] pr-10"
+                    />
+                    <button
+                      type="button"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-[#64748B] hover:text-[#020617]"
+                      onClick={() => setShowHostPinnacleCredentials({ ...showHostPinnacleCredentials, apiKey: !showHostPinnacleCredentials.apiKey })}
+                    >
+                      {showHostPinnacleCredentials.apiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  <p className="text-xs text-[#64748B] mt-1">API key for authentication (preferred method)</p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label className="text-sm font-medium text-[#020617] mb-2 block">User ID</Label>
+                    <div className="relative">
+                      <Input
+                        type={showHostPinnacleCredentials.userId ? 'text' : 'password'}
+                        value={formData.hostpinnacleUserId || settings?.hostpinnacleUserId || ''}
+                        onChange={(e) => setFormData({ ...formData, hostpinnacleUserId: e.target.value })}
+                        placeholder="Enter user ID"
+                        className="border-[#E5E7EB] bg-white text-[#020617] pr-10"
+                      />
+                      <button
+                        type="button"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-[#64748B] hover:text-[#020617]"
+                        onClick={() => setShowHostPinnacleCredentials({ ...showHostPinnacleCredentials, userId: !showHostPinnacleCredentials.userId })}
+                      >
+                        {showHostPinnacleCredentials.userId ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label className="text-sm font-medium text-[#020617] mb-2 block">Password</Label>
+                    <div className="relative">
+                      <Input
+                        type={showHostPinnacleCredentials.password ? 'text' : 'password'}
+                        value={formData.hostpinnaclePassword || settings?.hostpinnaclePassword || ''}
+                        onChange={(e) => setFormData({ ...formData, hostpinnaclePassword: e.target.value })}
+                        placeholder="Enter password"
+                        className="border-[#E5E7EB] bg-white text-[#020617] pr-10"
+                      />
+                      <button
+                        type="button"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-[#64748B] hover:text-[#020617]"
+                        onClick={() => setShowHostPinnacleCredentials({ ...showHostPinnacleCredentials, password: !showHostPinnacleCredentials.password })}
+                      >
+                        {showHostPinnacleCredentials.password ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <p className="text-xs text-[#64748B]">Alternative: Use User ID + Password if API key is not available</p>
+              </div>
+            </div>
+
+            <Separator />
+
+            <div>
+              <Label className="text-sm font-medium text-[#020617] mb-3 block">Timeout Settings (milliseconds)</Label>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <Label className="text-xs font-medium text-[#64748B] mb-1 block">Default Timeout</Label>
+                  <Input
+                    type="number"
+                    value={formData.hostpinnacleTimeout || settings?.hostpinnacleTimeout || 60000}
+                    onChange={(e) => setFormData({ ...formData, hostpinnacleTimeout: parseInt(e.target.value) || 60000 })}
+                    className="border-[#E5E7EB] bg-white text-[#020617]"
+                  />
+                  <p className="text-xs text-[#64748B] mt-1">Default: 60000ms (60s)</p>
+                </div>
+
+                <div>
+                  <Label className="text-xs font-medium text-[#64748B] mb-1 block">SMS Send Timeout</Label>
+                  <Input
+                    type="number"
+                    value={formData.hostpinnacleSmsSendTimeout || settings?.hostpinnacleSmsSendTimeout || 90000}
+                    onChange={(e) => setFormData({ ...formData, hostpinnacleSmsSendTimeout: parseInt(e.target.value) || 90000 })}
+                    className="border-[#E5E7EB] bg-white text-[#020617]"
+                  />
+                  <p className="text-xs text-[#64748B] mt-1">Default: 90000ms (90s)</p>
+                </div>
+
+                <div>
+                  <Label className="text-xs font-medium text-[#64748B] mb-1 block">Status Check Timeout</Label>
+                  <Input
+                    type="number"
+                    value={formData.hostpinnacleStatusTimeout || settings?.hostpinnacleStatusTimeout || 30000}
+                    onChange={(e) => setFormData({ ...formData, hostpinnacleStatusTimeout: parseInt(e.target.value) || 30000 })}
+                    className="border-[#E5E7EB] bg-white text-[#020617]"
+                  />
+                  <p className="text-xs text-[#64748B] mt-1">Default: 30000ms (30s)</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-sm text-blue-900">
+                <strong>Note:</strong> These settings override environment variables. If not set here, the system will use values from <code className="bg-blue-100 px-1 rounded">.env.local</code> file.
+              </p>
+            </div>
+          </div>
         </Card>
 
         {/* SECTION 7: DANGER ZONE */}

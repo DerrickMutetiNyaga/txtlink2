@@ -1,21 +1,77 @@
 /**
  * HostPinnacle API Client
  * Handles all API calls to HostPinnacle SMS portal
+ * Reads configuration from database (SystemSettings) with environment variable fallback
  */
 
-const HOSTPINNACLE_BASE_URL = process.env.HOSTPINNACLE_BASE_URL || 'https://smsportal.hostpinnacle.co.ke'
-const HOSTPINNACLE_USERID = process.env.HOSTPINNACLE_USERID
-const HOSTPINNACLE_PASSWORD = process.env.HOSTPINNACLE_PASSWORD
-// Prefer API key based authentication when available, as recommended by HostPinnacle docs
-const HOSTPINNACLE_API_KEY = process.env.HOSTPINNACLE_API_KEY
-// Status endpoint can be customized via env to match HostPinnacle docs
-// PHP example uses /SMSApi/report/status with uuid parameter
-const HOSTPINNACLE_STATUS_ENDPOINT =
-  process.env.HOSTPINNACLE_STATUS_ENDPOINT || '/SMSApi/report/status'
-// Timeout configuration (in milliseconds)
-const DEFAULT_TIMEOUT = parseInt(process.env.HOSTPINNACLE_TIMEOUT || '60000') // 60 seconds default
-const SMS_SEND_TIMEOUT = parseInt(process.env.HOSTPINNACLE_SMS_SEND_TIMEOUT || '90000') // 90 seconds for SMS send
-const STATUS_CHECK_TIMEOUT = parseInt(process.env.HOSTPINNACLE_STATUS_TIMEOUT || '30000') // 30 seconds for status checks
+import { SystemSettings } from '@/lib/db/models'
+import connectDB from '@/lib/db/connect'
+
+// Cache for settings to avoid repeated DB calls
+let settingsCache: {
+  baseUrl: string
+  userId?: string
+  password?: string
+  apiKey?: string
+  statusEndpoint: string
+  timeout: number
+  smsSendTimeout: number
+  statusTimeout: number
+  cachedAt: number
+} | null = null
+
+const CACHE_TTL = 60000 // Cache for 60 seconds
+
+/**
+ * Get HostPinnacle settings from database or environment variables
+ */
+async function getHostPinnacleSettings() {
+  // Return cached settings if still valid
+  if (settingsCache && Date.now() - settingsCache.cachedAt < CACHE_TTL) {
+    return settingsCache
+  }
+
+  try {
+    await connectDB()
+    const systemSettings = await SystemSettings.findOne().lean()
+    
+    if (systemSettings) {
+      settingsCache = {
+        baseUrl: systemSettings.hostpinnacleBaseUrl || process.env.HOSTPINNACLE_BASE_URL || 'https://smsportal.hostpinnacle.co.ke',
+        userId: systemSettings.hostpinnacleUserId || process.env.HOSTPINNACLE_USERID,
+        password: systemSettings.hostpinnaclePassword || process.env.HOSTPINNACLE_PASSWORD,
+        apiKey: systemSettings.hostpinnacleApiKey || process.env.HOSTPINNACLE_API_KEY,
+        statusEndpoint: systemSettings.hostpinnacleStatusEndpoint || process.env.HOSTPINNACLE_STATUS_ENDPOINT || '/SMSApi/report/status',
+        timeout: systemSettings.hostpinnacleTimeout || parseInt(process.env.HOSTPINNACLE_TIMEOUT || '60000'),
+        smsSendTimeout: systemSettings.hostpinnacleSmsSendTimeout || parseInt(process.env.HOSTPINNACLE_SMS_SEND_TIMEOUT || '90000'),
+        statusTimeout: systemSettings.hostpinnacleStatusTimeout || parseInt(process.env.HOSTPINNACLE_STATUS_TIMEOUT || '30000'),
+        cachedAt: Date.now(),
+      }
+      return settingsCache
+    }
+  } catch (error) {
+    console.warn('Failed to load HostPinnacle settings from database, using env vars:', error)
+  }
+
+  // Fallback to environment variables
+  settingsCache = {
+    baseUrl: process.env.HOSTPINNACLE_BASE_URL || 'https://smsportal.hostpinnacle.co.ke',
+    userId: process.env.HOSTPINNACLE_USERID,
+    password: process.env.HOSTPINNACLE_PASSWORD,
+    apiKey: process.env.HOSTPINNACLE_API_KEY,
+    statusEndpoint: process.env.HOSTPINNACLE_STATUS_ENDPOINT || '/SMSApi/report/status',
+    timeout: parseInt(process.env.HOSTPINNACLE_TIMEOUT || '60000'),
+    smsSendTimeout: parseInt(process.env.HOSTPINNACLE_SMS_SEND_TIMEOUT || '90000'),
+    statusTimeout: parseInt(process.env.HOSTPINNACLE_STATUS_TIMEOUT || '30000'),
+    cachedAt: Date.now(),
+  }
+  return settingsCache
+}
+
+// Clear cache when settings are updated (call this from settings API)
+export function clearHostPinnacleSettingsCache() {
+  settingsCache = null
+}
 
 interface HostPinnacleRequestOptions {
   apiKey?: string
@@ -38,7 +94,8 @@ async function requestForm(
   body: Record<string, string | number>,
   options: HostPinnacleRequestOptions & { timeout?: number } = {}
 ): Promise<HostPinnacleResponse> {
-  const url = `${HOSTPINNACLE_BASE_URL}${endpoint}`
+  const settings = await getHostPinnacleSettings()
+  const url = `${settings.baseUrl}${endpoint}`
 
   // Build form data
   const formData = new URLSearchParams()
@@ -54,20 +111,20 @@ async function requestForm(
   if (options.apiKey) {
     // Explicit API key passed in options
     headers['apiKey'] = options.apiKey
-  } else if (HOSTPINNACLE_API_KEY) {
-    // Fallback to API key from environment
-    headers['apiKey'] = HOSTPINNACLE_API_KEY
+  } else if (settings.apiKey) {
+    // Use API key from settings (database or env)
+    headers['apiKey'] = settings.apiKey
   } else if (options.userId && options.password) {
     formData.append('userid', options.userId)
     formData.append('password', options.password)
-  } else if (HOSTPINNACLE_USERID && HOSTPINNACLE_PASSWORD) {
-    // Fallback to env vars
-    formData.append('userid', HOSTPINNACLE_USERID)
-    formData.append('password', HOSTPINNACLE_PASSWORD)
+  } else if (settings.userId && settings.password) {
+    // Use credentials from settings (database or env)
+    formData.append('userid', settings.userId)
+    formData.append('password', settings.password)
   }
 
-  // Use custom timeout if provided, otherwise use default
-  const timeout = options.timeout || DEFAULT_TIMEOUT
+  // Use custom timeout if provided, otherwise use default from settings
+  const timeout = options.timeout || settings.timeout
 
   try {
     const response = await fetch(url, {
@@ -179,18 +236,20 @@ export async function readSmsStatus(params: {
     }
   }
 
+  const settings = await getHostPinnacleSettings()
+  
   // Ensure userid is always sent for status checks to avoid error 213
   const authOptions = { ...params.options }
-  if (!authOptions.userId && HOSTPINNACLE_USERID) {
-    authOptions.userId = HOSTPINNACLE_USERID
+  if (!authOptions.userId && settings.userId) {
+    authOptions.userId = settings.userId
   }
-  if (!authOptions.password && HOSTPINNACLE_PASSWORD) {
-    authOptions.password = HOSTPINNACLE_PASSWORD
+  if (!authOptions.password && settings.password) {
+    authOptions.password = settings.password
   }
 
-  return requestForm(HOSTPINNACLE_STATUS_ENDPOINT, body, {
+  return requestForm(settings.statusEndpoint, body, {
     ...authOptions,
-    timeout: STATUS_CHECK_TIMEOUT, // Use shorter timeout for status checks
+    timeout: settings.statusTimeout, // Use shorter timeout for status checks
   })
 }
 
@@ -303,7 +362,7 @@ export async function sendSms(params: {
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     const result = await requestForm('/SMSApi/send', body, {
       ...params.options,
-      timeout: SMS_SEND_TIMEOUT, // Use longer timeout for SMS send
+      timeout: (await getHostPinnacleSettings()).smsSendTimeout, // Use longer timeout for SMS send
     })
 
     // If successful, return immediately

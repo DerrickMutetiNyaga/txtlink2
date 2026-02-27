@@ -9,6 +9,7 @@ import connectDB from '@/lib/db/connect'
 import { SystemSettings } from '@/lib/db/models'
 import { requireOwner } from '@/lib/auth/middleware'
 import { logAudit } from '@/lib/utils/audit'
+import { clearHostPinnacleSettingsCache } from '@/lib/services/hostpinnacle/client'
 import mongoose from 'mongoose'
 
 export async function GET(request: NextRequest) {
@@ -33,6 +34,24 @@ export async function GET(request: NextRequest) {
         ? settingsObj.providerApiKey.substring(0, 4) + '••••••••' + settingsObj.providerApiKey.substring(settingsObj.providerApiKey.length - 4)
         : '••••••••'
       settingsObj.providerApiKey = masked
+    }
+
+    // Mask HostPinnacle credentials
+    const maskValue = (value: string | undefined) => {
+      if (!value) return undefined
+      return value.length > 8 
+        ? value.substring(0, 4) + '••••••••' + value.substring(value.length - 4)
+        : '••••••••'
+    }
+
+    if (settingsObj.hostpinnacleUserId) {
+      settingsObj.hostpinnacleUserId = maskValue(settingsObj.hostpinnacleUserId)
+    }
+    if (settingsObj.hostpinnaclePassword) {
+      settingsObj.hostpinnaclePassword = maskValue(settingsObj.hostpinnaclePassword)
+    }
+    if (settingsObj.hostpinnacleApiKey) {
+      settingsObj.hostpinnacleApiKey = maskValue(settingsObj.hostpinnacleApiKey)
     }
 
     // Mask M-Pesa credentials
@@ -123,6 +142,16 @@ export async function POST(request: NextRequest) {
       mpesaCallbackUrl,
       mpesaEnvironment,
       mpesaEnabled,
+      
+      // HostPinnacle Configuration
+      hostpinnacleBaseUrl,
+      hostpinnacleUserId,
+      hostpinnaclePassword,
+      hostpinnacleApiKey,
+      hostpinnacleStatusEndpoint,
+      hostpinnacleTimeout,
+      hostpinnacleSmsSendTimeout,
+      hostpinnacleStatusTimeout,
     } = body
 
     // Get existing settings to track changes
@@ -185,6 +214,22 @@ export async function POST(request: NextRequest) {
     if (mpesaEnvironment !== undefined) updateData.mpesaEnvironment = mpesaEnvironment
     if (mpesaEnabled !== undefined) updateData.mpesaEnabled = mpesaEnabled
 
+    // HostPinnacle Configuration
+    if (hostpinnacleBaseUrl !== undefined) updateData.hostpinnacleBaseUrl = hostpinnacleBaseUrl
+    if (hostpinnacleUserId !== undefined && hostpinnacleUserId !== '' && !hostpinnacleUserId.includes('••••')) {
+      updateData.hostpinnacleUserId = hostpinnacleUserId
+    }
+    if (hostpinnaclePassword !== undefined && hostpinnaclePassword !== '' && !hostpinnaclePassword.includes('••••')) {
+      updateData.hostpinnaclePassword = hostpinnaclePassword
+    }
+    if (hostpinnacleApiKey !== undefined && hostpinnacleApiKey !== '' && !hostpinnacleApiKey.includes('••••')) {
+      updateData.hostpinnacleApiKey = hostpinnacleApiKey
+    }
+    if (hostpinnacleStatusEndpoint !== undefined) updateData.hostpinnacleStatusEndpoint = hostpinnacleStatusEndpoint
+    if (hostpinnacleTimeout !== undefined) updateData.hostpinnacleTimeout = hostpinnacleTimeout
+    if (hostpinnacleSmsSendTimeout !== undefined) updateData.hostpinnacleSmsSendTimeout = hostpinnacleSmsSendTimeout
+    if (hostpinnacleStatusTimeout !== undefined) updateData.hostpinnacleStatusTimeout = hostpinnacleStatusTimeout
+
     // Update or create settings
     if (settings) {
       Object.assign(settings, updateData)
@@ -212,6 +257,9 @@ export async function POST(request: NextRequest) {
         }
       })
     }
+
+    // Clear HostPinnacle settings cache so new settings are used immediately
+    clearHostPinnacleSettingsCache()
 
     // Log audit
     await logAudit(
@@ -250,6 +298,17 @@ export async function POST(request: NextRequest) {
     }
     if (settingsObj.mpesaPasskey) {
       settingsObj.mpesaPasskey = maskValue(settingsObj.mpesaPasskey)
+    }
+
+    // Mask HostPinnacle credentials
+    if (settingsObj.hostpinnacleUserId) {
+      settingsObj.hostpinnacleUserId = maskValue(settingsObj.hostpinnacleUserId)
+    }
+    if (settingsObj.hostpinnaclePassword) {
+      settingsObj.hostpinnaclePassword = maskValue(settingsObj.hostpinnaclePassword)
+    }
+    if (settingsObj.hostpinnacleApiKey) {
+      settingsObj.hostpinnacleApiKey = maskValue(settingsObj.hostpinnacleApiKey)
     }
 
     return NextResponse.json({
