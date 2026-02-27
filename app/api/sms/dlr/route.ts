@@ -99,13 +99,58 @@ export async function POST(request: NextRequest) {
     }
 
     if (!transactionId) {
+      console.log('DLR received but no transaction ID found in payload:', data)
       return ok()
     }
 
-    const smsMessage = await SmsMessage.findOne({ hpTransactionId: String(transactionId) })
+    // Try to find the message by transaction ID
+    let smsMessage = await SmsMessage.findOne({ hpTransactionId: String(transactionId) })
 
+    // If not found, try alternative lookups
     if (!smsMessage) {
-      return ok()
+      // Try finding by phone number + recent timestamp (within last 7 days)
+      const mobileNumber = data.mobileNumber || data.MobileNumber || data.mobileNo
+      if (mobileNumber) {
+        // Normalize phone number (remove +, handle 254 prefix)
+        const normalizedMobile = String(mobileNumber).replace(/^\+/, '').replace(/^254/, '254')
+        const phoneVariations = [
+          normalizedMobile,
+          `+${normalizedMobile}`,
+          `0${normalizedMobile.substring(3)}`, // Convert 254... to 0...
+        ]
+
+        // Look for messages sent in the last 7 days to this number
+        const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+        smsMessage = await SmsMessage.findOne({
+          toNumbers: { $in: phoneVariations },
+          createdAt: { $gte: sevenDaysAgo },
+          status: { $in: ['queued', 'sent'] },
+        }).sort({ createdAt: -1 })
+      }
+
+      // If still not found, log for debugging
+      if (!smsMessage) {
+        console.warn('DLR received but no matching SMS message found:', {
+          transactionId: String(transactionId),
+          mobileNumber: data.mobileNumber || data.MobileNumber || data.mobileNo,
+          payload: data,
+        })
+        // Still mark the webhook log as processed even if we can't match it
+        await WebhookLog.findOneAndUpdate(
+          { transactionId: String(transactionId) },
+          {
+            processed: true,
+            processedAt: new Date(),
+            error: 'No matching SMS message found for this transaction ID',
+          }
+        ).catch(() => {})
+        return ok()
+      } else {
+        // Found by phone number - update it with the transaction ID for future lookups
+        await SmsMessage.findByIdAndUpdate(smsMessage._id, {
+          hpTransactionId: String(transactionId),
+        }).catch(() => {})
+      }
     }
 
     let mappedStatus: 'sent' | 'delivered' | 'failed' = 'sent'
@@ -130,7 +175,19 @@ export async function POST(request: NextRequest) {
     }
 
     if (mappedStatus === 'delivered') {
-      updateData.deliveredAt = deliveredTime ? new Date(deliveredTime) : new Date()
+      // Handle Unix timestamp in milliseconds (like "1772111471005")
+      if (deliveredTime) {
+        const deliveredTimeNum = Number(deliveredTime)
+        if (!isNaN(deliveredTimeNum) && deliveredTimeNum > 1000000000000) {
+          // It's a Unix timestamp in milliseconds
+          updateData.deliveredAt = new Date(deliveredTimeNum)
+        } else {
+          // Try parsing as date string
+          updateData.deliveredAt = new Date(deliveredTime)
+        }
+      } else {
+        updateData.deliveredAt = new Date()
+      }
     } else if (mappedStatus === 'failed') {
       updateData.failedAt = new Date()
       updateData.errorCode = data.errorCode ?? data.ErrorCode
@@ -149,10 +206,18 @@ export async function POST(request: NextRequest) {
 
     await SmsMessage.findByIdAndUpdate(smsMessage._id, updateData)
 
+    // Mark webhook log as processed
     await WebhookLog.findOneAndUpdate(
-      { transactionId },
+      { transactionId: String(transactionId) },
       { processed: true, processedAt: new Date() }
     ).catch(() => {})
+
+    console.log('DLR processed successfully:', {
+      transactionId: String(transactionId),
+      messageId: smsMessage._id?.toString(),
+      status: mappedStatus,
+      mobileNumber: smsMessage.toNumbers?.[0],
+    })
 
     // Trigger user webhooks for DLR
     try {
