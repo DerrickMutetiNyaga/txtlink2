@@ -135,11 +135,27 @@ async function requestForm(
     })
 
     const text = await response.text()
+    
+    // Log raw response from HostPinnacle
+    console.log('═══════════════════════════════════════════════════════')
+    console.log('📡 HOSTPINNACLE RAW API RESPONSE')
+    console.log('═══════════════════════════════════════════════════════')
+    console.log('Endpoint:', url)
+    console.log('HTTP Status:', response.status, response.statusText)
+    console.log('Response Headers:', Object.fromEntries(response.headers.entries()))
+    console.log('Raw Response Text:', text)
+    console.log('Response Length:', text.length, 'characters')
+    console.log('═══════════════════════════════════════════════════════')
+    
     let data: any
 
     try {
       data = JSON.parse(text)
-    } catch {
+      console.log('✅ Successfully parsed JSON response')
+      console.log('Parsed JSON Data:', JSON.stringify(data, null, 2))
+    } catch (parseError) {
+      console.error('❌ Failed to parse JSON response:', parseError)
+      console.log('Raw text that failed to parse:', text.substring(0, 500))
       // If not JSON, treat as error
       return {
         success: false,
@@ -218,6 +234,16 @@ export async function readSmsStatus(params: {
   uuid?: string
   options?: HostPinnacleRequestOptions
 }): Promise<HostPinnacleResponse> {
+  console.log('═══════════════════════════════════════════════════════')
+  console.log('🔍 HOSTPINNACLE SMS STATUS API REQUEST')
+  console.log('═══════════════════════════════════════════════════════')
+  console.log('Request Parameters:')
+  console.log('  - msgid:', params.msgid || 'Not provided')
+  console.log('  - uuid:', params.uuid || 'Not provided')
+  console.log('  - Has API Key:', !!params.options?.apiKey)
+  console.log('  - Has User ID:', !!params.options?.userId)
+  console.log('  - Has Password:', !!params.options?.password)
+  
   const body: Record<string, string> = {
     output: 'json',
   }
@@ -225,11 +251,14 @@ export async function readSmsStatus(params: {
   // Use uuid if provided (matching PHP example), otherwise use msgid
   if (params.uuid) {
     body.uuid = params.uuid
+    console.log('✅ Using UUID parameter:', params.uuid)
   } else if (params.msgid) {
     body.msgid = params.msgid
     // Also try uuid with the same value (some endpoints accept both)
     body.uuid = params.msgid
+    console.log('✅ Using msgid parameter (also set as uuid):', params.msgid)
   } else {
+    console.error('❌ Error: Neither msgid nor uuid provided')
     return {
       success: false,
       error: 'Either msgid or uuid must be provided',
@@ -237,20 +266,44 @@ export async function readSmsStatus(params: {
   }
 
   const settings = await getHostPinnacleSettings()
+  console.log('Settings loaded:')
+  console.log('  - Base URL:', settings.baseUrl)
+  console.log('  - Status Endpoint:', settings.statusEndpoint)
+  console.log('  - Timeout:', settings.statusTimeout, 'ms')
   
   // Ensure userid is always sent for status checks to avoid error 213
   const authOptions = { ...params.options }
   if (!authOptions.userId && settings.userId) {
     authOptions.userId = settings.userId
+    console.log('✅ Added User ID from settings')
   }
   if (!authOptions.password && settings.password) {
     authOptions.password = settings.password
+    console.log('✅ Added Password from settings')
+  }
+  if (!authOptions.apiKey && settings.apiKey) {
+    authOptions.apiKey = settings.apiKey
+    console.log('✅ Added API Key from settings')
   }
 
-  return requestForm(settings.statusEndpoint, body, {
+  console.log('Request Body:', JSON.stringify(body, null, 2))
+  console.log('═══════════════════════════════════════════════════════')
+
+  const result = await requestForm(settings.statusEndpoint, body, {
     ...authOptions,
     timeout: settings.statusTimeout, // Use shorter timeout for status checks
   })
+
+  console.log('═══════════════════════════════════════════════════════')
+  console.log('📥 HOSTPINNACLE SMS STATUS API RESULT')
+  console.log('═══════════════════════════════════════════════════════')
+  console.log('Success:', result.success)
+  console.log('Error:', result.error || 'None')
+  console.log('Message:', result.message || 'None')
+  console.log('Full Result:', JSON.stringify(result, null, 2))
+  console.log('═══════════════════════════════════════════════════════')
+
+  return result
 }
 
 /**
