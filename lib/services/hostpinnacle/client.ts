@@ -12,6 +12,10 @@ const HOSTPINNACLE_API_KEY = process.env.HOSTPINNACLE_API_KEY
 // PHP example uses /SMSApi/report/status with uuid parameter
 const HOSTPINNACLE_STATUS_ENDPOINT =
   process.env.HOSTPINNACLE_STATUS_ENDPOINT || '/SMSApi/report/status'
+// Timeout configuration (in milliseconds)
+const DEFAULT_TIMEOUT = parseInt(process.env.HOSTPINNACLE_TIMEOUT || '60000') // 60 seconds default
+const SMS_SEND_TIMEOUT = parseInt(process.env.HOSTPINNACLE_SMS_SEND_TIMEOUT || '90000') // 90 seconds for SMS send
+const STATUS_CHECK_TIMEOUT = parseInt(process.env.HOSTPINNACLE_STATUS_TIMEOUT || '30000') // 30 seconds for status checks
 
 interface HostPinnacleRequestOptions {
   apiKey?: string
@@ -32,7 +36,7 @@ interface HostPinnacleResponse {
 async function requestForm(
   endpoint: string,
   body: Record<string, string | number>,
-  options: HostPinnacleRequestOptions = {}
+  options: HostPinnacleRequestOptions & { timeout?: number } = {}
 ): Promise<HostPinnacleResponse> {
   const url = `${HOSTPINNACLE_BASE_URL}${endpoint}`
 
@@ -62,12 +66,15 @@ async function requestForm(
     formData.append('password', HOSTPINNACLE_PASSWORD)
   }
 
+  // Use custom timeout if provided, otherwise use default
+  const timeout = options.timeout || DEFAULT_TIMEOUT
+
   try {
     const response = await fetch(url, {
       method: 'POST',
       headers,
       body: formData.toString(),
-      signal: AbortSignal.timeout(30000),
+      signal: AbortSignal.timeout(timeout),
     })
 
     const text = await response.text()
@@ -131,10 +138,10 @@ async function requestForm(
       data,
     }
   } catch (error: any) {
-    if (error.name === 'AbortError') {
+    if (error.name === 'AbortError' || error.message?.includes('timeout') || error.message?.includes('aborted')) {
       return {
         success: false,
-        error: 'Request timeout',
+        error: `Request timeout after ${timeout}ms. The HostPinnacle API may be slow or unavailable. Please try again.`,
       }
     }
     return {
@@ -181,7 +188,10 @@ export async function readSmsStatus(params: {
     authOptions.password = HOSTPINNACLE_PASSWORD
   }
 
-  return requestForm(HOSTPINNACLE_STATUS_ENDPOINT, body, authOptions)
+  return requestForm(HOSTPINNACLE_STATUS_ENDPOINT, body, {
+    ...authOptions,
+    timeout: STATUS_CHECK_TIMEOUT, // Use shorter timeout for status checks
+  })
 }
 
 /**
@@ -265,6 +275,8 @@ export async function readSenderIds(params: {
 
 /**
  * Send SMS batch
+ * Uses longer timeout (90 seconds) as SMS sending can take time
+ * Includes retry logic for timeout errors (up to 2 retries)
  */
 export async function sendSms(params: {
   mobile: string | string[] // Comma-separated or array
@@ -272,6 +284,7 @@ export async function sendSms(params: {
   senderid: string
   msgType?: string
   options?: HostPinnacleRequestOptions
+  retries?: number // Number of retries on timeout (default: 2)
 }): Promise<HostPinnacleResponse> {
   const mobileStr = Array.isArray(params.mobile) ? params.mobile.join(',') : params.mobile
 
@@ -284,7 +297,42 @@ export async function sendSms(params: {
     output: 'json',
   }
 
-  return requestForm('/SMSApi/send', body, params.options)
+  const maxRetries = params.retries ?? 2
+  let lastError: HostPinnacleResponse | null = null
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const result = await requestForm('/SMSApi/send', body, {
+      ...params.options,
+      timeout: SMS_SEND_TIMEOUT, // Use longer timeout for SMS send
+    })
+
+    // If successful, return immediately
+    if (result.success) {
+      return result
+    }
+
+    // If timeout error and we have retries left, wait and retry
+    if (
+      result.error?.includes('timeout') &&
+      attempt < maxRetries
+    ) {
+      lastError = result
+      // Wait before retrying (exponential backoff: 2s, 4s)
+      const waitTime = Math.min(2000 * Math.pow(2, attempt), 10000)
+      console.log(`SMS send timeout, retrying in ${waitTime}ms (attempt ${attempt + 1}/${maxRetries + 1})...`)
+      await new Promise((resolve) => setTimeout(resolve, waitTime))
+      continue
+    }
+
+    // If not a timeout or no retries left, return the error
+    return result
+  }
+
+  // All retries exhausted
+  return lastError || {
+    success: false,
+    error: 'Request failed after multiple retries',
+  }
 }
 
 /**

@@ -255,12 +255,18 @@ export async function POST(request: NextRequest) {
           })
 
           // Log the full response for debugging
-          console.log('HostPinnacle SMS response:', {
-            success: hpResult.success,
-            error: hpResult.error,
-            message: hpResult.message,
-            data: hpResult.data,
-          })
+          console.log('═══════════════════════════════════════════════════════')
+          console.log('📤 HOSTPINNACLE SMS SEND API RESPONSE')
+          console.log('═══════════════════════════════════════════════════════')
+          console.log('Message ID:', smsMessage._id?.toString())
+          console.log('Recipient:', formattedPhone)
+          console.log('Sender ID:', senderId.senderName)
+          console.log('Success:', hpResult.success)
+          console.log('Error:', hpResult.error || 'None')
+          console.log('Message:', hpResult.message || 'None')
+          console.log('Full Response Data:', JSON.stringify(hpResult.data, null, 2))
+          console.log('Complete Response Object:', JSON.stringify(hpResult, null, 2))
+          console.log('═══════════════════════════════════════════════════════')
 
           // Note: "success" means HostPinnacle accepted the message. Actual delivery to the
           // handset is confirmed later via the DLR webhook (/api/sms/dlr). If messages

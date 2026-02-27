@@ -39,16 +39,32 @@ async function deductCredits(userId: mongoose.Types.ObjectId, segments: number) 
 }
 
 export async function checkSmsStatusForMessage(messageId: string, waitSeconds = 10) {
+  console.log('═══════════════════════════════════════════════════════')
+  console.log('🔄 STARTING SMS STATUS CHECK')
+  console.log('═══════════════════════════════════════════════════════')
+  console.log('Message ID:', messageId)
+  console.log('Wait seconds before check:', waitSeconds)
+  
   const smsMessage = await SmsMessage.findById(messageId).populate('userId', 'email')
 
-  if (!smsMessage) return
+  if (!smsMessage) {
+    console.log('❌ SMS message not found')
+    return
+  }
+
+  console.log('Current Status:', smsMessage.status)
+  console.log('Status Check Attempts:', smsMessage.statusCheckAttempts || 0)
+  console.log('External Msg ID:', smsMessage.externalMsgId)
+  console.log('HP Transaction ID:', smsMessage.hpTransactionId)
 
   // Only check messages that are still in-flight
   if (!['queued', 'sent', 'processing', 'retrying'].includes(smsMessage.status)) {
+    console.log('⚠️ Message status is', smsMessage.status, '- skipping status check')
     return
   }
 
   if (smsMessage.statusCheckAttempts && smsMessage.statusCheckAttempts >= MAX_STATUS_ATTEMPTS) {
+    console.log('⚠️ Max status check attempts reached (', MAX_STATUS_ATTEMPTS, ') - skipping')
     return
   }
 
@@ -84,7 +100,9 @@ export async function checkSmsStatusForMessage(messageId: string, waitSeconds = 
 
   // Wait before checking status (matching PHP: sleep(10))
   if (waitSeconds > 0) {
+    console.log('⏳ Waiting', waitSeconds, 'seconds before checking status...')
     await sleep(waitSeconds)
+    console.log('✅ Wait complete, now checking status')
   }
 
   const statusResult = await hostPinnacleClient.readSmsStatus({
@@ -95,6 +113,19 @@ export async function checkSmsStatusForMessage(messageId: string, waitSeconds = 
       password,
     },
   })
+
+  // Log the full status check response
+  console.log('═══════════════════════════════════════════════════════')
+  console.log('📊 HOSTPINNACLE SMS STATUS CHECK API RESPONSE')
+  console.log('═══════════════════════════════════════════════════════')
+  console.log('Message ID:', smsMessage._id?.toString())
+  console.log('UUID/Transaction ID:', uuid)
+  console.log('Success:', statusResult.success)
+  console.log('Error:', statusResult.error || 'None')
+  console.log('Message:', statusResult.message || 'None')
+  console.log('Full Response Data:', JSON.stringify(statusResult.data, null, 2))
+  console.log('Complete Response Object:', JSON.stringify(statusResult, null, 2))
+  console.log('═══════════════════════════════════════════════════════')
 
   const update: any = {
     statusCheckAttempts: (smsMessage.statusCheckAttempts || 0) + 1,
@@ -107,18 +138,34 @@ export async function checkSmsStatusForMessage(messageId: string, waitSeconds = 
   if (statusResult.success && statusResult.data) {
     const response = statusResult.data.response || statusResult.data
     
+    console.log('📋 Parsing Status Response Structure:')
+    console.log('Response object keys:', Object.keys(response))
+    console.log('Has reports_statusList?', !!response.reports_statusList)
+    
     // PHP: $statusData->response->reports_statusList[0]->status->Status
     if (response.reports_statusList && Array.isArray(response.reports_statusList) && response.reports_statusList.length > 0) {
+      console.log('✅ Found reports_statusList array with', response.reports_statusList.length, 'items')
       const report = response.reports_statusList[0]
+      console.log('First report item:', JSON.stringify(report, null, 2))
       if (report.status) {
         reportStatus = report.status.Status || report.status.status || null
         cause = report.status.Cause || report.status.cause || ''
+        console.log('✅ Extracted Status:', reportStatus)
+        console.log('✅ Extracted Cause:', cause)
+      } else {
+        console.log('⚠️ Report item has no status field')
       }
     } else {
+      console.log('⚠️ No reports_statusList found, trying fallback parsing')
       // Fallback: try direct status fields
       reportStatus = response.status?.Status || response.status?.status || response.Status || response.status || null
       cause = response.status?.Cause || response.status?.cause || response.Cause || response.cause || ''
+      console.log('Fallback Status:', reportStatus)
+      console.log('Fallback Cause:', cause)
     }
+  } else {
+    console.log('❌ Status check failed or no data returned')
+    console.log('Status result:', JSON.stringify(statusResult, null, 2))
   }
 
   // Get user email for notification
@@ -198,7 +245,11 @@ export async function checkSmsStatusForMessage(messageId: string, waitSeconds = 
     update.deliveryCause = 'Failed – No Status Report'
   }
 
+  console.log('📝 Updating SMS Message with:', JSON.stringify(update, null, 2))
   await SmsMessage.findByIdAndUpdate(smsMessage._id, update)
+  
+  console.log('✅ Status check complete!')
+  console.log('═══════════════════════════════════════════════════════')
 }
 
 /**
