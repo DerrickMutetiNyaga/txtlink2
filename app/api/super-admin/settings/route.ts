@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
       settingsObj.providerApiKey = masked
     }
 
-    // Mask HostPinnacle credentials
+    // Helper function to mask sensitive values
     const maskValue = (value: string | undefined) => {
       if (!value) return undefined
       return value.length > 8 
@@ -44,6 +44,7 @@ export async function GET(request: NextRequest) {
         : '••••••••'
     }
 
+    // Mask HostPinnacle credentials
     if (settingsObj.hostpinnacleUserId) {
       settingsObj.hostpinnacleUserId = maskValue(settingsObj.hostpinnacleUserId)
     }
@@ -55,12 +56,6 @@ export async function GET(request: NextRequest) {
     }
 
     // Mask M-Pesa credentials
-    const maskValue = (value: string | undefined) => {
-      if (!value) return undefined
-      return value.length > 8 
-        ? value.substring(0, 4) + '••••••••' + value.substring(value.length - 4)
-        : '••••••••'
-    }
 
     if (settingsObj.mpesaConsumerKey) {
       settingsObj.mpesaConsumerKey = maskValue(settingsObj.mpesaConsumerKey)
