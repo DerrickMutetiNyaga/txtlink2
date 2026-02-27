@@ -45,6 +45,35 @@ export async function PATCH(
         )
       }
     }
+    if (body.product !== undefined) {
+      if (!['SMS', 'WhatsApp'].includes(body.product)) {
+        return NextResponse.json({ error: 'Invalid product' }, { status: 400 })
+      }
+      webhook.product = body.product
+    }
+    if (body.serverSendMethod !== undefined) {
+      if (!['POST', 'GET', 'JSON', 'XML'].includes(body.serverSendMethod)) {
+        return NextResponse.json({ error: 'Invalid server send method' }, { status: 400 })
+      }
+      webhook.serverSendMethod = body.serverSendMethod
+    }
+    if (body.reportType !== undefined) {
+      if (!['DLR', 'MO'].includes(body.reportType)) {
+        return NextResponse.json({ error: 'Invalid report type' }, { status: 400 })
+      }
+      webhook.reportType = body.reportType
+    }
+    if (body.wabaNumber !== undefined) webhook.wabaNumber = body.wabaNumber
+    if (body.transactionIdParam !== undefined) webhook.transactionIdParam = body.transactionIdParam
+    if (body.messageIdParam !== undefined) webhook.messageIdParam = body.messageIdParam
+    if (body.errorCodeParam !== undefined) webhook.errorCodeParam = body.errorCodeParam
+    if (body.mobileNumberParam !== undefined) webhook.mobileNumberParam = body.mobileNumberParam
+    if (body.receivedTimeParam !== undefined) webhook.receivedTimeParam = body.receivedTimeParam
+    if (body.deliveredTimeParam !== undefined) webhook.deliveredTimeParam = body.deliveredTimeParam
+    if (body.readTimeParam !== undefined) webhook.readTimeParam = body.readTimeParam
+    if (body.statusParam !== undefined) webhook.statusParam = body.statusParam
+    if (body.customParameters !== undefined) webhook.customParameters = body.customParameters
+    if (body.customHeaders !== undefined) webhook.customHeaders = body.customHeaders
     if (body.events !== undefined) {
       const validEvents = ['sms.delivered', 'sms.failed', 'sms.sent', 'balance.low', 'campaign.completed']
       const invalidEvents = body.events.filter((e: string) => !validEvents.includes(e))

@@ -11,8 +11,9 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import connectDB from '@/lib/db/connect'
-import { SmsMessage, User, WebhookLog } from '@/lib/db/models'
+import { SmsMessage, User, WebhookLog, UserWebhook } from '@/lib/db/models'
 import { getPricingRule } from '@/lib/utils/pricing'
+import { sendWebhook } from '@/lib/services/webhook/delivery'
 
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET
 
@@ -152,6 +153,47 @@ export async function POST(request: NextRequest) {
       { transactionId },
       { processed: true, processedAt: new Date() }
     ).catch(() => {})
+
+    // Trigger user webhooks for DLR
+    try {
+      const userWebhooks = await UserWebhook.find({
+        userId: smsMessage.userId,
+        product: 'SMS',
+        reportType: 'DLR',
+        status: 'active',
+      })
+
+      const webhookData = {
+        transactionId: String(transactionId),
+        messageId: smsMessage._id?.toString(),
+        errorCode: errorCode || (mappedStatus === 'failed' ? '1' : '0'),
+        mobileNumber: smsMessage.toNumbers?.[0] || '',
+        receivedTime: data.receivedTime || new Date().toISOString(),
+        deliveredTime: deliveredTime || (mappedStatus === 'delivered' ? new Date().toISOString() : undefined),
+        status: mappedStatus,
+      }
+
+      // Send webhooks asynchronously (don't wait for them)
+      Promise.all(
+        userWebhooks.map(async (webhook) => {
+          try {
+            const result = await sendWebhook(webhook, webhookData)
+            await UserWebhook.findByIdAndUpdate(webhook._id, {
+              lastTriggeredAt: new Date(),
+            })
+            return result
+          } catch (err) {
+            console.error(`Failed to send webhook ${webhook._id}:`, err)
+            return { success: false, error: String(err) }
+          }
+        })
+      ).catch((err) => {
+        console.error('Error sending user webhooks:', err)
+      })
+    } catch (webhookErr) {
+      console.error('Error triggering user webhooks:', webhookErr)
+      // Don't fail the DLR processing if webhook sending fails
+    }
 
     return ok()
   } catch (error: any) {

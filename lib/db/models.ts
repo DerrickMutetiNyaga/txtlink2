@@ -240,12 +240,30 @@ const AuditLogSchema = new Schema<IAuditLog>(
 export interface IUserWebhook {
   _id?: string
   userId: mongoose.Types.ObjectId
-  name: string
-  url: string
-  events: string[] // Array of event types like ['sms.delivered', 'sms.failed']
+  name?: string // Optional name for identification
+  product: 'SMS' | 'WhatsApp' // Product type
+  serverSendMethod: 'POST' | 'GET' | 'JSON' | 'XML' // HTTP method/format
+  reportType: 'DLR' | 'MO' // Report type (MO disabled for SMS)
+  wabaNumber?: string // WhatsApp Business Account number (WhatsApp only)
+  url: string // Webhook URL endpoint
+  // Parameter name mappings (what parameter names to use when sending)
+  transactionIdParam?: string
+  messageIdParam?: string
+  errorCodeParam?: string
+  mobileNumberParam?: string
+  receivedTimeParam?: string
+  deliveredTimeParam?: string
+  readTimeParam?: string // WhatsApp only
+  statusParam?: string // WhatsApp only
+  // Custom parameters and headers
+  customParameters?: Array<{ name: string; value: string }>
+  customHeaders?: Array<{ name: string; value: string }>
+  // Legacy fields (for backward compatibility)
+  events?: string[] // Array of event types like ['sms.delivered', 'sms.failed']
   secret: string // Webhook secret for signature verification
   status: 'active' | 'inactive'
   lastTriggeredAt?: Date
+  lastTestResponse?: string // Store test webhook response
   createdAt: Date
   updatedAt: Date
 }
@@ -253,12 +271,36 @@ export interface IUserWebhook {
 const UserWebhookSchema = new Schema<IUserWebhook>(
   {
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-    name: { type: String, required: true },
+    name: { type: String },
+    product: { type: String, enum: ['SMS', 'WhatsApp'], required: true },
+    serverSendMethod: { type: String, enum: ['POST', 'GET', 'JSON', 'XML'], required: true },
+    reportType: { type: String, enum: ['DLR', 'MO'], required: true },
+    wabaNumber: { type: String },
     url: { type: String, required: true },
-    events: { type: [String], required: true },
+    // Parameter mappings
+    transactionIdParam: { type: String },
+    messageIdParam: { type: String },
+    errorCodeParam: { type: String },
+    mobileNumberParam: { type: String },
+    receivedTimeParam: { type: String },
+    deliveredTimeParam: { type: String },
+    readTimeParam: { type: String },
+    statusParam: { type: String },
+    // Custom parameters and headers
+    customParameters: [{
+      name: { type: String, required: true },
+      value: { type: String, required: true },
+    }],
+    customHeaders: [{
+      name: { type: String, required: true },
+      value: { type: String, required: true },
+    }],
+    // Legacy fields
+    events: { type: [String] },
     secret: { type: String, required: true },
     status: { type: String, enum: ['active', 'inactive'], default: 'active' },
     lastTriggeredAt: { type: Date },
+    lastTestResponse: { type: String },
   },
   { timestamps: true }
 )

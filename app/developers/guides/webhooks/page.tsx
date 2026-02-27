@@ -1,274 +1,262 @@
 'use client'
 
 import { DocsLayout } from '@/components/docs-layout'
-import { CodeBlock } from '@/components/docs/code-block'
-import { Callout } from '@/components/docs/callout'
 import { Card } from '@/components/ui/card'
-import { Tabs, Tab } from '@/components/docs/tabs'
-import { Webhook, CheckCircle2 } from 'lucide-react'
-import Link from 'next/link'
 
 export default function WebhooksPage() {
-  const webhookExample = `{
-  "event": "sms.delivered",
-  "messageId": "507f1f77bcf86cd799439011",
-  "to": "+254712345678",
-  "status": "delivered",
-  "deliveredAt": "2026-02-08T12:05:00Z",
-  "timestamp": "2026-02-08T12:05:00Z"
-}`
-
-  const nodeExample = `// Express.js webhook handler
-const express = require('express');
-const crypto = require('crypto');
-const app = express();
-
-app.post('/webhook', express.raw({ type: 'application/json' }), (req, res) => {
-  const signature = req.headers['x-txtlink-signature'];
-  const secret = process.env.TXTLINK_WEBHOOK_SECRET;
-  
-  // Verify signature
-  const hmac = crypto.createHmac('sha256', secret);
-  const digest = hmac.update(JSON.stringify(req.body)).digest('hex');
-  
-  if (signature !== digest) {
-    return res.status(401).send('Invalid signature');
-  }
-  
-  const event = JSON.parse(req.body);
-  
-  // Handle different event types
-  switch (event.event) {
-    case 'sms.delivered':
-      console.log('SMS delivered:', event.messageId);
-      // Update your database
-      break;
-    case 'sms.failed':
-      console.log('SMS failed:', event.messageId);
-      // Handle failure
-      break;
-  }
-  
-  res.status(200).send('OK');
-});`
-
-  const pythonExample = `# Flask webhook handler
-from flask import Flask, request, jsonify
-import hmac
-import hashlib
-import os
-
-app = Flask(__name__)
-
-@app.route('/webhook', methods=['POST'])
-def webhook():
-    signature = request.headers.get('X-TXTLINK-Signature')
-    secret = os.getenv('TXTLINK_WEBHOOK_SECRET')
-    
-    # Verify signature
-    hmac_obj = hmac.new(secret.encode(), request.data, hashlib.sha256)
-    digest = hmac_obj.hexdigest()
-    
-    if signature != digest:
-        return jsonify({'error': 'Invalid signature'}), 401
-    
-    event = request.json
-    
-    # Handle different event types
-    if event['event'] == 'sms.delivered':
-        print(f"SMS delivered: {event['messageId']}")
-    elif event['event'] == 'sms.failed':
-        print(f"SMS failed: {event['messageId']}")
-    
-    return jsonify({'status': 'ok'}), 200`
-
-  const events = [
-    {
-      event: 'sms.queued',
-      description: 'SMS message has been queued for delivery',
-      fields: ['messageId', 'to', 'senderId', 'timestamp'],
-    },
-    {
-      event: 'sms.sent',
-      description: 'SMS message has been sent to the carrier',
-      fields: ['messageId', 'to', 'senderId', 'sentAt', 'timestamp'],
-    },
-    {
-      event: 'sms.delivered',
-      description: 'SMS message has been delivered to the recipient',
-      fields: ['messageId', 'to', 'senderId', 'deliveredAt', 'timestamp'],
-    },
-    {
-      event: 'sms.failed',
-      description: 'SMS message delivery failed',
-      fields: ['messageId', 'to', 'senderId', 'errorCode', 'errorMessage', 'failedAt', 'timestamp'],
-    },
-  ]
-
   return (
     <DocsLayout>
       <div className="prose prose-slate max-w-none">
-        <div className="mb-12">
+        <div className="mb-10">
           <h1 className="text-4xl font-bold text-slate-900 mb-4">
             Webhooks
           </h1>
-          <p className="text-xl text-slate-600 leading-relaxed">
-            Webhooks allow you to receive real-time notifications about SMS delivery status. 
-            Configure webhooks to get instant updates when messages are delivered or fail.
+          <p className="text-lg text-slate-600 leading-relaxed">
+            This guide explains what webhooks are and how to configure them in the platform
+            for real-time Delivery Reports (DLR) and WhatsApp Mobile Originated (MO) responses.
           </p>
         </div>
 
-        {/* What are Webhooks */}
-        <div className="mb-12">
-          <h2 className="text-2xl font-bold text-slate-900 mb-6">What are Webhooks?</h2>
-          <p className="text-slate-600 mb-6">
-            Webhooks are HTTP callbacks that notify your application when events occur. 
-            Instead of polling the API for status updates, TXTLINK sends a POST request 
-            to your webhook URL whenever an SMS status changes.
+        <div className="mb-8">
+          <h2 className="text-2xl font-bold text-slate-900 mb-4">What are Webhooks?</h2>
+          <p className="text-slate-700 mb-4">
+            Webhooks are a way for two systems to communicate with each other in real-time.
+            They enable the automatic and instant delivery of data from one system (the sender)
+            to another system (the receiver) whenever a specific event or trigger occurs.
           </p>
-          <Card className="p-6 bg-slate-50">
-            <div className="flex items-start gap-4">
-              <Webhook className="w-6 h-6 text-emerald-600 flex-shrink-0 mt-1" />
-              <div>
-                <h3 className="font-semibold text-slate-900 mb-2">Benefits</h3>
-                <ul className="space-y-2 text-slate-600">
-                  <li className="flex items-start gap-2">
-                    <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
-                    <span>Real-time delivery status updates</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
-                    <span>No need to poll the API repeatedly</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
-                    <span>Reduced API calls and faster response times</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
-                    <span>Automatic retry on delivery failures</span>
-                  </li>
-                </ul>
-              </div>
-            </div>
+          <p className="text-slate-700 mb-4">
+            Instead of the receiver continuously polling or requesting data from the sender,
+            webhooks allow the sender to proactively push data to the receiver. This makes
+            integrations more efficient, reduces latency, and simplifies your application logic.
+          </p>
+          <p className="text-slate-700 mb-4">
+            Webhooks are commonly used to streamline data synchronization, automate workflows,
+            and facilitate seamless integrations. By utilizing webhooks, you can receive timely
+            updates, notifications, or data payloads whenever certain events or actions occur,
+            enabling you to respond promptly and trigger corresponding actions in your system.
+          </p>
+          <Card className="p-6 bg-slate-50 border-slate-200">
+            <h3 className="text-lg font-semibold text-slate-900 mb-3">How Webhooks Work</h3>
+            <ol className="list-decimal list-inside space-y-2 text-slate-700">
+              <li>
+                <strong>Event Trigger</strong>: An event or action occurs in the sender system,
+                such as a new SMS delivery update, a WhatsApp message, or a status change.
+              </li>
+              <li>
+                <strong>Webhook Registration</strong>: The receiver system registers a webhook
+                with the sender system by providing a callback URL or endpoint where the data
+                will be sent.
+              </li>
+              <li>
+                <strong>Payload Delivery</strong>: When the event is triggered, the sender
+                system packages relevant data into a payload and sends an HTTP request to the
+                specified webhook URL.
+              </li>
+              <li>
+                <strong>Receiver Handling</strong>: The receiver system processes the payload
+                at the webhook endpoint and performs any necessary actions or updates.
+              </li>
+            </ol>
           </Card>
         </div>
 
-        {/* Setting Up Webhooks */}
-        <div className="mb-12">
-          <h2 className="text-2xl font-bold text-slate-900 mb-6">Setting Up Webhooks</h2>
-          <ol className="list-decimal list-inside space-y-3 text-slate-600 mb-6">
-            <li>Create a webhook endpoint in your application that accepts POST requests</li>
-            <li>Log in to your TXTLINK dashboard</li>
-            <li>Navigate to <strong>Settings → Webhooks</strong></li>
-            <li>Click <strong>"Create Webhook"</strong></li>
-            <li>Enter your webhook URL (must be HTTPS in production)</li>
-            <li>Select the events you want to receive (e.g., sms.delivered, sms.failed)</li>
-            <li>Save your webhook secret for signature verification</li>
-          </ol>
-          <Callout type="warning" title="Webhook URL Requirements">
-            <ul className="list-disc list-inside space-y-1 mt-2">
-              <li>Must be publicly accessible (not localhost)</li>
-              <li>Must use HTTPS in production</li>
-              <li>Must respond with 200 OK within 5 seconds</li>
-              <li>Should verify webhook signatures for security</li>
+        <div className="mb-8">
+          <h2 className="text-2xl font-bold text-slate-900 mb-4">How to Use this Documentation</h2>
+          <p className="text-slate-700">
+            This page walks you through:
+          </p>
+          <ul className="list-disc list-inside text-slate-700 space-y-1 mt-2">
+            <li>Adding a webhook for SMS / WhatsApp DLR (Delivery Reports)</li>
+            <li>Adding a webhook for WhatsApp MO (Mobile Originated) responses</li>
+            <li>Managing and reviewing all configured webhooks</li>
+          </ul>
+        </div>
+
+        <div className="mb-10">
+          <h2 className="text-2xl font-bold text-slate-900 mb-4">Add Webhook for DLR (SMS/WhatsApp)</h2>
+          <p className="text-slate-700 mb-4">
+            To receive real-time Delivery Receipts (DLRs), you can set up a webhook. This webhook
+            can be used for all supported products, such as SMS and WhatsApp.
+          </p>
+          <Card className="p-6 bg-white border-slate-200">
+            <h3 className="text-lg font-semibold text-slate-900 mb-3">Form Fields</h3>
+            <ol className="list-decimal list-inside space-y-2 text-slate-700 mb-4">
+              <li>
+                <strong>Product</strong>: Select the product for which you want to create the webhook
+                (e.g., SMS, WhatsApp).
+              </li>
+              <li>
+                <strong>Webhook Server Send Method</strong>: Select the send method for the webhook
+                (e.g., POST, GET, JSON, XML).
+              </li>
+              <li>
+                <strong>Webhook Report Type</strong>: Select the type of report you want to receive
+                via the webhook (e.g., DLR, MO). MO is not available for the SMS product.
+              </li>
+              <li>
+                <strong>Waba Number (WhatsApp only)</strong>: Choose a Waba number from the list.
+                This field will not appear for the SMS product.
+              </li>
+              <li>
+                <strong>Webhook (URL Endpoint)</strong>: Enter the URL where you want to receive the
+                webhook data.
+              </li>
+            </ol>
+
+            <h3 className="text-lg font-semibold text-slate-900 mb-3">Required Parameters</h3>
+            <p className="text-slate-700 mb-3">
+              Set the following required parameters for the webhook by specifying the parameter
+              names that your endpoint expects:
+            </p>
+            <ul className="list-disc list-inside space-y-1 text-slate-700 mb-4">
+              <li><strong>Transaction ID Parameter</strong>: Parameter name for the transaction ID.</li>
+              <li><strong>Message ID Parameter</strong>: Parameter name for the message ID.</li>
+              <li><strong>Error Code Parameter</strong>: Parameter name for the error code.</li>
+              <li><strong>Mobile Number Parameter</strong>: Parameter name for the mobile number.</li>
+              <li><strong>Received Time Parameter</strong>: Parameter name for the received time.</li>
+              <li><strong>Delivered Time Parameter</strong>: Parameter name for the delivered time.</li>
             </ul>
-          </Callout>
-        </div>
 
-        {/* Webhook Events */}
-        <div className="mb-12">
-          <h2 className="text-2xl font-bold text-slate-900 mb-6">Webhook Events</h2>
-          <p className="text-slate-600 mb-6">
-            TXTLINK sends webhooks for the following events:
-          </p>
-          <div className="space-y-4">
-            {events.map((event) => (
-              <Card key={event.event} className="p-6 bg-white border border-slate-200 rounded-2xl shadow-sm">
-                <div className="flex items-start gap-4">
-                  <div className="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center flex-shrink-0">
-                    <Webhook className="w-5 h-5 text-emerald-600" />
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      <h3 className="font-semibold text-slate-900">{event.event}</h3>
-                      <span className="px-2 py-1 bg-slate-100 text-slate-600 rounded text-xs font-mono">
-                        {event.event}
-                      </span>
-                    </div>
-                    <p className="text-slate-600 mb-3">{event.description}</p>
-                    <div className="bg-slate-50 rounded-lg p-3">
-                      <p className="text-xs font-semibold text-slate-500 mb-1">Payload Fields:</p>
-                      <div className="flex flex-wrap gap-2">
-                        {event.fields.map((field) => (
-                          <span key={field} className="px-2 py-1 bg-white text-slate-600 rounded text-xs font-mono">
-                            {field}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </Card>
-            ))}
-          </div>
-        </div>
-
-        {/* Webhook Payload */}
-        <div className="mb-12">
-          <h2 className="text-2xl font-bold text-slate-900 mb-6">Webhook Payload</h2>
-          <p className="text-slate-600 mb-6">
-            Example webhook payload for a delivered SMS:
-          </p>
-          <CodeBlock code={webhookExample} language="json" />
-        </div>
-
-        {/* Implementation Examples */}
-        <div className="mb-12">
-          <h2 className="text-2xl font-bold text-slate-900 mb-6">Implementation Examples</h2>
-          <Tabs defaultTab="node">
-            <Tab id="node" label="Node.js">
-              <CodeBlock code={nodeExample} language="javascript" />
-            </Tab>
-            <Tab id="python" label="Python">
-              <CodeBlock code={pythonExample} language="python" />
-            </Tab>
-          </Tabs>
-        </div>
-
-        {/* Security */}
-        <div className="mb-12">
-          <h2 className="text-2xl font-bold text-slate-900 mb-6">Security</h2>
-          <Callout type="warning" title="Always Verify Webhook Signatures">
-            <p className="mb-3">
-              TXTLINK signs all webhook requests with a secret key. Always verify the signature 
-              to ensure the request is authentic and hasn't been tampered with.
+            <p className="text-slate-700 mb-3">
+              For WhatsApp-specific DLRs, you can also configure the following:
             </p>
-            <p className="text-sm text-slate-600">
-              The signature is sent in the <code className="px-1.5 py-0.5 bg-slate-100 rounded">X-TXTLINK-Signature</code> header 
-              and is computed using HMAC-SHA256 with your webhook secret.
+            <ul className="list-disc list-inside space-y-1 text-slate-700 mb-4">
+              <li><strong>Read Time Parameter</strong>: Parameter name for the read time.</li>
+              <li><strong>Status Parameter</strong>: Parameter name for the status.</li>
+            </ul>
+
+            <h3 className="text-lg font-semibold text-slate-900 mb-3">Custom Parameters &amp; Headers (Optional)</h3>
+            <p className="text-slate-700 mb-2">
+              Optionally, you can enrich webhook requests with additional data:
             </p>
-          </Callout>
+            <ul className="list-disc list-inside space-y-1 text-slate-700 mb-4">
+              <li>
+                <strong>Add Custom Parameters</strong>: Enable this checkbox to add extra parameters
+                (key–value pairs) that will be sent alongside the default fields. You can click
+                <strong> Add More</strong> to add multiple parameters.
+              </li>
+              <li>
+                <strong>Add Custom Headers</strong>: Enable this checkbox to include additional
+                HTTP headers. You can also click <strong>Add More</strong> to define multiple headers.
+              </li>
+            </ul>
+
+            <h3 className="text-lg font-semibold text-slate-900 mb-3">Testing &amp; Saving</h3>
+            <ul className="list-disc list-inside space-y-1 text-slate-700">
+              <li>
+                Click <strong>Test Webhook</strong> to send a test request and preview the response
+                from your endpoint.
+              </li>
+              <li>
+                Once you are satisfied with the configuration, click <strong>Save</strong> to
+                create the webhook. You can also add multiple custom parameters and headers
+                using the <strong>Add More</strong> buttons.
+              </li>
+            </ul>
+          </Card>
         </div>
 
-        {/* Testing */}
-        <div className="mb-12">
-          <h2 className="text-2xl font-bold text-slate-900 mb-6">Testing Webhooks</h2>
-          <p className="text-slate-600 mb-6">
-            Use tools like ngrok or localtunnel to expose your local development server 
-            for webhook testing:
+        <div className="mb-10">
+          <h2 className="text-2xl font-bold text-slate-900 mb-4">Add Webhook for WhatsApp’s MO Response</h2>
+          <p className="text-slate-700 mb-4">
+            To receive real-time MO (Mobile Originated) responses from WhatsApp, you can set up
+            a dedicated webhook for the WhatsApp product.
           </p>
-          <CodeBlock
-            code={`# Using ngrok
-ngrok http 3000
+          <Card className="p-6 bg-white border-slate-200">
+            <h3 className="text-lg font-semibold text-slate-900 mb-3">Form Fields</h3>
+            <ol className="list-decimal list-inside space-y-2 text-slate-700 mb-4">
+              <li>
+                <strong>Product</strong>: Select the product for which you want to create the webhook.
+                For MO responses, choose <strong>WhatsApp</strong>.
+              </li>
+              <li>
+                <strong>Webhook Server Send Method</strong>: Select the HTTP method used for sending
+                the webhook (POST, GET, JSON, or XML).
+              </li>
+              <li>
+                <strong>Webhook Report Type</strong>: Select <strong>MO</strong> as the report type.
+              </li>
+              <li>
+                <strong>Waba Number</strong>: If applicable, select the specific Waba number.
+              </li>
+              <li>
+                <strong>Webhook (URL Endpoint)</strong>: Provide the full URL (including protocol,
+                e.g., <code>https://</code>) where MO data will be sent.
+              </li>
+            </ol>
 
-# Your webhook URL will be:
-# https://abc123.ngrok.io/webhook`}
-            language="bash"
-          />
+            <h3 className="text-lg font-semibold text-slate-900 mb-3">Custom Parameters &amp; Headers (Optional)</h3>
+            <p className="text-slate-700 mb-2">
+              You can also include custom parameters and headers:
+            </p>
+            <ul className="list-disc list-inside space-y-1 text-slate-700 mb-4">
+              <li>
+                Enable <strong>Add Custom Parameters</strong> and define any extra parameters
+                your endpoint expects. Use <strong>Add More</strong> to define multiple entries.
+              </li>
+              <li>
+                Enable <strong>Add Custom Headers</strong> and set any additional HTTP headers
+                needed by your system. Again, use <strong>Add More</strong> to add several headers.
+              </li>
+            </ul>
+
+            <h3 className="text-lg font-semibold text-slate-900 mb-3">Testing &amp; Saving</h3>
+            <ul className="list-disc list-inside space-y-1 text-slate-700">
+              <li>
+                Click <strong>Test Webhook</strong> to validate that your endpoint is reachable
+                and that it handles the payload as expected. The test response will be shown
+                in the <strong>Webhook Test Response</strong> section.
+              </li>
+              <li>
+                Click <strong>Save Changes</strong> to persist the webhook configuration.
+              </li>
+            </ul>
+          </Card>
+        </div>
+
+        <div className="mb-10">
+          <h2 className="text-2xl font-bold text-slate-900 mb-4">Manage Webhooks</h2>
+          <p className="text-slate-700 mb-4">
+            The <strong>Manage Webhooks</strong> section lets you review and maintain all
+            configured webhooks for DLR and MO.
+          </p>
+          <Card className="p-6 bg-white border-slate-200">
+            <h3 className="text-lg font-semibold text-slate-900 mb-3">View Webhooks</h3>
+            <p className="text-slate-700 mb-3">
+              The webhooks table typically includes:
+            </p>
+            <ul className="list-disc list-inside space-y-1 text-slate-700 mb-4">
+              <li><strong>ID</strong>: Unique identifier for each webhook.</li>
+              <li><strong>Product</strong>: The product associated with the webhook (SMS, WhatsApp, etc.).</li>
+              <li><strong>Webhook</strong>: The URL endpoint where webhook data is sent.</li>
+              <li><strong>Report Type</strong>: The report type (DLR or MO).</li>
+              <li><strong>Server Method</strong>: The HTTP/send method used (POST, GET, JSON, XML).</li>
+              <li><strong>Product Unique ID</strong>: A product-specific identifier, such as a Waba number.</li>
+              <li><strong>Action</strong>: Controls for editing, deleting, or viewing details.</li>
+            </ul>
+            <p className="text-slate-700 mb-4">
+              If no webhooks have been configured yet, the table will display a message indicating
+              that there are no entries.
+            </p>
+
+            <h3 className="text-lg font-semibold text-slate-900 mb-3">Available Actions</h3>
+            <ul className="list-disc list-inside space-y-1 text-slate-700">
+              <li><strong>Edit</strong>: Update the webhook configuration.</li>
+              <li><strong>Delete</strong>: Remove the webhook from the system.</li>
+              <li><strong>View Details</strong>: Inspect the full configuration of a webhook.</li>
+            </ul>
+          </Card>
+        </div>
+
+        <div className="mb-8">
+          <h2 className="text-2xl font-bold text-slate-900 mb-3">Next Steps</h2>
+          <p className="text-slate-700">
+            Once you have created and saved your webhooks, the platform will start sending
+            real-time DLR and MO data to the specified webhook URLs based on your configuration.
+            If you have any questions or need further assistance, contact support.
+          </p>
         </div>
       </div>
     </DocsLayout>
   )
 }
-
