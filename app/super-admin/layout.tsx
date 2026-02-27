@@ -21,6 +21,7 @@ import {
   Bell,
   ChevronDown,
   CreditCard,
+  Activity,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -125,6 +126,7 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
     { href: '/super-admin/pricing', label: 'Pricing', icon: DollarSign },
     { href: '/super-admin/mpesa-transactions', label: 'M-Pesa Transactions', icon: CreditCard },
     { href: '/super-admin/analytics', label: 'Analytics', icon: BarChart3 },
+    { href: '/super-admin/queue-status', label: 'Queue Status', icon: Activity },
     { href: '/super-admin/audit', label: 'Audit Logs', icon: FileText },
     { href: '/super-admin/settings', label: 'Settings', icon: Settings },
   ]
