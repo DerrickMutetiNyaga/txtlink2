@@ -152,7 +152,7 @@ export async function POST(request: NextRequest) {
           channel: 'sms',
           email: dbUser.email,
         })),
-        { session }
+        { session, ordered: true }
       )
 
       await session.commitTransaction()

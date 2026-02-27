@@ -21,10 +21,7 @@ import React, { useState, useEffect } from 'react'
 import {
   Upload,
   Users,
-  Filter,
   Check,
-  CheckCircle2,
-  Download,
   ArrowRight,
   Send,
   Loader2,
@@ -51,11 +48,6 @@ const validNumbers = 1230
 const invalidNumbers = 20
 const duplicatesRemoved = 5
 
-const contactLists = [
-  { id: '1', name: 'Customers', count: 15234, updated: '2024-01-15' },
-  { id: '2', name: 'Newsletter Subscribers', count: 8945, updated: '2024-01-10' },
-  { id: '3', name: 'VIP Members', count: 3421, updated: '2024-01-20' },
-]
 
 interface SenderIdOption {
   id: string
@@ -66,9 +58,9 @@ interface SenderIdOption {
 
 export function BulkSendForm({ balance, pricePerCreditKes }: BulkSendFormProps) {
   const [bulkStep, setBulkStep] = useState<1 | 2 | 3 | 4>(1)
-  const [audienceMethod, setAudienceMethod] = useState<'csv' | 'list' | 'segment'>('csv')
+  const [audienceMethod, setAudienceMethod] = useState<'csv' | 'manual'>('manual')
   const [csvFile, setCsvFile] = useState<File | null>(null)
-  const [selectedList, setSelectedList] = useState<string>('')
+  const [manualNumbers, setManualNumbers] = useState<string>('')
   const [bulkMessage, setBulkMessage] = useState('')
   const [bulkSenderId, setBulkSenderId] = useState<string>('')
   const [bulkSchedule, setBulkSchedule] = useState('now')
@@ -217,9 +209,8 @@ export function BulkSendForm({ balance, pricePerCreditKes }: BulkSendFormProps) 
             {/* Method Selector */}
             <div className="flex gap-2 p-1 bg-slate-100 rounded-xl border border-slate-200/60 mb-6">
               {[
+                { id: 'manual', label: 'Add Numbers', icon: Users },
                 { id: 'csv', label: 'Upload CSV', icon: Upload },
-                { id: 'list', label: 'Select List', icon: Users },
-                { id: 'segment', label: 'Segment', icon: Filter },
               ].map((method) => {
                 const IconComponent = method.icon
                 return (
@@ -367,114 +358,130 @@ export function BulkSendForm({ balance, pricePerCreditKes }: BulkSendFormProps) 
               </div>
             )}
 
-            {/* Select List */}
-            {audienceMethod === 'list' && (
+            {/* Manual Number Input */}
+            {audienceMethod === 'manual' && (
               <div className="space-y-4">
-                <Input
-                  placeholder="Search lists..."
-                  className="h-11 bg-slate-50 border-slate-200/70 focus:bg-white focus:border-[#0F766E] focus:ring-4 focus:ring-[#0F766E]/10 rounded-xl"
-                />
-                <div className="space-y-2">
-                  {contactLists.map((list) => (
-                    <button
-                      key={list.id}
-                      onClick={() => setSelectedList(list.id)}
-                      className={`w-full p-4 rounded-xl border transition-all text-left ${
-                        selectedList === list.id
-                          ? 'border-[#0F766E] bg-[#ECFDF5]'
-                          : 'border-slate-200 hover:border-slate-300 bg-white'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="font-semibold text-slate-900">{list.name}</p>
-                          <p className="text-sm text-slate-500 mt-1">
-                            {list.count.toLocaleString()} contacts • Updated {list.updated}
-                          </p>
-                        </div>
-                        {selectedList === list.id && (
-                          <CheckCircle2 className="w-5 h-5 text-[#0F766E]" />
-                        )}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Segment */}
-            {audienceMethod === 'segment' && (
-              <div className="space-y-4">
-                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/60">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Filter size={16} className="text-slate-500" />
-                    <p className="text-sm font-medium text-slate-700">Segment Rules</p>
-                  </div>
-                  <div className="space-y-2">
-                    <Select defaultValue="country">
-                      <SelectTrigger className="h-10 bg-white">
-                        <SelectValue placeholder="Field" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="country">Country</SelectItem>
-                        <SelectItem value="tag">Tag</SelectItem>
-                        <SelectItem value="last_seen">Last Seen</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Select defaultValue="equals">
-                      <SelectTrigger className="h-10 bg-white">
-                        <SelectValue placeholder="Operator" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="equals">Equals</SelectItem>
-                        <SelectItem value="contains">Contains</SelectItem>
-                        <SelectItem value="less_than">Less than</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Input placeholder="Value (e.g., Kenya)" className="h-10 bg-white" />
-                  </div>
-                </div>
-                <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200/50">
-                  <p className="text-sm font-medium text-emerald-700 mb-1">
-                    Estimated recipients
+                <div>
+                  <label className="block text-sm font-semibold text-slate-900 mb-2">
+                    Phone Numbers
+                  </label>
+                  <p className="text-sm text-slate-700 mb-3">
+                    Enter phone numbers, one per line or separated by commas.
                   </p>
-                  <p className="text-2xl font-bold text-emerald-700">
-                    {estimatedRecipients.toLocaleString()}
+                  <div className="mb-3 p-3 rounded-lg bg-slate-50 border border-slate-200">
+                    <p className="text-xs font-medium text-slate-600 mb-1">Example format:</p>
+                    <div className="font-mono text-sm text-slate-900 space-y-0.5">
+                      <div>+254712345678</div>
+                      <div>+254723456789</div>
+                      <div>+254734567890</div>
+                    </div>
+                  </div>
+                  <Textarea
+                    value={manualNumbers}
+                    onChange={(e) => {
+                      setManualNumbers(e.target.value)
+                      // Parse numbers from input
+                      const input = e.target.value
+                      // Split by newlines, commas, or semicolons, then filter and clean
+                      const numbers = input
+                        .split(/[\n,;]+/)
+                        .map(num => num.trim())
+                        .filter(num => num.length > 0)
+                        .map(num => {
+                          // Extract digits and + sign
+                          const digits = num.replace(/[^\d+]/g, '')
+                          
+                          // Handle different formats:
+                          // If starts with 0, assume Kenya (+254)
+                          if (digits.startsWith('0')) {
+                            return `+254${digits.substring(1)}`
+                          }
+                          
+                          // If starts with 254, add +
+                          if (digits.startsWith('254')) {
+                            return `+${digits}`
+                          }
+                          
+                          // If starts with +, keep it
+                          if (digits.startsWith('+')) {
+                            return digits
+                          }
+                          
+                          // If 9 digits and starts with 7 or 1, assume Kenya
+                          if (digits.length === 9 && (digits.startsWith('7') || digits.startsWith('1'))) {
+                            return `+254${digits}`
+                          }
+                          
+                          // Otherwise, add + prefix
+                          return digits.length > 0 ? `+${digits}` : ''
+                        })
+                        .filter(num => num.length > 0)
+                      
+                      // Remove duplicates if enabled
+                      const uniqueNumbers = excludeDuplicates 
+                        ? [...new Set(numbers)]
+                        : numbers
+                      
+                      setParsedRecipients(uniqueNumbers)
+                      setSendError(null)
+                    }}
+                    placeholder="+254712345678&#10;+254723456789&#10;+254734567890"
+                    rows={12}
+                    className="w-full px-4 py-4 bg-white border-2 border-slate-300 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0F766E] focus:border-[#0F766E] rounded-xl text-base text-slate-900 resize-none leading-relaxed font-mono placeholder:text-slate-400"
+                  />
+                </div>
+                
+                <div className="p-4 rounded-xl bg-emerald-50 border-2 border-emerald-300">
+                  <p className="text-sm font-semibold text-emerald-800 mb-1">
+                    Valid Numbers
                   </p>
+                  <p className="text-3xl font-bold text-emerald-700">
+                    {parsedRecipients.length.toLocaleString()}
+                  </p>
+                  {excludeDuplicates && manualNumbers.split(/[\n,;]+/).filter(n => n.trim()).length > parsedRecipients.length && (
+                    <p className="text-sm text-emerald-700 mt-2 font-medium">
+                      {manualNumbers.split(/[\n,;]+/).filter(n => n.trim()).length - parsedRecipients.length} duplicate(s) removed
+                    </p>
+                  )}
+                  {parsedRecipients.length === 0 && (
+                    <p className="text-sm text-emerald-600 mt-2">
+                      Enter phone numbers above to see count
+                    </p>
+                  )}
                 </div>
               </div>
             )}
 
             {/* Audience Protections */}
-            <div className="mt-6 pt-6 border-t border-slate-200">
-              <p className="text-sm font-medium text-slate-700 mb-3">Audience Protections</p>
+            <div className="mt-6 pt-6 border-t-2 border-slate-300">
+              <p className="text-sm font-semibold text-slate-900 mb-4">Audience Protections</p>
               <div className="space-y-3">
-                <label className="flex items-center gap-3 cursor-pointer">
+                <label className="flex items-center gap-3 cursor-pointer p-2 rounded-lg hover:bg-slate-50 transition-colors">
                   <input
                     type="checkbox"
                     checked={excludeDuplicates}
                     onChange={(e) => setExcludeDuplicates(e.target.checked)}
-                    className="w-4 h-4 rounded border-slate-300 text-[#0F766E] focus:ring-[#0F766E]"
+                    className="w-5 h-5 rounded border-2 border-slate-400 text-[#0F766E] focus:ring-2 focus:ring-[#0F766E] cursor-pointer"
                   />
-                  <span className="text-sm text-slate-700">Exclude duplicates</span>
+                  <span className="text-sm font-medium text-slate-900">Exclude duplicates</span>
                 </label>
-                <label className="flex items-center gap-3 cursor-pointer">
+                <label className="flex items-center gap-3 cursor-pointer p-2 rounded-lg hover:bg-slate-50 transition-colors">
                   <input
                     type="checkbox"
                     checked={excludeInvalid}
                     onChange={(e) => setExcludeInvalid(e.target.checked)}
-                    className="w-4 h-4 rounded border-slate-300 text-[#0F766E] focus:ring-[#0F766E]"
+                    className="w-5 h-5 rounded border-2 border-slate-400 text-[#0F766E] focus:ring-2 focus:ring-[#0F766E] cursor-pointer"
                   />
-                  <span className="text-sm text-slate-700">Exclude invalid numbers</span>
+                  <span className="text-sm font-medium text-slate-900">Exclude invalid numbers</span>
                 </label>
-                <label className="flex items-center gap-3 cursor-pointer">
+                <label className="flex items-center gap-3 cursor-pointer p-2 rounded-lg hover:bg-slate-50 transition-colors">
                   <input
                     type="checkbox"
                     checked={excludeUnsubscribed}
                     onChange={(e) => setExcludeUnsubscribed(e.target.checked)}
-                    className="w-4 h-4 rounded border-slate-300 text-[#0F766E] focus:ring-[#0F766E]"
+                    className="w-5 h-5 rounded border-2 border-slate-400 text-[#0F766E] focus:ring-2 focus:ring-[#0F766E] cursor-pointer"
                   />
-                  <span className="text-sm text-slate-700">Exclude unsubscribed</span>
+                  <span className="text-sm font-medium text-slate-900">Exclude unsubscribed</span>
                 </label>
               </div>
             </div>
@@ -483,7 +490,7 @@ export function BulkSendForm({ balance, pricePerCreditKes }: BulkSendFormProps) 
             <div className="flex justify-end mt-8">
               <Button
                 onClick={() => setBulkStep(2)}
-                disabled={!csvFile && !selectedList && audienceMethod !== 'segment'}
+                disabled={parsedRecipients.length === 0 && !csvFile}
                 className="bg-[#0F766E] hover:bg-[#115E59] text-white rounded-xl px-6"
               >
                 Continue
