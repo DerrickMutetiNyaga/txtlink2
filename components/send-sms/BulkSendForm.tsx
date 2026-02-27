@@ -83,6 +83,8 @@ export function BulkSendForm({ balance, pricePerCreditKes }: BulkSendFormProps) 
   const [priority, setPriority] = useState('normal')
   const [senderIds, setSenderIds] = useState<SenderIdOption[]>([])
   const [loadingSenderIds, setLoadingSenderIds] = useState(true)
+  const [parsedRecipients, setParsedRecipients] = useState<string[]>([])
+  const [sendError, setSendError] = useState<string | null>(null)
 
   // Fetch sender IDs on mount
   useEffect(() => {
@@ -140,7 +142,7 @@ export function BulkSendForm({ balance, pricePerCreditKes }: BulkSendFormProps) 
   // Calculations
   const bulkCharCount = bulkMessage.length
   const bulkSegments = Math.ceil(bulkCharCount / 153) || 0
-  const estimatedRecipients = validNumbers
+  const estimatedRecipients = parsedRecipients.length || validNumbers
   const totalSegments = bulkSegments * estimatedRecipients
   const bulkEstimatedCredits = totalSegments // 1 credit per 153 chars per recipient
   const bulkHasSufficientBalance = balance >= bulkEstimatedCredits
@@ -251,7 +253,39 @@ export function BulkSendForm({ balance, pricePerCreditKes }: BulkSendFormProps) 
                   <input
                     type="file"
                     accept=".csv"
-                    onChange={(e) => e.target.files?.[0] && setCsvFile(e.target.files[0])}
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0]
+                      if (file) {
+                        setCsvFile(file)
+                        // Parse CSV file
+                        const text = await file.text()
+                        const lines = text.split('\n').filter(line => line.trim())
+                        const headers = lines[0]?.split(',').map(h => h.trim().toLowerCase()) || []
+                        const phoneIndex = headers.findIndex(h => h === 'phone' || h === 'mobile' || h === 'number')
+                        
+                        if (phoneIndex === -1) {
+                          setSendError('CSV must have a "phone" column')
+                          return
+                        }
+                        
+                        const phones: string[] = []
+                        for (let i = 1; i < lines.length; i++) {
+                          const values = lines[i].split(',').map(v => v.trim())
+                          const phone = values[phoneIndex]
+                          if (phone) {
+                            phones.push(phone)
+                          }
+                        }
+                        
+                        // Remove duplicates if enabled
+                        const uniquePhones = excludeDuplicates 
+                          ? [...new Set(phones)]
+                          : phones
+                        
+                        setParsedRecipients(uniquePhones)
+                        setSendError(null)
+                      }
+                    }}
                     className="hidden"
                     id="csv-upload"
                   />
@@ -815,6 +849,24 @@ export function BulkSendForm({ balance, pricePerCreditKes }: BulkSendFormProps) 
                 </div>
               </div>
 
+              {/* Error Message */}
+              {sendError && (
+                <div className="p-4 rounded-xl bg-red-50 border border-red-200/60">
+                  <p className="text-sm font-medium text-red-900">Error</p>
+                  <p className="text-sm text-red-700 mt-1">{sendError}</p>
+                </div>
+              )}
+
+              {/* Success Message */}
+              {isSuccess && (
+                <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200/60">
+                  <p className="text-sm font-medium text-emerald-900">Success!</p>
+                  <p className="text-sm text-emerald-700 mt-1">
+                    Bulk SMS campaign queued. Redirecting to SMS history...
+                  </p>
+                </div>
+              )}
+
               {/* Confirmation Checkbox */}
               <label className="flex items-start gap-3 p-4 rounded-xl border border-slate-200/60 cursor-pointer hover:bg-slate-50 transition-colors">
                 <input
@@ -850,12 +902,47 @@ export function BulkSendForm({ balance, pricePerCreditKes }: BulkSendFormProps) 
                 </Button>
                 <Button
                   onClick={async () => {
+                    if (!bulkMessage || !bulkSenderId || parsedRecipients.length === 0) {
+                      setSendError('Please complete all required fields')
+                      return
+                    }
+
                     setIsBulkSending(true)
-                    await new Promise((resolve) => setTimeout(resolve, 2000))
-                    setIsBulkSending(false)
-                    setIsSuccess(true)
+                    setSendError(null)
+
+                    try {
+                      const token = localStorage.getItem('token')
+                      const response = await authFetch('/api/sms/bulk-send', {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                          recipients: parsedRecipients,
+                          message: bulkMessage,
+                          senderIdId: bulkSenderId,
+                        }),
+                      })
+
+                      if (!response.ok) {
+                        const errorData = await response.json()
+                        throw new Error(errorData.error || 'Failed to send bulk SMS')
+                      }
+
+                      const data = await response.json()
+                      setIsSuccess(true)
+                      
+                      // Redirect to SMS history after 2 seconds
+                      setTimeout(() => {
+                        window.location.href = '/app/smshistory'
+                      }, 2000)
+                    } catch (error: any) {
+                      setSendError(error.message || 'Failed to send bulk SMS')
+                    } finally {
+                      setIsBulkSending(false)
+                    }
                   }}
-                  disabled={!confirmedOptIn || !bulkHasSufficientBalance || isBulkSending}
+                  disabled={!confirmedOptIn || !bulkHasSufficientBalance || isBulkSending || parsedRecipients.length === 0}
                   className="flex-1 bg-[#0F766E] hover:bg-[#115E59] text-white rounded-xl disabled:opacity-50"
                 >
                   {isBulkSending ? (

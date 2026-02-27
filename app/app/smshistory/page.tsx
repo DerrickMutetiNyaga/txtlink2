@@ -131,26 +131,65 @@ export default function SMSHistoryPage() {
     fetchSMSHistory(true)
   }, [statusFilter, senderIdFilter, searchQuery])
 
-  // Auto-refresh: Poll every 10 seconds if there are pending/sent messages
+  // Real-time status checking: Check one message at a time until completion
   useEffect(() => {
-    // Check if there are messages that need status updates
-    const hasPendingMessages = smsHistory.some(
+    // Find the first message that needs status checking
+    const pendingMessage = smsHistory.find(
       (msg) => msg.status === 'sent' || msg.status === 'queued' || msg.status === 'pending'
     )
 
-    if (!hasPendingMessages) {
-      return // No need to poll if all messages are delivered/failed
+    if (!pendingMessage) {
+      return // No messages need checking
     }
 
-    // Set up interval for auto-refresh
-    const intervalId = setInterval(() => {
-      // Only refresh if page is visible (not in background tab)
-      if (document.visibilityState === 'visible') {
-        fetchSMSHistory(false) // Don't show loading spinner on auto-refresh
-      }
-    }, 10000) // Poll every 10 seconds
+    // Only check if page is visible
+    if (document.visibilityState !== 'visible') {
+      return
+    }
 
-    // Cleanup interval on unmount or when dependencies change
+    // Check status of this message
+    const checkMessageStatus = async () => {
+      try {
+        const token = localStorage.getItem('token')
+        const response = await fetch(`/api/sms/status?messageId=${pendingMessage.messageId}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+
+        if (response.ok) {
+          const data = await response.json()
+          
+          // Update the specific message in state without reloading
+          if (data.completed || data.status !== pendingMessage.status) {
+            setSmsHistory(prev => prev.map(msg => 
+              msg.messageId === pendingMessage.messageId
+                ? {
+                    ...msg,
+                    status: data.status as any,
+                    failureReason: data.errorMessage || msg.failureReason,
+                  }
+                : msg
+            ))
+            
+            // Update stats if status changed to final state
+            if (data.completed && (data.status === 'delivered' || data.status === 'failed')) {
+              // Refresh stats after a short delay to ensure DB is updated
+              setTimeout(() => {
+                fetchSMSHistory(false) // Refresh stats only
+              }, 500)
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Failed to check message status:', error)
+      }
+    }
+
+    // Check immediately, then every 10 seconds
+    checkMessageStatus()
+    const intervalId = setInterval(checkMessageStatus, 10000)
+
     return () => clearInterval(intervalId)
   }, [smsHistory, fetchSMSHistory])
 
@@ -254,7 +293,7 @@ export default function SMSHistoryPage() {
               {smsHistory.some((msg) => msg.status === 'sent' || msg.status === 'queued' || msg.status === 'pending') && (
                 <p className="text-xs text-emerald-600 mt-1 flex items-center gap-1">
                   <RefreshCw className="w-3 h-3 animate-spin" />
-                  Auto-refreshing every 10 seconds...
+                  Auto-checking status every 10 seconds (one message at a time until completion)...
                 </p>
               )}
             </div>
@@ -454,7 +493,10 @@ export default function SMSHistoryPage() {
                             {sms.message}
                           </td>
                           <td className="px-5 py-3">
-                            <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${getStatusBadge(sms.status)}`}>
+                            <span 
+                              key={`${sms.id}-${sms.status}`}
+                              className={`rounded-full px-2.5 py-1 text-xs font-medium ${getStatusBadge(sms.status)}`}
+                            >
                               {sms.status === 'retrying' ? 'Retrying' : sms.status.charAt(0).toUpperCase() + sms.status.slice(1)}
                             </span>
                           </td>
