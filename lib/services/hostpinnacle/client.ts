@@ -6,6 +6,8 @@
 const HOSTPINNACLE_BASE_URL = process.env.HOSTPINNACLE_BASE_URL || 'https://smsportal.hostpinnacle.co.ke'
 const HOSTPINNACLE_USERID = process.env.HOSTPINNACLE_USERID
 const HOSTPINNACLE_PASSWORD = process.env.HOSTPINNACLE_PASSWORD
+// Prefer API key based authentication when available, as recommended by HostPinnacle docs
+const HOSTPINNACLE_API_KEY = process.env.HOSTPINNACLE_API_KEY
 
 interface HostPinnacleRequestOptions {
   apiKey?: string
@@ -36,13 +38,17 @@ async function requestForm(
     formData.append(key, String(value))
   }
 
-  // Add auth: prefer apiKey in header, otherwise userId+password in body
+  // Add auth: prefer apiKey in header (from options or env), otherwise userId+password in body
   const headers: Record<string, string> = {
     'Content-Type': 'application/x-www-form-urlencoded',
   }
 
   if (options.apiKey) {
+    // Explicit API key passed in options
     headers['apiKey'] = options.apiKey
+  } else if (HOSTPINNACLE_API_KEY) {
+    // Fallback to API key from environment
+    headers['apiKey'] = HOSTPINNACLE_API_KEY
   } else if (options.userId && options.password) {
     formData.append('userid', options.userId)
     formData.append('password', options.password)
