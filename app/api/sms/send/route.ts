@@ -30,8 +30,8 @@ function formatPhoneNumber(phone: string): string {
     return `+${digits}`
   }
   
-  // If digits start with 7 (Kenya mobile without country code), add +254
-  if (digits.startsWith('7') && digits.length === 9) {
+  // If digits start with 7 or 1 (Kenya mobile without country code), add +254
+  if ((digits.startsWith('7') || digits.startsWith('1')) && digits.length === 9) {
     return `+254${digits}`
   }
   

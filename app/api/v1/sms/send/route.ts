@@ -35,8 +35,8 @@ function formatPhoneNumber(phone: string): string {
     return `+${digits}`
   }
   
-  // If digits start with 7 (Kenya mobile without country code), add +254
-  if (digits.startsWith('7') && digits.length === 9) {
+  // If digits start with 7 or 1 (Kenya mobile without country code), add +254
+  if ((digits.startsWith('7') || digits.startsWith('1')) && digits.length === 9) {
     return `+254${digits}`
   }
   
@@ -277,8 +277,8 @@ export async function POST(request: NextRequest) {
       if (digitsAfter254.length !== 9) {
         phoneValidationError = `Invalid Kenya phone number. Should be +254 followed by 9 digits (e.g., +254712345678). Got: ${formattedPhone}`
         phoneErrorCode = 'INVALID_PHONE_NUMBER'
-      } else if (!digitsAfter254.startsWith('7')) {
-        phoneValidationError = `Invalid Kenya mobile number. Mobile numbers should start with 7 (e.g., +254712345678). Got: ${formattedPhone}`
+      } else if (!(digitsAfter254.startsWith('7') || digitsAfter254.startsWith('1'))) {
+        phoneValidationError = `Invalid Kenya mobile number. Mobile numbers should start with 7 or 1 (e.g., +254712345678 or +254112345678). Got: ${formattedPhone}`
         phoneErrorCode = 'INVALID_PHONE_NUMBER'
       }
     } else if (formattedPhone.startsWith('+7')) {

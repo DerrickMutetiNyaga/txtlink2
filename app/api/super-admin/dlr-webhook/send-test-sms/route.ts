@@ -16,7 +16,7 @@ function formatPhone(phone: string): string {
   if (digits.startsWith('0')) return `+254${digits.substring(1)}`
   if (phone.startsWith('+')) return phone
   if (digits.startsWith('254')) return `+${digits}`
-  if (digits.startsWith('7') && digits.length === 9) return `+254${digits}`
+  if ((digits.startsWith('7') || digits.startsWith('1')) && digits.length === 9) return `+254${digits}`
   return `+${digits}`
 }
 

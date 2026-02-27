@@ -38,7 +38,7 @@ import {
   FileText,
   DollarSign
 } from 'lucide-react'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 
 // Message type
@@ -77,53 +77,82 @@ export default function SMSHistoryPage() {
   })
   const [failureInsights, setFailureInsights] = useState<Array<{ reason: string; count: number; percentage: number }>>([])
   const [availableSenderIds, setAvailableSenderIds] = useState<string[]>([])
+  const [isAutoRefreshing, setIsAutoRefreshing] = useState(false)
 
-  // Fetch SMS history
-  useEffect(() => {
-    const fetchSMSHistory = async () => {
-      try {
-        setLoading(true)
-        const token = localStorage.getItem('token')
-        const params = new URLSearchParams({
-          status: statusFilter,
-          senderId: senderIdFilter,
-          search: searchQuery,
+  // Fetch SMS history function
+  const fetchSMSHistory = useCallback(async (showLoading = true) => {
+    try {
+      if (showLoading) setLoading(true)
+      setIsAutoRefreshing(true)
+      const token = localStorage.getItem('token')
+      const params = new URLSearchParams({
+        status: statusFilter,
+        senderId: senderIdFilter,
+        search: searchQuery,
+      })
+
+      const response = await fetch(`/api/user/sms-history?${params.toString()}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setSmsHistory(data.messages || [])
+        setDeliveryStats(data.stats || {
+          delivered: { count: 0, percentage: 0 },
+          failed: { count: 0, percentage: 0 },
+          pending: { count: 0, percentage: 0 },
         })
-
-        const response = await fetch(`/api/user/sms-history?${params.toString()}`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        })
-
-        if (response.ok) {
-          const data = await response.json()
-          setSmsHistory(data.messages || [])
-          setDeliveryStats(data.stats || {
-            delivered: { count: 0, percentage: 0 },
-            failed: { count: 0, percentage: 0 },
-            pending: { count: 0, percentage: 0 },
-          })
-          setFailureInsights(data.failureInsights || [])
-          
-          // Extract unique sender IDs
-          const senderIds = [...new Set(data.messages?.map((msg: SMSMessage) => msg.senderId) || [])]
-          setAvailableSenderIds(senderIds)
-        }
-      } catch (error) {
-        console.error('Failed to fetch SMS history:', error)
+        setFailureInsights(data.failureInsights || [])
+        
+        // Extract unique sender IDs
+        const senderIds = [...new Set(data.messages?.map((msg: SMSMessage) => msg.senderId) || [])]
+        setAvailableSenderIds(senderIds)
+      }
+    } catch (error) {
+      console.error('Failed to fetch SMS history:', error)
+      if (showLoading) {
         toast({
           title: 'Error',
           description: 'Failed to load SMS history',
           variant: 'destructive',
         })
-      } finally {
-        setLoading(false)
       }
+    } finally {
+      if (showLoading) setLoading(false)
+      setIsAutoRefreshing(false)
+    }
+  }, [statusFilter, senderIdFilter, searchQuery, toast])
+
+  // Initial fetch and when filters change
+  useEffect(() => {
+    fetchSMSHistory(true)
+  }, [statusFilter, senderIdFilter, searchQuery])
+
+  // Auto-refresh: Poll every 10 seconds if there are pending/sent messages
+  useEffect(() => {
+    // Check if there are messages that need status updates
+    const hasPendingMessages = smsHistory.some(
+      (msg) => msg.status === 'sent' || msg.status === 'queued' || msg.status === 'pending'
+    )
+
+    if (!hasPendingMessages) {
+      return // No need to poll if all messages are delivered/failed
     }
 
-    fetchSMSHistory()
-  }, [statusFilter, senderIdFilter, searchQuery, toast])
+    // Set up interval for auto-refresh
+    const intervalId = setInterval(() => {
+      // Only refresh if page is visible (not in background tab)
+      if (document.visibilityState === 'visible') {
+        fetchSMSHistory(false) // Don't show loading spinner on auto-refresh
+      }
+    }, 10000) // Poll every 10 seconds
+
+    // Cleanup interval on unmount or when dependencies change
+    return () => clearInterval(intervalId)
+  }, [smsHistory, fetchSMSHistory])
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -222,6 +251,12 @@ export default function SMSHistoryPage() {
               <p className="text-xs text-slate-500 mt-1">
                 Delivered/Failed status is updated by HostPinnacle delivery reports (DLR)—so you can see if each message actually reached the recipient.
               </p>
+              {smsHistory.some((msg) => msg.status === 'sent' || msg.status === 'queued' || msg.status === 'pending') && (
+                <p className="text-xs text-emerald-600 mt-1 flex items-center gap-1">
+                  <RefreshCw className="w-3 h-3 animate-spin" />
+                  Auto-refreshing every 10 seconds...
+                </p>
+              )}
             </div>
 
             {/* Center: Search */}
@@ -240,6 +275,16 @@ export default function SMSHistoryPage() {
 
             {/* Right: Actions */}
             <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                onClick={() => fetchSMSHistory(true)}
+                disabled={isAutoRefreshing}
+                className="h-9 rounded-xl border border-slate-200 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 hover:text-slate-900 hover:border-slate-300 disabled:opacity-50"
+                title="Refresh now"
+              >
+                <RefreshCw className={`w-4 h-4 mr-2 ${isAutoRefreshing ? 'animate-spin' : ''}`} />
+                {isAutoRefreshing ? 'Refreshing...' : 'Refresh'}
+              </Button>
               <Button
                 variant="outline"
                 className="h-9 rounded-xl border border-slate-200 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 hover:text-slate-900 hover:border-slate-300"

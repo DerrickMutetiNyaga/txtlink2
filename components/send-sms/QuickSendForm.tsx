@@ -87,8 +87,8 @@ export function QuickSendForm({
       return `+254${digits}`
     }
     
-    // If starts with 7 (Kenya mobile without country code), add +254
-    if (cleaned.startsWith('7')) {
+    // If starts with 7 or 1 (Kenya mobile without country code), add +254
+    if (cleaned.startsWith('7') || cleaned.startsWith('1')) {
       const digits = cleaned.replace(/\D/g, '').slice(0, 9)
       if (digits.length === 9) {
         return `+254${digits}`
@@ -123,8 +123,8 @@ export function QuickSendForm({
       if (digits.length !== 9) {
         return { valid: false, error: 'Kenya number must be +254 followed by 9 digits' }
       }
-      if (!digits.startsWith('7')) {
-        return { valid: false, error: 'Kenya mobile numbers must start with 7' }
+      if (!digits.startsWith('7') && !digits.startsWith('1')) {
+        return { valid: false, error: 'Kenya mobile numbers must start with 7 or 1' }
       }
       return { valid: true, error: null }
     }
