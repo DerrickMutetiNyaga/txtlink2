@@ -3,6 +3,7 @@
 import { PortalLayout } from '@/components/portal-layout'
 import { QuickSendForm } from '@/components/send-sms/QuickSendForm'
 import { BulkSendForm } from '@/components/send-sms/BulkSendForm'
+import SenderIdAdBanner from '@/components/sender-id-ad/SenderIdAdBanner'
 import { useState, useEffect } from 'react'
 
 export default function SendSMSPage() {
@@ -62,6 +63,9 @@ export default function SendSMSPage() {
   return (
     <PortalLayout activeSection="Send SMS">
       <div className="max-w-7xl mx-auto">
+        {/* Sender ID Ad Banner */}
+        <SenderIdAdBanner currentPage="send-sms" />
+        
         {/* Header */}
         <div className="mb-6">
           <h1 className="text-2xl md:text-3xl font-semibold text-slate-900 mb-2">Send SMS</h1>

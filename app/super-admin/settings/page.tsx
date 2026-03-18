@@ -544,6 +544,38 @@ export default function SuperAdminSettingsPage() {
                 </Button>
                 <span className="text-xs text-[#64748B]">One-time: tell HostPinnacle to send delivery reports to this app</span>
               </div>
+              {/* Manual Status Sync */}
+              <div className="mt-4 p-4 rounded-lg border border-[#E5E7EB] bg-[#FAFAFA]">
+                <Label className="text-sm font-medium text-[#020617] mb-2 block">Manual Status Sync</Label>
+                <p className="text-xs text-[#64748B] mb-3">Manually check and update SMS statuses from HostPinnacle. This will check all pending messages and update their status.</p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    try {
+                      const token = localStorage.getItem('token')
+                      const res = await fetch('/api/cron/sms-status?limit=100', {
+                        method: 'GET',
+                        headers: token ? { Authorization: `Bearer ${token}` } : {},
+                      })
+                      const data = await res.json()
+                      if (data.success) {
+                        alert(`Status sync completed! Checked ${data.limit || 100} messages.`)
+                      } else {
+                        alert(data.error || 'Status sync failed')
+                      }
+                    } catch (e: any) {
+                      alert(e.message || 'Request failed')
+                    }
+                  }}
+                  className="border-[#E5E7EB]"
+                >
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  Sync Statuses Now
+                </Button>
+              </div>
+
               <div className="mt-4 p-4 rounded-lg border border-[#E5E7EB] bg-[#FAFAFA]">
                 <Label className="text-sm font-medium text-[#020617] mb-2 block">Test delivery reports</Label>
                 <p className="text-xs text-[#64748B] mb-3">Send a test SMS. Success and delivery status appear here—no need to open SMS History.</p>

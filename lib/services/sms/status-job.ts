@@ -264,36 +264,57 @@ export async function checkSmsStatusForMessage(messageId: string, waitSeconds = 
  */
 export async function checkPendingSmsStatuses(limit = 100) {
   const pendingMessages = await SmsMessage.find({
-    status: { $in: ['queued', 'sent', 'processing'] },
+    status: { $in: ['queued', 'sent', 'processing', 'retrying'] },
     statusCheckAttempts: { $lt: MAX_STATUS_ATTEMPTS },
   })
     .sort({ createdAt: 1 }) // Oldest first
     .limit(limit)
     .lean()
 
+  console.log(`[Status Job] Found ${pendingMessages.length} pending messages to check`)
+
   if (pendingMessages.length === 0) {
+    console.log('[Status Job] No pending messages found')
     return
   }
 
   // Process in batches of 10 concurrently to avoid overwhelming the API
   const batchSize = 10
+  let successCount = 0
+  let errorCount = 0
+  
   for (let i = 0; i < pendingMessages.length; i += batchSize) {
     const batch = pendingMessages.slice(i, i + batchSize)
     
+    console.log(`[Status Job] Processing batch ${Math.floor(i / batchSize) + 1} (${batch.length} messages)`)
+    
     // Process batch concurrently
-    await Promise.allSettled(
+    const results = await Promise.allSettled(
       batch.map(msg => 
         checkSmsStatusForMessage(msg._id!.toString(), 0).catch(e => {
           console.error('Error checking SMS status for message', msg._id, e)
+          errorCount++
+          throw e
         })
       )
     )
+    
+    // Count successes
+    results.forEach(result => {
+      if (result.status === 'fulfilled') {
+        successCount++
+      } else {
+        errorCount++
+      }
+    })
 
     // Small delay between batches to avoid rate limiting
     if (i + batchSize < pendingMessages.length) {
       await new Promise(resolve => setTimeout(resolve, 100))
     }
   }
+  
+  console.log(`[Status Job] Completed: ${successCount} successful, ${errorCount} errors`)
 }
 
 

@@ -124,6 +124,7 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
     { href: '/super-admin', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/super-admin/accounts', label: 'Accounts', icon: Users },
     { href: '/super-admin/pricing', label: 'Pricing', icon: DollarSign },
+    { href: '/super-admin/sender-id-ad', label: 'Sender ID Ad', icon: CheckCircle2 },
     { href: '/super-admin/mpesa-transactions', label: 'M-Pesa Transactions', icon: CreditCard },
     { href: '/super-admin/analytics', label: 'Analytics', icon: BarChart3 },
     { href: '/super-admin/queue-status', label: 'Queue Status', icon: Activity },

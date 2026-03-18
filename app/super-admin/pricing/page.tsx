@@ -130,6 +130,21 @@ export default function SuperAdminPricing() {
   const [editingMarketingPricing, setEditingMarketingPricing] = useState<MarketingPricing | null>(null)
   const [showMarketingEditor, setShowMarketingEditor] = useState(false)
 
+  // Sender ID pricing state
+  const [senderIdPricing, setSenderIdPricing] = useState<{
+    registrationFee: number
+    approvalTimeline: string
+    requiredDocuments: string[]
+    description: string
+  } | null>(null)
+  const [editingSenderIdPricing, setEditingSenderIdPricing] = useState<{
+    registrationFee: number
+    approvalTimeline: string
+    requiredDocuments: string[]
+    description: string
+  } | null>(null)
+  const [showSenderIdEditor, setShowSenderIdEditor] = useState(false)
+
   useEffect(() => {
     fetchData()
     // Create default global rule if none exists
@@ -184,6 +199,15 @@ export default function SuperAdminPricing() {
         const marketingResult = await marketingResponse.json()
         setMarketingPricing(marketingResult.pricing)
       }
+
+      // Fetch Sender ID pricing
+      const senderIdResponse = await fetch('/api/sender-id-pricing', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (senderIdResponse.ok) {
+        const senderIdResult = await senderIdResponse.json()
+        setSenderIdPricing(senderIdResult.pricing)
+      }
     } catch (error) {
       console.error('Error fetching data:', error)
     } finally {
@@ -217,6 +241,35 @@ export default function SuperAdminPricing() {
       }
     } catch (error) {
       alert('Failed to save marketing pricing')
+    }
+  }
+
+  const handleSaveSenderIdPricing = async () => {
+    if (!editingSenderIdPricing) return
+
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch('/api/sender-id-pricing', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(editingSenderIdPricing),
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        setSenderIdPricing(result.pricing)
+        setShowSenderIdEditor(false)
+        setEditingSenderIdPricing(null)
+        alert('Sender ID pricing saved successfully')
+      } else {
+        const error = await response.json()
+        alert(error.error || 'Failed to save Sender ID pricing')
+      }
+    } catch (error) {
+      alert('Failed to save Sender ID pricing')
     }
   }
 
@@ -889,6 +942,67 @@ export default function SuperAdminPricing() {
           )}
         </Card>
 
+        {/* Sender ID Pricing Management Section */}
+        <Card className="bg-white border-[#E5E7EB] rounded-xl shadow-sm border-l-4 border-l-emerald-500 p-6">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-2">
+              <Radio className="w-5 h-5 text-emerald-600" />
+              <h2 className="text-xl font-semibold text-[#020617]">Sender ID Pricing (Public Pages)</h2>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                onClick={() => {
+                  setEditingSenderIdPricing(senderIdPricing || {
+                    registrationFee: 5000,
+                    approvalTimeline: '3-5 business days after document submission',
+                    requiredDocuments: [
+                      'Business registration certificate',
+                      'Company letterhead',
+                      'Authorized signatory ID',
+                    ],
+                    description: 'One-time setup fee for new Sender ID registration and approval processing. No annual renewal fees.',
+                  })
+                  setShowSenderIdEditor(true)
+                }}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-xl shadow-sm active:scale-95 focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-all duration-150"
+              >
+                <Edit className="w-4 h-4 mr-2" />
+                Edit Sender ID Pricing
+              </Button>
+            </div>
+          </div>
+
+          {senderIdPricing ? (
+            <div className="space-y-4">
+              <div className="bg-[#F8FAFC] rounded-lg p-4 border border-[#E5E7EB]">
+                <p className="text-sm font-medium text-[#020617] mb-2">Registration Fee</p>
+                <p className="text-lg font-bold text-[#020617]">KSh {senderIdPricing.registrationFee.toLocaleString()}</p>
+              </div>
+              <div className="bg-[#F8FAFC] rounded-lg p-4 border border-[#E5E7EB]">
+                <p className="text-sm font-medium text-[#020617] mb-2">Approval Timeline</p>
+                <p className="text-sm text-[#64748B]">{senderIdPricing.approvalTimeline}</p>
+              </div>
+              <div className="bg-[#F8FAFC] rounded-lg p-4 border border-[#E5E7EB]">
+                <p className="text-sm font-medium text-[#020617] mb-2">Description</p>
+                <p className="text-sm text-[#64748B]">{senderIdPricing.description}</p>
+              </div>
+              <div className="bg-[#F8FAFC] rounded-lg p-4 border border-[#E5E7EB]">
+                <p className="text-sm font-medium text-[#020617] mb-3">Required Documents ({senderIdPricing.requiredDocuments.length})</p>
+                <ul className="space-y-1">
+                  {senderIdPricing.requiredDocuments.map((doc, idx) => (
+                    <li key={idx} className="text-sm text-[#64748B] flex items-start gap-2">
+                      <span className="text-emerald-600 mt-0.5">•</span>
+                      <span>{doc}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-[#64748B]">No Sender ID pricing configured. Click "Edit Sender ID Pricing" to set it up.</p>
+          )}
+        </Card>
+
         {/* Marketing Pricing Management Section */}
         <Card className="bg-white border-[#E5E7EB] rounded-xl shadow-sm border-l-4 border-l-teal-500 p-6">
           <div className="flex items-center justify-between mb-6">
@@ -902,8 +1016,57 @@ export default function SuperAdminPricing() {
                   setEditingMarketingPricing(marketingPricing || {
                     pageTitle: 'Simple, Transparent Pricing',
                     pageSubtitle: 'Scale your messaging without hidden fees. Only pay for what you send.',
-                    tiers: [],
-                    volumeDiscounts: [],
+                    tiers: [
+                      {
+                        name: 'Starter',
+                        price: 'KSh 0.3',
+                        priceDecimal: '',
+                        unit: 'per SMS',
+                        description: 'For growing businesses starting their SMS journey',
+                        icon: 'Rocket',
+                        accentColor: 'teal',
+                        features: [
+                          { text: 'Up to 10,000 SMS/month', category: 'Sending', highlight: false },
+                          { text: 'Basic sender ID', category: 'Sending', highlight: false },
+                          { text: 'REST API access', category: 'API', highlight: true },
+                          { text: 'Email support', category: 'Support', highlight: false },
+                          { text: 'Standard routing', category: 'Sending', highlight: false },
+                          { text: 'Web dashboard', category: 'Support', highlight: false },
+                        ],
+                        cta: 'Get Started',
+                        ctaSecondary: 'See full API docs',
+                        highlighted: false,
+                      },
+                      {
+                        name: 'Professional',
+                        price: 'KSh 0.25',
+                        priceDecimal: '',
+                        unit: 'per SMS',
+                        description: 'For established businesses with high volume',
+                        icon: 'ShieldCheck',
+                        accentColor: 'indigo',
+                        features: [
+                          { text: 'Unlimited SMS volume', category: 'Sending', highlight: true },
+                          { text: 'Dedicated sender ID', category: 'Sending', highlight: false },
+                          { text: 'REST + SMPP APIs', category: 'API', highlight: true },
+                          { text: 'Priority 24/7 support', category: 'Support', highlight: false },
+                          { text: 'Advanced analytics', category: 'Support', highlight: false },
+                          { text: 'Carrier optimization', category: 'Sending', highlight: false },
+                          { text: 'Webhook integration', category: 'API', highlight: false },
+                          { text: 'Custom templates', category: 'Sending', highlight: false },
+                        ],
+                        cta: 'Start Free Trial',
+                        ctaSecondary: 'Compare plans',
+                        highlighted: true,
+                        highlightReason: 'Best balance of cost + deliverability',
+                      },
+                    ],
+                    volumeDiscounts: [
+                      { volume: '1M - 10M', discount: '10%', price: 'KSh 0.26' },
+                      { volume: '10M - 50M', discount: '15%', price: 'KSh 0.21' },
+                      { volume: '50M - 100M', discount: '20%', price: 'KSh 0.15' },
+                      { volume: '100M+', discount: 'Custom', price: 'Contact' },
+                    ],
                   })
                   setShowMarketingEditor(true)
                 }}
@@ -1349,6 +1512,152 @@ export default function SuperAdminPricing() {
                     onClick={() => {
                       setShowMarketingEditor(false)
                       setEditingMarketingPricing(null)
+                    }}
+                    className="bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 rounded-xl transition-all duration-150"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+        )}
+
+        {/* Edit Sender ID Pricing Modal */}
+        {showSenderIdEditor && editingSenderIdPricing && (
+          <Dialog open={showSenderIdEditor} onOpenChange={setShowSenderIdEditor}>
+            <DialogContent 
+              overlayClassName="bg-black/40 backdrop-blur-sm"
+              className="max-w-2xl bg-white border border-slate-200 rounded-2xl shadow-xl p-8 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 duration-150 ease-out [&>button]:text-slate-400 [&>button]:hover:text-slate-700 [&>button]:transition-colors"
+            >
+              <DialogHeader className="pb-5 border-b border-slate-200">
+                <DialogTitle className="text-xl font-semibold text-slate-900">
+                  Edit Sender ID Pricing
+                </DialogTitle>
+                <DialogDescription className="text-slate-500 text-sm mt-1.5">
+                  Configure the Sender ID pricing information displayed on public pages
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-5 mt-6 max-h-[70vh] overflow-y-auto">
+                {/* Registration Fee */}
+                <div>
+                  <Label className="text-sm font-medium text-slate-900 mb-2 block">Registration Fee (KSh)</Label>
+                  <Input
+                    type="number"
+                    step="1"
+                    value={editingSenderIdPricing.registrationFee || ''}
+                    onChange={(e) =>
+                      setEditingSenderIdPricing({
+                        ...editingSenderIdPricing,
+                        registrationFee: parseFloat(e.target.value) || 0,
+                      })
+                    }
+                    className="rounded-xl border border-slate-200 bg-white text-slate-900 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition"
+                  />
+                </div>
+
+                {/* Approval Timeline */}
+                <div>
+                  <Label className="text-sm font-medium text-slate-900 mb-2 block">Approval Timeline</Label>
+                  <Input
+                    type="text"
+                    value={editingSenderIdPricing.approvalTimeline || ''}
+                    onChange={(e) =>
+                      setEditingSenderIdPricing({
+                        ...editingSenderIdPricing,
+                        approvalTimeline: e.target.value,
+                      })
+                    }
+                    className="rounded-xl border border-slate-200 bg-white text-slate-900 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition"
+                    placeholder="3-5 business days after document submission"
+                  />
+                </div>
+
+                {/* Description */}
+                <div>
+                  <Label className="text-sm font-medium text-slate-900 mb-2 block">Description</Label>
+                  <Textarea
+                    value={editingSenderIdPricing.description || ''}
+                    onChange={(e) =>
+                      setEditingSenderIdPricing({
+                        ...editingSenderIdPricing,
+                        description: e.target.value,
+                      })
+                    }
+                    className="rounded-xl border border-slate-200 bg-white text-slate-900 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition min-h-[100px]"
+                    placeholder="One-time setup fee for new Sender ID registration and approval processing. No annual renewal fees."
+                  />
+                </div>
+
+                {/* Required Documents */}
+                <div>
+                  <Label className="text-sm font-medium text-slate-900 mb-2 block">Required Documents</Label>
+                  <div className="space-y-2">
+                    {editingSenderIdPricing.requiredDocuments.map((doc, idx) => (
+                      <div key={idx} className="flex gap-2 items-center">
+                        <Input
+                          value={doc}
+                          onChange={(e) => {
+                            const newDocs = [...editingSenderIdPricing.requiredDocuments]
+                            newDocs[idx] = e.target.value
+                            setEditingSenderIdPricing({
+                              ...editingSenderIdPricing,
+                              requiredDocuments: newDocs,
+                            })
+                          }}
+                          className="flex-1 rounded-xl border border-slate-200 bg-white px-4 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition"
+                          placeholder="Document name"
+                        />
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            const newDocs = editingSenderIdPricing.requiredDocuments.filter((_, i) => i !== idx)
+                            setEditingSenderIdPricing({
+                              ...editingSenderIdPricing,
+                              requiredDocuments: newDocs,
+                            })
+                          }}
+                          className="text-slate-400 hover:text-red-600 transition-colors"
+                        >
+                          <X className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    ))}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setEditingSenderIdPricing({
+                          ...editingSenderIdPricing,
+                          requiredDocuments: [
+                            ...editingSenderIdPricing.requiredDocuments,
+                            '',
+                          ],
+                        })
+                      }}
+                      className="w-full bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 rounded-xl"
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add Document
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="flex gap-3 pt-4 border-t border-slate-200">
+                  <Button
+                    onClick={handleSaveSenderIdPricing}
+                    className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-xl shadow-sm active:scale-95 focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-all duration-150"
+                  >
+                    <Save className="w-4 h-4 mr-2" />
+                    Save Sender ID Pricing
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setShowSenderIdEditor(false)
+                      setEditingSenderIdPricing(null)
                     }}
                     className="bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 rounded-xl transition-all duration-150"
                   >

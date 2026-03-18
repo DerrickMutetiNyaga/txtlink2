@@ -1,0 +1,9 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/sms-status",
+      "schedule": "*/5 * * * *"
+    }
+  ]
+}
+

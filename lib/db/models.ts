@@ -713,6 +713,66 @@ const MarketingPricingSchema = new Schema<IMarketingPricing>(
 // Ensure only one marketing pricing document exists (singleton)
 MarketingPricingSchema.index({}, { unique: true })
 
+// Sender ID Advertisement Model (Singleton - only one active ad)
+export interface ISenderIdAd {
+  _id?: string
+  // Ad Content
+  title: string
+  description: string
+  senderIdName: string // The sender ID being advertised
+  price: number // Price in KSh
+  priceUnit: string // e.g., "per month", "one-time"
+  ctaText: string // Call-to-action button text
+  ctaLink: string // Where the CTA button links to
+  
+  // Display Settings
+  isActive: boolean
+  displayFrequency: 'low' | 'medium' | 'high' // How often to show
+  showOnPages: string[] // Pages to show on: ['dashboard', 'send-sms', 'smshistory', etc.]
+  
+  // Design
+  backgroundColor: string // Hex color
+  textColor: string // Hex color
+  accentColor: string // Hex color for buttons/accents
+  icon?: string // Icon name (optional)
+  
+  // Tracking
+  views: number
+  clicks: number
+  updatedBy: mongoose.Types.ObjectId
+  createdAt: Date
+  updatedAt: Date
+}
+
+const SenderIdAdSchema = new Schema<ISenderIdAd>(
+  {
+    title: { type: String, required: true },
+    description: { type: String, required: true },
+    senderIdName: { type: String, required: true },
+    price: { type: Number, required: true },
+    priceUnit: { type: String, default: 'per month' },
+    ctaText: { type: String, default: 'Get Started' },
+    ctaLink: { type: String, default: '/app/sender-ids' },
+    
+    isActive: { type: Boolean, default: false },
+    displayFrequency: { type: String, enum: ['low', 'medium', 'high'], default: 'medium' },
+    showOnPages: { type: [String], default: ['dashboard', 'send-sms'] },
+    
+    backgroundColor: { type: String, default: '#ECFDF5' }, // emerald-50
+    textColor: { type: String, default: '#065F46' }, // emerald-900
+    accentColor: { type: String, default: '#0F766E' }, // teal-600
+    icon: { type: String },
+    
+    views: { type: Number, default: 0 },
+    clicks: { type: Number, default: 0 },
+    updatedBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+  },
+  { timestamps: true }
+)
+
+// Ensure only one active ad at a time
+SenderIdAdSchema.index({ isActive: 1 }, { partialFilterExpression: { isActive: true } })
+
 // Export models
 export const User: Model<IUser> = mongoose.models.User || mongoose.model<IUser>('User', UserSchema)
 export const HostPinnacleAccount: Model<IHostPinnacleAccount> =
@@ -744,4 +804,46 @@ export const PaymentGateway: Model<IPaymentGateway> =
   mongoose.models.PaymentGateway || mongoose.model<IPaymentGateway>('PaymentGateway', PaymentGatewaySchema)
 export const MarketingPricing: Model<IMarketingPricing> =
   mongoose.models.MarketingPricing || mongoose.model<IMarketingPricing>('MarketingPricing', MarketingPricingSchema)
+// Sender ID Pricing Model (for marketing pages)
+export interface ISenderIdPricing {
+  _id?: string
+  registrationFee: number // One-time registration fee in KSh
+  approvalTimeline: string // e.g., "3-5 business days"
+  requiredDocuments: string[] // Array of required documents
+  description: string // Description text
+  updatedBy?: mongoose.Types.ObjectId
+  createdAt: Date
+  updatedAt: Date
+}
+
+const SenderIdPricingSchema = new Schema<ISenderIdPricing>(
+  {
+    registrationFee: { type: Number, required: true, default: 5000 },
+    approvalTimeline: { type: String, required: true, default: '3-5 business days after document submission' },
+    requiredDocuments: {
+      type: [String],
+      required: true,
+      default: [
+        'Business registration certificate',
+        'Company letterhead',
+        'Authorized signatory ID',
+      ],
+    },
+    description: {
+      type: String,
+      required: true,
+      default: 'One-time setup fee for new Sender ID registration and approval processing. No annual renewal fees.',
+    },
+    updatedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+  },
+  { timestamps: true }
+)
+
+// Ensure only one Sender ID pricing document exists (singleton)
+SenderIdPricingSchema.index({}, { unique: true })
+
+export const SenderIdAd: Model<ISenderIdAd> =
+  mongoose.models.SenderIdAd || mongoose.model<ISenderIdAd>('SenderIdAd', SenderIdAdSchema)
+export const SenderIdPricing: Model<ISenderIdPricing> =
+  mongoose.models.SenderIdPricing || mongoose.model<ISenderIdPricing>('SenderIdPricing', SenderIdPricingSchema)
 

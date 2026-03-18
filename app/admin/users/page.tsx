@@ -295,30 +295,53 @@ export default function AdminUsersPage() {
       console.error('Error parsing user from localStorage:', error)
       setIsOwner(false)
     }
-  }, [router])
-
-  useEffect(() => {
-    fetchUsers()
-    fetchAllSenderIds()
   }, [])
+
+  // Fetch data after owner check
+  useEffect(() => {
+    // Only fetch if not owner (owner will be redirected)
+    if (isOwner === false) {
+      fetchUsers()
+      fetchAllSenderIds()
+    }
+  }, [isOwner])
 
   const fetchUsers = async () => {
     try {
       setLoading(true)
+      const token = localStorage.getItem('token')
+      
+      if (!token) {
+        console.error('No authentication token found')
+        alert('Please log in to access this page')
+        router.push('/auth/login')
+        return
+      }
+
       const response = await fetch('/api/admin/users', {
         headers: {
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
+          Authorization: `Bearer ${token}`,
         },
       })
 
       if (!response.ok) {
-        throw new Error('Failed to fetch users')
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
+        console.error('Failed to fetch users:', errorData)
+        
+        if (response.status === 401 || response.status === 403) {
+          alert(`Access denied: ${errorData.error || 'You do not have permission to access this page'}`)
+          router.push('/auth/login')
+          return
+        }
+        
+        throw new Error(errorData.error || `Failed to fetch users: ${response.status}`)
       }
 
       const data = await response.json()
       setUsers(data.users || [])
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching users:', error)
+      alert(`Error: ${error.message || 'Failed to fetch users. Please try again.'}`)
     } finally {
       setLoading(false)
     }
@@ -327,16 +350,31 @@ export default function AdminUsersPage() {
   const fetchAllSenderIds = async () => {
     try {
       setLoadingSenderIds(true)
+      const token = localStorage.getItem('token')
+      
+      if (!token) {
+        console.error('No authentication token found')
+        return
+      }
+
       const response = await fetch('/api/admin/senderids', {
         headers: {
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
+          Authorization: `Bearer ${token}`,
         },
       })
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
         console.error('Failed to fetch sender IDs:', errorData)
-        alert(`Failed to fetch sender IDs: ${errorData.error || 'Unknown error'}`)
+        
+        // Don't show alert for 401/403 - already handled in fetchUsers
+        if (response.status === 401 || response.status === 403) {
+          return
+        }
+        
+        // For other errors, log but don't block the page
+        console.warn(`Failed to fetch sender IDs: ${errorData.error || 'Unknown error'}. The page will still work, but sender ID dropdown may be empty.`)
+        setAvailableSenderIds([])
         return
       }
 
@@ -349,7 +387,9 @@ export default function AdminUsersPage() {
       }
     } catch (error: any) {
       console.error('Error fetching sender IDs:', error)
-      alert(`Error: ${error.message || 'Failed to fetch sender IDs'}`)
+      // Don't show alert - this is a non-critical feature
+      // The page can still function without the sender ID list
+      setAvailableSenderIds([])
     } finally {
       setLoadingSenderIds(false)
     }

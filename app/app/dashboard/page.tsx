@@ -30,6 +30,7 @@ import {
 } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
 import Link from 'next/link'
+import SenderIdAdBanner from '@/components/sender-id-ad/SenderIdAdBanner'
 import {
   LineChart,
   Line,
@@ -392,6 +393,9 @@ export default function DashboardPage() {
   return (
     <PortalLayout activeSection="Dashboard">
       <div className="space-y-6 max-w-7xl mx-auto">
+        {/* Sender ID Ad Banner */}
+        <SenderIdAdBanner currentPage="dashboard" />
+        
         {/* Premium Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-5 mb-4">
           <div>

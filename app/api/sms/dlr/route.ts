@@ -156,18 +156,39 @@ export async function POST(request: NextRequest) {
     let mappedStatus: 'sent' | 'delivered' | 'failed' = 'sent'
     const statusLower = (status || '').toString().toLowerCase()
 
-    if (deliveredTime != null && deliveredTime !== '') {
+    // Enhanced status mapping - check multiple indicators
+    if (deliveredTime != null && deliveredTime !== '' && deliveredTime !== '0' && deliveredTime !== 'null') {
       mappedStatus = 'delivered'
-    } else if (errorCode != null && errorCode !== '') {
+      console.log('DLR: Status set to delivered based on deliveredTime:', deliveredTime)
+    } else if (errorCode != null && errorCode !== '' && errorCode !== '0' && errorCode !== 'null') {
       mappedStatus = 'failed'
-    } else if (statusLower.includes('deliver') || statusLower === 'success' || statusLower === 'delivered') {
+      console.log('DLR: Status set to failed based on errorCode:', errorCode)
+    } else if (
+      statusLower.includes('deliver') || 
+      statusLower === 'success' || 
+      statusLower === 'delivered' ||
+      statusLower === 'dlvrd' ||
+      statusLower === 'dlv' ||
+      data.deliveryStatus?.toLowerCase() === 'delivered' ||
+      data.DeliveryStatus?.toLowerCase() === 'delivered'
+    ) {
       mappedStatus = 'delivered'
+      console.log('DLR: Status set to delivered based on status field:', status)
     } else if (
       statusLower.includes('fail') ||
       statusLower.includes('reject') ||
-      statusLower === 'error'
+      statusLower === 'error' ||
+      statusLower === 'undeliv' ||
+      statusLower === 'expired'
     ) {
       mappedStatus = 'failed'
+      console.log('DLR: Status set to failed based on status field:', status)
+    } else {
+      // If status is explicitly "sent" or "submitted", keep it as sent
+      if (statusLower === 'sent' || statusLower === 'submitted' || statusLower === 'pending') {
+        mappedStatus = 'sent'
+      }
+      console.log('DLR: Status kept as sent. Status value:', status, 'deliveredTime:', deliveredTime, 'errorCode:', errorCode)
     }
 
     const updateData: any = {

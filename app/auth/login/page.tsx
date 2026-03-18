@@ -72,8 +72,10 @@ export default function LoginPage() {
   }
 
   const handleSocialLogin = (provider: 'google') => {
-    // TODO: Implement social login
-    console.log(`Login with ${provider}`)
+    if (provider === 'google') {
+      window.location.href = '/api/auth/google/start?intent=login'
+      return
+    }
   }
 
   const features = [

@@ -107,8 +107,10 @@ export default function RegisterPage() {
   }
 
   const handleSocialSignup = (provider: 'google') => {
-    // TODO: Implement social signup
-    console.log(`Sign up with ${provider}`)
+    if (provider === 'google') {
+      window.location.href = '/api/auth/google/start?intent=register'
+      return
+    }
   }
 
   const features = [

@@ -40,6 +40,7 @@ import {
 } from 'lucide-react'
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
+import SenderIdAdBanner from '@/components/sender-id-ad/SenderIdAdBanner'
 
 // Message type
 interface SMSMessage {
@@ -331,6 +332,9 @@ export default function SMSHistoryPage() {
   return (
     <PortalLayout activeSection="SMS History">
       <div className="space-y-6">
+        {/* Sender ID Ad Banner */}
+        <SenderIdAdBanner currentPage="smshistory" />
+        
         {/* Header - Compact Toolbar Style */}
         <Card className="rounded-2xl border border-slate-200/70 bg-white px-6 py-4 shadow-sm">
           {/* Row 1: Title + Search + Actions */}

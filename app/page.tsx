@@ -42,6 +42,7 @@ const iconMap: Record<string, any> = {
 
 export default function Home() {
   const [pricingData, setPricingData] = useState<any>(null)
+  const [senderIdPricing, setSenderIdPricing] = useState<any>(null)
 
   useEffect(() => {
     const fetchPricing = async () => {
@@ -55,20 +56,34 @@ export default function Home() {
         console.error('Error fetching pricing:', error)
       }
     }
+    
+    const fetchSenderIdPricing = async () => {
+      try {
+        const response = await fetch('/api/sender-id-pricing')
+        if (response.ok) {
+          const result = await response.json()
+          setSenderIdPricing(result.pricing)
+        }
+      } catch (error) {
+        console.error('Error fetching Sender ID pricing:', error)
+      }
+    }
+    
     fetchPricing()
+    fetchSenderIdPricing()
   }, [])
 
   return (
     <MarketingLayout>
       {/* Hero Section */}
-      <section className="relative py-12 sm:py-16 md:py-20 lg:py-24 max-h-[90vh] sm:max-h-[85vh] md:max-h-[80vh] overflow-hidden border-b border-gray-200 bg-gradient-to-b from-white via-emerald-50/40 to-white">
+      <section className="relative py-8 sm:py-12 md:py-16 lg:py-20 xl:py-24 border-b border-gray-200 bg-gradient-to-b from-white via-emerald-50/40 to-white">
         {/* Subtle Background Elements */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           {/* Soft Radial Glow */}
-          <div className="absolute top-1/2 right-1/4 -translate-y-1/2 w-[500px] h-[500px] bg-emerald-200/20 rounded-full blur-3xl"></div>
+          <div className="absolute top-1/2 right-1/4 -translate-y-1/2 w-[300px] h-[300px] sm:w-[400px] sm:h-[400px] md:w-[500px] md:h-[500px] bg-emerald-200/20 rounded-full blur-3xl"></div>
           {/* Floating Blur Shapes */}
-          <div className="absolute top-20 left-1/4 w-64 h-64 bg-teal-100/30 rounded-full blur-2xl animate-pulse"></div>
-          <div className="absolute bottom-20 right-1/4 w-48 h-48 bg-green-100/30 rounded-full blur-2xl animate-pulse" style={{ animationDelay: '1.5s' }}></div>
+          <div className="absolute top-20 left-1/4 w-32 h-32 sm:w-48 sm:h-48 md:w-64 md:h-64 bg-teal-100/30 rounded-full blur-2xl animate-pulse"></div>
+          <div className="absolute bottom-20 right-1/4 w-24 h-24 sm:w-36 sm:h-36 md:w-48 md:h-48 bg-green-100/30 rounded-full blur-2xl animate-pulse" style={{ animationDelay: '1.5s' }}></div>
         </div>
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 relative z-10">
@@ -104,18 +119,20 @@ export default function Home() {
               </div>
 
               {/* Trust Layer */}
-              <div className="flex flex-wrap gap-4 sm:gap-6 pt-2 text-xs sm:text-sm text-gray-600 justify-center lg:justify-start">
-                <div className="flex items-center gap-2">
-                  <Check className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-                  <span>No setup fees</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Check className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-                  <span>Fast Sender ID approval</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Check className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-                  <span>API ready in minutes</span>
+              <div className="pt-4 sm:pt-6 pb-8 sm:pb-12 md:pb-16">
+                <div className="flex flex-wrap items-center justify-center lg:justify-start gap-x-4 sm:gap-x-6 md:gap-x-8 gap-y-3 sm:gap-y-4">
+                  <div className="flex items-center gap-2 sm:gap-2.5">
+                    <Check className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600 flex-shrink-0" />
+                    <span className="text-xs sm:text-sm text-gray-600 font-medium whitespace-nowrap">No setup fees</span>
+                  </div>
+                  <div className="flex items-center gap-2 sm:gap-2.5">
+                    <Check className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600 flex-shrink-0" />
+                    <span className="text-xs sm:text-sm text-gray-600 font-medium whitespace-nowrap">Fast Sender ID approval</span>
+                  </div>
+                  <div className="flex items-center gap-2 sm:gap-2.5">
+                    <Check className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600 flex-shrink-0" />
+                    <span className="text-xs sm:text-sm text-gray-600 font-medium whitespace-nowrap">API ready in minutes</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -123,7 +140,7 @@ export default function Home() {
             {/* Right Visual - Modern Dashboard Mockup */}
             <div className="relative max-w-full sm:max-w-lg md:max-w-xl mx-auto lg:mx-0 order-first lg:order-last">
               {/* Dashboard Container */}
-              <div className="relative bg-white rounded-xl border border-gray-200 shadow-2xl overflow-hidden scale-90 sm:scale-95 md:scale-100">
+              <div className="relative bg-white rounded-xl border border-gray-200 shadow-2xl overflow-hidden scale-75 sm:scale-90 md:scale-95 lg:scale-100">
                 {/* Dashboard Header */}
                 <div className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200 px-4 py-3 flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -209,7 +226,7 @@ export default function Home() {
               </div>
 
               {/* Floating UI Cards - Hidden on mobile */}
-              <div className="hidden sm:block absolute -top-4 -right-4 bg-white rounded-lg shadow-xl border border-gray-200 p-3 z-20 animate-float">
+              <div className="hidden md:block absolute -top-4 -right-4 bg-white rounded-lg shadow-xl border border-gray-200 p-3 z-20 animate-float">
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center">
                     <MessageSquare className="w-4 h-4 text-emerald-600" />
@@ -221,7 +238,7 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="hidden sm:block absolute -bottom-4 -left-4 bg-white rounded-lg shadow-xl border border-gray-200 p-3 z-20 animate-float" style={{ animationDelay: '0.5s' }}>
+              <div className="hidden md:block absolute -bottom-4 -left-4 bg-white rounded-lg shadow-xl border border-gray-200 p-3 z-20 animate-float" style={{ animationDelay: '0.5s' }}>
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
                     <Zap className="w-4 h-4 text-blue-600" />
@@ -236,18 +253,62 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Social Proof - Slightly Visible */}
-        <div className="absolute bottom-0 left-0 right-0 pt-6 sm:pt-8 pb-4 bg-gradient-to-t from-white via-white/90 to-transparent">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6">
-            <p className="text-xs sm:text-sm text-gray-500 text-center mb-3">
-              Trusted by 500+ businesses across fintech, healthcare & e-commerce
+        {/* Premium Trust Section */}
+        <div 
+          className="relative mt-12 sm:mt-16 md:mt-20 pt-12 sm:pt-16 md:pt-20 pb-12 sm:pb-16 md:pb-20"
+          style={{ backgroundColor: '#FAF8F6', borderTop: '1px solid #E5E1DC' }}
+        >
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+            {/* Eyebrow Text */}
+            <p 
+              className="text-center mb-3 sm:mb-4 font-medium tracking-wider uppercase"
+              style={{ 
+                fontSize: '13px',
+                color: '#6B6B6B',
+                letterSpacing: '0.05em'
+              }}
+            >
+              Trusted by ambitious teams
             </p>
-            {/* Logo Placeholders - Grayscale */}
-            <div className="flex items-center justify-center gap-4 sm:gap-8 opacity-60 flex-wrap">
-              <div className="w-16 sm:w-20 h-6 sm:h-8 bg-gray-300 rounded"></div>
-              <div className="w-16 sm:w-20 h-6 sm:h-8 bg-gray-300 rounded"></div>
-              <div className="w-16 sm:w-20 h-6 sm:h-8 bg-gray-300 rounded"></div>
-              <div className="w-16 sm:w-20 h-6 sm:h-8 bg-gray-300 rounded"></div>
+            
+            {/* Main Headline */}
+            <h2 
+              className="text-center mb-8 sm:mb-10 md:mb-12 font-semibold leading-tight px-2"
+              style={{ 
+                fontSize: 'clamp(22px, 4vw, 28px)',
+                color: '#1F1F1F',
+                lineHeight: '1.3'
+              }}
+            >
+              Powering{' '}
+              <span style={{ color: '#2F6B5F' }}>500+ businesses</span>
+              {' '}across fintech, healthcare, and e-commerce
+            </h2>
+            
+            {/* Logo Placeholders - Premium Style */}
+            <div className="flex items-center justify-center gap-4 sm:gap-5 md:gap-6 lg:gap-8 flex-wrap">
+              {[1, 2, 3, 4].map((idx) => (
+                <div
+                  key={idx}
+                  className="rounded-lg flex items-center justify-center"
+                  style={{
+                    width: 'clamp(100px, 15vw, 140px)',
+                    height: 'clamp(50px, 8vw, 70px)',
+                    backgroundColor: '#E9E6E2',
+                    border: '1px solid #E5E1DC'
+                  }}
+                >
+                  <div 
+                    className="rounded"
+                    style={{
+                      width: '80%',
+                      height: '60%',
+                      backgroundColor: '#D4D0CA',
+                      opacity: 0.6
+                    }}
+                  />
+                </div>
+              ))}
             </div>
           </div>
         </div>
@@ -383,7 +444,7 @@ export default function Home() {
                 icon: Radio,
                 title: 'Sender ID Registration',
                 description:
-                  'Register and manage dedicated sender IDs for consistent brand identity and improved deliverability.',
+                  'Register and manage dedicated sender IDs for consistent brand identity and improved deliverability. From KSh 5,000 one-time registration.',
               },
               {
                 icon: BarChart3,
@@ -844,6 +905,188 @@ console.log(result.messageId);`}
                 )
               })
             })()}
+          </div>
+
+          {/* Premium Sender ID Pricing Block */}
+          <div 
+            className="mt-12 sm:mt-16 md:mt-20 pt-12 sm:pt-16 md:pt-20 border-t"
+            style={{ borderColor: '#E5E1DC', backgroundColor: '#F8F7F4' }}
+          >
+            <div className="max-w-3xl mx-auto px-4 sm:px-6">
+              {/* Eyebrow */}
+              <div className="text-center mb-4">
+                <p 
+                  className="text-xs sm:text-sm font-medium uppercase tracking-wider"
+                  style={{ color: '#0F9D8A', letterSpacing: '0.1em' }}
+                >
+                  Sender ID Setup
+                </p>
+              </div>
+
+              {/* Header */}
+              <div className="text-center mb-10 sm:mb-12">
+                <h3 
+                  className="text-2xl sm:text-3xl md:text-4xl font-bold mb-4"
+                  style={{ color: '#0F172A' }}
+                >
+                  Sender ID Pricing & Approval
+                </h3>
+                <p 
+                  className="text-sm sm:text-base text-gray-600 max-w-xl mx-auto"
+                  style={{ color: '#475569' }}
+                >
+                  Simple, transparent pricing for Sender ID registration and approval support.
+                </p>
+              </div>
+
+              {/* Premium Pricing Card */}
+              <Card 
+                className="bg-white shadow-xl overflow-hidden"
+                style={{ 
+                  border: '1px solid #D9F2EC',
+                  borderRadius: '20px'
+                }}
+              >
+                <div className="p-8 sm:p-10 md:p-12">
+                  {/* Icon Badge & Label */}
+                  <div className="text-center mb-6">
+                    <div 
+                      className="inline-flex items-center justify-center w-12 h-12 rounded-xl mb-4"
+                      style={{ backgroundColor: '#D9F2EC' }}
+                    >
+                      <Radio className="w-6 h-6" style={{ color: '#0F9D8A' }} />
+                    </div>
+                    <p 
+                      className="text-sm font-medium mb-6"
+                      style={{ color: '#475569' }}
+                    >
+                      One-time registration fee
+                    </p>
+
+                    {/* Price - Dominant Visual */}
+                    <div className="mb-4">
+                    <div className="flex items-baseline justify-center gap-2 mb-2">
+                      <span 
+                        className="text-5xl sm:text-6xl md:text-7xl font-bold"
+                        style={{ color: '#0F172A' }}
+                      >
+                        KSh {senderIdPricing?.registrationFee?.toLocaleString() || '5,000'}
+                      </span>
+                    </div>
+                    <p 
+                      className="text-sm font-medium"
+                      style={{ color: '#64748B' }}
+                    >
+                      One-time payment
+                    </p>
+                  </div>
+
+                  {/* Description */}
+                  <p 
+                    className="text-base max-w-md mx-auto leading-relaxed"
+                    style={{ color: '#475569' }}
+                  >
+                    {senderIdPricing?.description || 'One-time setup fee for new Sender ID registration and approval processing. No annual renewal fees.'}
+                  </p>
+                  </div>
+
+                  {/* Mini Cards - Approval Timeline & Documents */}
+                  <div className="grid sm:grid-cols-2 gap-4 sm:gap-6 mt-10 sm:mt-12">
+                    {/* Approval Timeline Card */}
+                    <div 
+                      className="p-5 sm:p-6 rounded-xl"
+                      style={{ backgroundColor: '#F8F7F4', border: '1px solid #E5E1DC' }}
+                    >
+                      <div className="flex items-center gap-3 mb-3">
+                        <div 
+                          className="p-2 rounded-lg"
+                          style={{ backgroundColor: '#D9F2EC' }}
+                        >
+                          <CheckCircle2 className="w-5 h-5" style={{ color: '#0F9D8A' }} />
+                        </div>
+                        <h4 
+                          className="text-base font-semibold"
+                          style={{ color: '#0F172A' }}
+                        >
+                          Approval Timeline
+                        </h4>
+                      </div>
+                      <p 
+                        className="text-sm leading-relaxed"
+                        style={{ color: '#475569' }}
+                      >
+                        {senderIdPricing?.approvalTimeline || '3–5 business days after document submission'}
+                      </p>
+                    </div>
+
+                    {/* Required Documents Card */}
+                    <div 
+                      className="p-5 sm:p-6 rounded-xl"
+                      style={{ backgroundColor: '#F8F7F4', border: '1px solid #E5E1DC' }}
+                    >
+                      <div className="flex items-center gap-3 mb-3">
+                        <div 
+                          className="p-2 rounded-lg"
+                          style={{ backgroundColor: '#D9F2EC' }}
+                        >
+                          <Shield className="w-5 h-5" style={{ color: '#0F9D8A' }} />
+                        </div>
+                        <h4 
+                          className="text-base font-semibold"
+                          style={{ color: '#0F172A' }}
+                        >
+                          Required Documents
+                        </h4>
+                      </div>
+                      <ul 
+                        className="text-sm leading-relaxed space-y-1"
+                        style={{ color: '#475569' }}
+                      >
+                        {(senderIdPricing?.requiredDocuments || [
+                          'Business registration certificate',
+                          'Company letterhead',
+                          'Authorized signatory ID',
+                        ]).map((doc: string, idx: number) => (
+                          <li key={idx}>• {doc}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+
+                  {/* CTA Buttons - Better Hierarchy */}
+                  <div className="mt-10 sm:mt-12 pt-8 border-t" style={{ borderColor: '#E5E1DC' }}>
+                    <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center">
+                      {/* Primary CTA */}
+                      <Link href="/auth/register" className="w-full sm:w-auto">
+                        <Button 
+                          className="w-full sm:w-auto px-8 py-4 text-base font-semibold shadow-lg hover:shadow-xl transition-all"
+                          style={{ 
+                            backgroundColor: '#0F9D8A',
+                            color: 'white'
+                          }}
+                        >
+                          Apply for Sender ID
+                          <ArrowRight className="ml-2" size={18} />
+                        </Button>
+                      </Link>
+                      {/* Secondary CTA */}
+                      <Link href="/sender-id" className="w-full sm:w-auto">
+                        <Button 
+                          variant="outline"
+                          className="w-full sm:w-auto px-8 py-4 text-base font-semibold bg-white hover:bg-gray-50 transition-all"
+                          style={{ 
+                            border: '1px solid #DDE7E5',
+                            color: '#0F172A'
+                          }}
+                        >
+                          Learn More
+                        </Button>
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            </div>
           </div>
 
           {/* Trust Row */}
