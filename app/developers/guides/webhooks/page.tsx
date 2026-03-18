@@ -4,6 +4,42 @@ import { DocsLayout } from '@/components/docs-layout'
 import { Card } from '@/components/ui/card'
 
 export default function WebhooksPage() {
+  const signatureHeaderExample = `X-TXTLink-Timestamp: 1710797243
+X-TXTLink-Signature: t=1710797243,v1=8d3a...`
+
+  const verifyNodeExample = `import crypto from 'crypto';
+
+function timingSafeEqual(a: string, b: string) {
+  const aBuf = Buffer.from(a, 'utf8');
+  const bBuf = Buffer.from(b, 'utf8');
+  if (aBuf.length !== bBuf.length) return false;
+  return crypto.timingSafeEqual(aBuf, bBuf);
+}
+
+export function verifyTXTLinkWebhook({
+  secret,
+  signatureHeader,
+  payload,
+  toleranceSeconds = 300,
+}: {
+  secret: string; // whsec_... value from your dashboard (store server-side)
+  signatureHeader: string; // "t=...,v1=..."
+  payload: string; // for POST: raw body; for GET: full URL including query string
+  toleranceSeconds?: number;
+}) {
+  const parts = Object.fromEntries(signatureHeader.split(',').map(kv => kv.split('=')));
+  const t = parts.t;
+  const v1 = parts.v1;
+  if (!t || !v1) return false;
+
+  const now = Math.floor(Date.now() / 1000);
+  if (Math.abs(now - Number(t)) > toleranceSeconds) return false;
+
+  const signed = \`\${t}.\${payload}\`;
+  const expected = crypto.createHmac('sha256', secret).update(signed, 'utf8').digest('hex');
+  return timingSafeEqual(expected, v1);
+}`
+
   return (
     <DocsLayout>
       <div className="prose prose-slate max-w-none">
@@ -70,6 +106,42 @@ export default function WebhooksPage() {
             <li>Adding a webhook for WhatsApp MO (Mobile Originated) responses</li>
             <li>Managing and reviewing all configured webhooks</li>
           </ul>
+        </div>
+
+        <div className="mb-10">
+          <h2 className="text-2xl font-bold text-slate-900 mb-4">Security: Verify TXTLink Webhooks</h2>
+          <p className="text-slate-700 mb-4">
+            TXTLink signs outbound webhook requests so your server can verify they were sent by TXTLink and not a third party.
+            Every webhook includes these headers:
+          </p>
+          <Card className="p-6 bg-white border-slate-200">
+            <pre className="text-xs bg-slate-50 p-4 rounded-xl overflow-x-auto">
+              {signatureHeaderExample}
+            </pre>
+            <p className="text-slate-700 mt-4 mb-3">
+              The signature is an HMAC-SHA256 computed as:
+            </p>
+            <pre className="text-xs bg-slate-50 p-4 rounded-xl overflow-x-auto">
+              {`signed_payload = "${'t'}.${'payload'}"`}
+            </pre>
+            <ul className="list-disc list-inside space-y-1 text-slate-700 mt-4">
+              <li>
+                <strong>t</strong>: timestamp from the signature header (unix seconds)
+              </li>
+              <li>
+                <strong>payload</strong>: for <strong>POST</strong> webhooks this is the raw request body; for <strong>GET</strong> webhooks this is the full URL including query string
+              </li>
+            </ul>
+            <p className="text-slate-700 mt-4 mb-3">
+              Verify with your webhook secret (<code>whsec_...</code>) from your dashboard:
+            </p>
+            <pre className="text-xs bg-slate-900 text-slate-50 p-4 rounded-xl overflow-x-auto">
+              {verifyNodeExample}
+            </pre>
+            <p className="text-slate-700 mt-4">
+              Always use the <strong>raw</strong> request body when verifying signatures (don’t re-serialize JSON).
+            </p>
+          </Card>
         </div>
 
         <div className="mb-10">

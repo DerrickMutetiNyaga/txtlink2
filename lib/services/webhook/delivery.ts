@@ -4,6 +4,7 @@
  */
 
 import { IUserWebhook } from '@/lib/db/models'
+import crypto from 'crypto'
 
 interface WebhookPayload {
   transactionId?: string
@@ -79,6 +80,11 @@ export async function sendWebhook(
       'User-Agent': 'Enterprise-SMS-Platform/1.0',
     }
 
+    // Add TXTLink signature headers so receivers can verify authenticity.
+    // Signature format: t=<unix_seconds>,v1=<hex_hmac_sha256>
+    const timestamp = Math.floor(Date.now() / 1000).toString()
+    headers['X-TXTLink-Timestamp'] = timestamp
+
     // Add custom headers
     if (webhook.customHeaders && webhook.customHeaders.length > 0) {
       webhook.customHeaders.forEach((header) => {
@@ -88,6 +94,7 @@ export async function sendWebhook(
 
     let response: Response
     const url = new URL(webhook.url)
+    let signingPayload = ''
 
     switch (webhook.serverSendMethod) {
       case 'GET':
@@ -95,6 +102,8 @@ export async function sendWebhook(
         Object.entries(payload).forEach(([key, value]) => {
           url.searchParams.append(key, String(value))
         })
+        signingPayload = url.toString()
+        headers['X-TXTLink-Signature'] = buildSignatureHeader(webhook.secret, timestamp, signingPayload)
         response = await fetch(url.toString(), {
           method: 'GET',
           headers,
@@ -108,6 +117,8 @@ export async function sendWebhook(
           formData.append(key, String(value))
         })
         headers['Content-Type'] = 'application/x-www-form-urlencoded'
+        signingPayload = formData.toString()
+        headers['X-TXTLink-Signature'] = buildSignatureHeader(webhook.secret, timestamp, signingPayload)
         response = await fetch(webhook.url, {
           method: 'POST',
           headers,
@@ -118,10 +129,12 @@ export async function sendWebhook(
       case 'JSON':
         // Send as JSON
         headers['Content-Type'] = 'application/json'
+        signingPayload = JSON.stringify(payload)
+        headers['X-TXTLink-Signature'] = buildSignatureHeader(webhook.secret, timestamp, signingPayload)
         response = await fetch(webhook.url, {
           method: 'POST',
           headers,
-          body: JSON.stringify(payload),
+          body: signingPayload,
         })
         break
 
@@ -131,6 +144,8 @@ export async function sendWebhook(
         const xmlBody = `<?xml version="1.0" encoding="UTF-8"?><webhook>${Object.entries(payload)
           .map(([key, value]) => `<${key}>${String(value)}</${key}>`)
           .join('')}</webhook>`
+        signingPayload = xmlBody
+        headers['X-TXTLink-Signature'] = buildSignatureHeader(webhook.secret, timestamp, signingPayload)
         response = await fetch(webhook.url, {
           method: 'POST',
           headers,
@@ -158,6 +173,12 @@ export async function sendWebhook(
       error: error.message || 'Failed to send webhook',
     }
   }
+}
+
+function buildSignatureHeader(secret: string, timestamp: string, payload: string): string {
+  const signed = `${timestamp}.${payload}`
+  const mac = crypto.createHmac('sha256', secret).update(signed, 'utf8').digest('hex')
+  return `t=${timestamp},v1=${mac}`
 }
 
 /**

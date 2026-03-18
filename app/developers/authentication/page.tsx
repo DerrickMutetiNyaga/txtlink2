@@ -7,7 +7,7 @@ import { Card } from '@/components/ui/card'
 import { Tabs, Tab } from '@/components/docs/tabs'
 
 export default function AuthenticationPage() {
-  const apiKeyExample = `curl https://api.txtlink.com/v1/sms/send \\
+  const apiKeyExample = `curl https://www.txtlink.co.ke/api/v1/sms/send \\
   -H "Authorization: Bearer YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{
@@ -16,7 +16,7 @@ export default function AuthenticationPage() {
     "senderIdName": "TXTLINK"
   }'`
 
-  const basicAuthExample = `curl https://api.txtlink.com/v1/sms/send \\
+  const basicAuthExample = `curl https://www.txtlink.co.ke/api/v1/sms/send \\
   -u "your-email@example.com:your-password" \\
   -H "Content-Type: application/json" \\
   -d '{
@@ -25,7 +25,7 @@ export default function AuthenticationPage() {
     "senderIdName": "TXTLINK"
   }'`
 
-  const bodyAuthExample = `curl https://api.txtlink.com/v1/sms/send \\
+  const bodyAuthExample = `curl https://www.txtlink.co.ke/api/v1/sms/send \\
   -H "Content-Type: application/json" \\
   -d '{
     "username": "your-email@example.com",

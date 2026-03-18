@@ -15,7 +15,7 @@ export default function ErrorsPage() {
 
   const errorHandlingExample = `// JavaScript/Node.js
 try {
-  const response = await fetch('https://api.txtlink.com/v1/sms/send', {
+  const response = await fetch('https://www.txtlink.co.ke/api/v1/sms/send', {
     method: 'POST',
     headers: {
       'Authorization': 'Bearer YOUR_API_KEY',

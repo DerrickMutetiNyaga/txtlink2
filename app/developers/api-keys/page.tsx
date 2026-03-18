@@ -19,7 +19,7 @@ export default function APIKeysPage() {
 TXTLINK_API_KEY=sk_live_abc123xyz...`
 
   const usageExample = `# Using API Key in requests
-curl -X POST https://api.txtlink.com/v1/sms/send \\
+curl -X POST https://www.txtlink.co.ke/api/v1/sms/send \\
   -H "Authorization: Bearer YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{

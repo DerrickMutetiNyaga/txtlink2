@@ -49,8 +49,18 @@ function formatPhoneNumber(phone: string): string {
  */
 async function authenticateWithApiKey(apiKey: string): Promise<{ userId: string; user: any } | null> {
   try {
-    // Find API key by comparing hash
-    const apiKeys = await ApiKey.find({ status: 'active' }).lean()
+    // Fast lookup: narrow candidates by stored keyPrefix (sk_live_ + 8 chars / sk_test_ + 8 chars)
+    const normalized = apiKey.trim()
+    if (!normalized.startsWith('sk_live_') && !normalized.startsWith('sk_test_')) {
+      return null
+    }
+
+    // keyPrefix is stored like: sk_live_<first8> or sk_test_<first8>
+    const prefixLen = 'sk_live_'.length + 8
+    const lookupPrefix = normalized.substring(0, prefixLen)
+
+    // Find candidate API keys by prefix, then compare hash
+    const apiKeys = await ApiKey.find({ status: 'active', keyPrefix: lookupPrefix }).lean()
     
     for (const key of apiKeys) {
       // Try to match the API key
