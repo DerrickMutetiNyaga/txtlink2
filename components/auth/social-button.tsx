@@ -46,7 +46,7 @@ export function SocialButton({ provider, children, onClick, disabled }: SocialBu
       variant="outline"
       onClick={onClick}
       disabled={disabled}
-      className="w-full bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300 rounded-xl shadow-sm transition-all duration-200 h-11 font-medium"
+      className="w-full bg-white border border-gray-200 text-gray-700 hover:text-gray-700 !hover:bg-gray-50 hover:border-gray-300 rounded-xl shadow-sm transition-all duration-200 h-11 font-medium"
     >
       <span className="flex items-center justify-center gap-3">
         {icons[provider]}
