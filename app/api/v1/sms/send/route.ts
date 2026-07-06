@@ -9,9 +9,9 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import connectDB from '@/lib/db/connect'
-import { User, SenderId, UserSenderId, SmsMessage, HostPinnacleAccount, ApiKey } from '@/lib/db/models'
+import { User, SenderId, UserSenderId, SmsMessage, ApiKey } from '@/lib/db/models'
+import { resolveHostPinnacleCredentials } from '@/lib/services/hostpinnacle/credentials'
 import { hostPinnacleClient } from '@/lib/services/hostpinnacle/client'
-import { decrypt } from '@/lib/utils/encryption'
 import { calculateSegments153, getEffectivePricePerCreditKes } from '@/lib/utils/credits'
 import { initialNextCheckAt } from '@/lib/services/sms-status/build-synchronizer'
 import { maskPhone } from '@/lib/utils/log-sanitize'
@@ -308,32 +308,19 @@ export async function POST(request: NextRequest) {
       )
     }
     
-    // Get HostPinnacle account
-    const hpAccount = await HostPinnacleAccount.findOne({ userId: userObjectId })
-    
-    let apiKey: string | undefined
-    let hpUserId: string
-    let password: string | undefined
-    
-    if (hpAccount) {
-      apiKey = hpAccount.hpApiKeyEncrypted
-        ? decrypt(hpAccount.hpApiKeyEncrypted)
-        : undefined
-      password = hpAccount.hpPasswordEncrypted
-        ? decrypt(hpAccount.hpPasswordEncrypted)
-        : undefined
-      hpUserId = hpAccount.hpUserLoginName
-    } else {
-      hpUserId = process.env.HOSTPINNACLE_USERID || ''
-      password = process.env.HOSTPINNACLE_PASSWORD
-      
-      if (!hpUserId || !password) {
-        return NextResponse.json(
-          { error: 'HostPinnacle configuration not found. Please contact support.' },
-          { status: 500 }
-        )
-      }
+    // HostPinnacle credentials: user sub-account → SystemSettings → env vars
+    const hpCreds = await resolveHostPinnacleCredentials(userObjectId)
+    if (!hpCreds) {
+      return NextResponse.json(
+        {
+          error:
+            'HostPinnacle is not configured. Set credentials in Super Admin → Settings or add HOSTPINNACLE_USERID and HOSTPINNACLE_PASSWORD on the server.',
+        },
+        { status: 500 }
+      )
     }
+
+    const { userId: hpUserId, password, apiKey: hpApiKey } = hpCreds
     
     // Use MongoDB transaction for atomicity
     const session = await mongoose.startSession()
@@ -404,7 +391,7 @@ export async function POST(request: NextRequest) {
             msg: message,
             senderid: senderIdObj.senderName,
             options: {
-              apiKey,
+              apiKey: hpApiKey,
               userId: hpUserId,
               password,
             },

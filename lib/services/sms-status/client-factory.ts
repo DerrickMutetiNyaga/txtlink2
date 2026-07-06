@@ -8,6 +8,7 @@
 
 import { SystemSettings } from '@/lib/db/models'
 import { HostPinnacleStatusClient } from '@/lib/services/hostpinnacle/status-client'
+import { loadMasterHostPinnacleCredentials } from '@/lib/services/hostpinnacle/credentials'
 import type { SmsStatusConfig } from '@/lib/config/sms-status-config'
 import type { Logger } from '@/lib/worker/logger'
 
@@ -22,6 +23,8 @@ export async function createStatusClient(
     logger?.warn('Failed to load SystemSettings; falling back to env vars', { error })
   }
 
+  const masterCreds = await loadMasterHostPinnacleCredentials()
+
   return new HostPinnacleStatusClient(
     {
       baseUrl:
@@ -32,9 +35,9 @@ export async function createStatusClient(
         settings?.hostpinnacleStatusEndpoint ||
         process.env.HOSTPINNACLE_STATUS_ENDPOINT ||
         '/SMSApi/report/status',
-      userId: settings?.hostpinnacleUserId || process.env.HOSTPINNACLE_USERID,
-      password: settings?.hostpinnaclePassword || process.env.HOSTPINNACLE_PASSWORD,
-      apiKey: settings?.hostpinnacleApiKey || process.env.HOSTPINNACLE_API_KEY,
+      userId: masterCreds?.userId,
+      password: masterCreds?.password,
+      apiKey: masterCreds?.apiKey,
       timeoutMs: config.hostpinnacleTimeoutMs,
       maxRetries: config.maxRetries,
       rateLimitPerSecond: config.rateLimitPerSecond,

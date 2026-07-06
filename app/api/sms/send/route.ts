@@ -5,10 +5,10 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import connectDB from '@/lib/db/connect'
-import { User, SenderId, UserSenderId, SmsMessage, HostPinnacleAccount } from '@/lib/db/models'
+import { User, SenderId, UserSenderId, SmsMessage } from '@/lib/db/models'
+import { resolveHostPinnacleCredentials } from '@/lib/services/hostpinnacle/credentials'
 import { hostPinnacleClient } from '@/lib/services/hostpinnacle/client'
 import { requireAuth } from '@/lib/auth/middleware'
-import { decrypt } from '@/lib/utils/encryption'
 import { calculateSegments153, getEffectivePricePerCreditKes } from '@/lib/utils/credits'
 import { initialNextCheckAt } from '@/lib/services/sms-status/build-synchronizer'
 import { maskPhone } from '@/lib/utils/log-sanitize'
@@ -144,36 +144,19 @@ export async function POST(request: NextRequest) {
     // Log phone number formatting for debugging (masked - phone numbers are PII)
     console.log('Phone number formatted:', maskPhone(formattedPhone))
 
-    // Get HostPinnacle account (user's sub-account if exists, otherwise use master account)
-    const hpAccount = await HostPinnacleAccount.findOne({ userId: userObjectId })
-    
-    let apiKey: string | undefined
-    let hpUserId: string
-    let password: string | undefined
-
-    if (hpAccount) {
-      // Use user's own HostPinnacle sub-account
-      apiKey = hpAccount.hpApiKeyEncrypted
-        ? decrypt(hpAccount.hpApiKeyEncrypted)
-        : undefined
-      password = hpAccount.hpPasswordEncrypted
-        ? decrypt(hpAccount.hpPasswordEncrypted)
-        : undefined
-      hpUserId = hpAccount.hpUserLoginName
-    } else {
-      // Fallback to master account (for users without sub-accounts)
-      // Use master account credentials from env
-      hpUserId = process.env.HOSTPINNACLE_USERID || ''
-      password = process.env.HOSTPINNACLE_PASSWORD
-      // API key is optional, we can use userId+password instead
-      
-      if (!hpUserId || !password) {
-        return NextResponse.json(
-          { error: 'HostPinnacle configuration not found. Please contact support.' },
-          { status: 500 }
-        )
-      }
+    // HostPinnacle credentials: user sub-account → SystemSettings → env vars
+    const hpCreds = await resolveHostPinnacleCredentials(userObjectId)
+    if (!hpCreds) {
+      return NextResponse.json(
+        {
+          error:
+            'HostPinnacle is not configured. Set credentials in Super Admin → Settings or add HOSTPINNACLE_USERID and HOSTPINNACLE_PASSWORD on the server.',
+        },
+        { status: 500 }
+      )
     }
+
+    const { userId: hpUserId, password, apiKey } = hpCreds
 
     // Use MongoDB transaction for atomicity
     const session = await mongoose.startSession()

@@ -6,6 +6,7 @@
 
 import { SystemSettings } from '@/lib/db/models'
 import connectDB from '@/lib/db/connect'
+import { loadMasterHostPinnacleCredentials } from './credentials'
 
 // Cache for settings to avoid repeated DB calls
 let settingsCache: {
@@ -34,17 +35,18 @@ async function getHostPinnacleSettings() {
   try {
     await connectDB()
     const systemSettings = await SystemSettings.findOne().lean()
-    
-    if (systemSettings) {
+    const masterCreds = await loadMasterHostPinnacleCredentials()
+
+    if (systemSettings || masterCreds) {
       settingsCache = {
-        baseUrl: systemSettings.hostpinnacleBaseUrl || process.env.HOSTPINNACLE_BASE_URL || 'https://smsportal.hostpinnacle.co.ke',
-        userId: systemSettings.hostpinnacleUserId || process.env.HOSTPINNACLE_USERID,
-        password: systemSettings.hostpinnaclePassword || process.env.HOSTPINNACLE_PASSWORD,
-        apiKey: systemSettings.hostpinnacleApiKey || process.env.HOSTPINNACLE_API_KEY,
-        statusEndpoint: systemSettings.hostpinnacleStatusEndpoint || process.env.HOSTPINNACLE_STATUS_ENDPOINT || '/SMSApi/report/status',
-        timeout: systemSettings.hostpinnacleTimeout || parseInt(process.env.HOSTPINNACLE_TIMEOUT || '30000'),
-        smsSendTimeout: systemSettings.hostpinnacleSmsSendTimeout || parseInt(process.env.HOSTPINNACLE_SMS_SEND_TIMEOUT || '45000'),
-        statusTimeout: systemSettings.hostpinnacleStatusTimeout || parseInt(process.env.HOSTPINNACLE_STATUS_TIMEOUT || '15000'),
+        baseUrl: systemSettings?.hostpinnacleBaseUrl || process.env.HOSTPINNACLE_BASE_URL || 'https://smsportal.hostpinnacle.co.ke',
+        userId: masterCreds?.userId,
+        password: masterCreds?.password,
+        apiKey: masterCreds?.apiKey,
+        statusEndpoint: systemSettings?.hostpinnacleStatusEndpoint || process.env.HOSTPINNACLE_STATUS_ENDPOINT || '/SMSApi/report/status',
+        timeout: systemSettings?.hostpinnacleTimeout || parseInt(process.env.HOSTPINNACLE_TIMEOUT || '30000'),
+        smsSendTimeout: systemSettings?.hostpinnacleSmsSendTimeout || parseInt(process.env.HOSTPINNACLE_SMS_SEND_TIMEOUT || '45000'),
+        statusTimeout: systemSettings?.hostpinnacleStatusTimeout || parseInt(process.env.HOSTPINNACLE_STATUS_TIMEOUT || '15000'),
         cachedAt: Date.now(),
       }
       return settingsCache
@@ -53,12 +55,12 @@ async function getHostPinnacleSettings() {
     console.warn('Failed to load HostPinnacle settings from database, using env vars:', error)
   }
 
-  // Fallback to environment variables
+  // Fallback to environment variables only
   settingsCache = {
     baseUrl: process.env.HOSTPINNACLE_BASE_URL || 'https://smsportal.hostpinnacle.co.ke',
-    userId: process.env.HOSTPINNACLE_USERID,
+    userId: process.env.HOSTPINNACLE_USERID || process.env.HOSTPINNACLE_USER_ID,
     password: process.env.HOSTPINNACLE_PASSWORD,
-    apiKey: process.env.HOSTPINNACLE_API_KEY,
+    apiKey: process.env.HOSTPINNACLE_API_KEY || process.env.HOSTPINNACLE_APIKEY,
     statusEndpoint: process.env.HOSTPINNACLE_STATUS_ENDPOINT || '/SMSApi/report/status',
     timeout: parseInt(process.env.HOSTPINNACLE_TIMEOUT || '30000'),
     smsSendTimeout: parseInt(process.env.HOSTPINNACLE_SMS_SEND_TIMEOUT || '45000'),
