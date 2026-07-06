@@ -136,12 +136,12 @@ export class HostPinnacleStatusClient {
     const headers: Record<string, string> = {
       'Content-Type': 'application/x-www-form-urlencoded',
     }
-    if (this.config.apiKey) {
-      headers['apiKey'] = this.config.apiKey
-    }
+    // Prefer userId+password over apiKey (same rule as send client)
     if (this.config.userId && this.config.password) {
       form.append('userid', this.config.userId)
       form.append('password', this.config.password)
+    } else if (this.config.apiKey) {
+      headers['apiKey'] = this.config.apiKey
     }
 
     let response: Response

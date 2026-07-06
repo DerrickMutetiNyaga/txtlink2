@@ -88,6 +88,117 @@ interface HostPinnacleResponse {
   message?: string
 }
 
+function normStatus(value: unknown): string {
+  return String(value ?? '').trim().toLowerCase()
+}
+
+function isSuccessStatus(value: unknown): boolean {
+  const s = normStatus(value)
+  return s === 'success' || s === 'ok'
+}
+
+function isErrorStatus(value: unknown): boolean {
+  const s = normStatus(value)
+  return s === 'error' || s === 'failed' || s === 'fail'
+}
+
+/** Pull a human-readable provider message from any HostPinnacle JSON shape. */
+function extractProviderMessage(obj: any): string | undefined {
+  if (!obj || typeof obj !== 'object') return undefined
+
+  for (const key of ['reason', 'Reason', 'msg', 'message', 'error', 'description', 'Description']) {
+    const value = obj[key]
+    if (typeof value === 'string' && value.trim() && normStatus(value) !== 'success') {
+      return value.trim()
+    }
+  }
+
+  const code = obj.statusCode ?? obj.code ?? obj.errorCode
+  if (code != null && isErrorStatus(obj.status ?? obj.Status)) {
+    return `HostPinnacle error (code ${code})`
+  }
+
+  return undefined
+}
+
+function applyHostPinnacleAuth(
+  formData: URLSearchParams,
+  headers: Record<string, string>,
+  options: HostPinnacleRequestOptions,
+  settings: { userId?: string; password?: string; apiKey?: string }
+) {
+  // HostPinnacle docs: authenticate with userId+password OR apiKey — not both.
+  // Prefer userId+password when both are configured; a stale apiKey in settings
+  // was causing immediate send failures while password auth would have worked.
+  if (options.userId && options.password) {
+    formData.append('userid', options.userId)
+    formData.append('password', options.password)
+    return
+  }
+  if (settings.userId && settings.password) {
+    formData.append('userid', settings.userId)
+    formData.append('password', settings.password)
+    return
+  }
+  if (options.apiKey) {
+    headers['apiKey'] = options.apiKey
+    return
+  }
+  if (settings.apiKey) {
+    headers['apiKey'] = settings.apiKey
+  }
+}
+
+function parseHostPinnacleResponse(
+  endpoint: string,
+  data: any,
+  httpOk: boolean
+): HostPinnacleResponse {
+  if (!httpOk) {
+    const message = extractProviderMessage(data) || `HTTP error`
+    return { success: false, error: message, message }
+  }
+
+  // Nested { response: { status, msg, ... } } — sender ID and admin APIs
+  if (data?.response && typeof data.response === 'object') {
+    const inner = data.response
+    if (isSuccessStatus(inner.status ?? inner.Status)) {
+      return { success: true, data: inner }
+    }
+    if (isErrorStatus(inner.status ?? inner.Status)) {
+      const message = extractProviderMessage(inner) || 'HostPinnacle request failed'
+      console.warn(`[HostPinnacle] ${endpoint} provider error:`, {
+        status: inner.status ?? inner.Status,
+        code: inner.code ?? inner.statusCode,
+        reason: inner.reason ?? inner.msg,
+      })
+      return { success: false, error: message, message }
+    }
+  }
+
+  // Flat { status, transactionId, reason } — SMS send API
+  if (isSuccessStatus(data?.status ?? data?.Status) || data?.success === true) {
+    return { success: true, data: data.data ?? data.result ?? data }
+  }
+
+  if (isErrorStatus(data?.status ?? data?.Status)) {
+    const message = extractProviderMessage(data) || 'HostPinnacle request failed'
+    console.warn(`[HostPinnacle] ${endpoint} provider error:`, {
+      status: data.status ?? data.Status,
+      code: data.statusCode ?? data.code,
+      reason: data.reason ?? data.msg,
+    })
+    return { success: false, error: message, message }
+  }
+
+  if (typeof data?.error === 'string' && data.error.trim()) {
+    return { success: false, error: data.error.trim(), message: data.message }
+  }
+
+  // No explicit status — assume success (legacy/plain responses)
+  return { success: true, data }
+}
+
 /**
  * Make a form-urlencoded POST request to HostPinnacle
  */
@@ -105,25 +216,11 @@ async function requestForm(
     formData.append(key, String(value))
   }
 
-  // Add auth: prefer apiKey in header (from options or env), otherwise userId+password in body
+  // Authenticate (userId+password preferred over apiKey — see applyHostPinnacleAuth)
   const headers: Record<string, string> = {
     'Content-Type': 'application/x-www-form-urlencoded',
   }
-
-  if (options.apiKey) {
-    // Explicit API key passed in options
-    headers['apiKey'] = options.apiKey
-  } else if (settings.apiKey) {
-    // Use API key from settings (database or env)
-    headers['apiKey'] = settings.apiKey
-  } else if (options.userId && options.password) {
-    formData.append('userid', options.userId)
-    formData.append('password', options.password)
-  } else if (settings.userId && settings.password) {
-    // Use credentials from settings (database or env)
-    formData.append('userid', settings.userId)
-    formData.append('password', settings.password)
-  }
+  applyHostPinnacleAuth(formData, headers, options, settings)
 
   // Use custom timeout if provided, otherwise use default from settings
   const timeout = options.timeout || settings.timeout
@@ -158,52 +255,14 @@ async function requestForm(
     }
 
     if (!response.ok) {
+      const parsed = parseHostPinnacleResponse(endpoint, data, false)
       return {
-        success: false,
-        error: data.error || data.message || `HTTP ${response.status}`,
-        message: data.message,
+        ...parsed,
+        error: parsed.error || `HTTP ${response.status}`,
       }
     }
 
-    // HostPinnacle often returns success in different formats
-    // Check for nested response object (common format)
-    if (data.response) {
-      const response = data.response
-      if (response.status === 'success' || response.Status === 'Success') {
-        return {
-          success: true,
-          data: response, // Return the response object which contains senderidList
-        }
-      }
-      if (response.status === 'error' || response.Status === 'Error') {
-        return {
-          success: false,
-          error: response.error || response.msg || 'Unknown error',
-          message: response.msg,
-        }
-      }
-    }
-
-    if (data.status === 'success' || data.Status === 'Success' || data.success === true) {
-      return {
-        success: true,
-        data: data.data || data.result || data,
-      }
-    }
-
-    if (data.status === 'error' || data.Status === 'Error' || data.error) {
-      return {
-        success: false,
-        error: data.error || data.message || 'Unknown error',
-        message: data.message,
-      }
-    }
-
-    // Default: assume success if no error indicators
-    return {
-      success: true,
-      data,
-    }
+    return parseHostPinnacleResponse(endpoint, data, true)
   } catch (error: any) {
     if (error.name === 'AbortError' || error.message?.includes('timeout') || error.message?.includes('aborted')) {
       return {
