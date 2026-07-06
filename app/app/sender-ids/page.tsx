@@ -81,6 +81,7 @@ export default function SenderIDsPage() {
     <PortalLayout activeSection="Sender IDs">
       <div className="space-y-6">
         {/* Header */}
+<<<<<<< HEAD
         <div className="app-page-header">
           <div>
             <h1 className="text-2xl sm:text-3xl font-semibold text-gray-900 mb-2">Sender IDs</h1>
@@ -88,13 +89,26 @@ export default function SenderIDsPage() {
           </div>
           <Link href="/app/sender-ids/request" className="w-full sm:w-auto">
             <Button className="w-full sm:w-auto bg-teal-600 text-white hover:bg-teal-700">
+=======
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-semibold text-gray-900 mb-2">Sender IDs</h1>
+            <p className="text-gray-600">Manage your approved and pending sender IDs</p>
+          </div>
+          <Link href="/app/sender-ids/request">
+            <Button className="bg-teal-600 text-white hover:bg-teal-700">
+>>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
               <Plus size={18} className="mr-2" /> Apply for New Sender ID
             </Button>
           </Link>
         </div>
 
         {/* Stats */}
+<<<<<<< HEAD
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
+=======
+        <div className="grid md:grid-cols-3 gap-6">
+>>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
           <Card className="p-5 bg-white border border-gray-100 shadow-sm">
             <div className="flex items-center gap-4">
               <div className="p-3 rounded-xl bg-emerald-100 text-emerald-600">
@@ -148,10 +162,17 @@ export default function SenderIDsPage() {
             </Link>
           </Card>
         ) : (
+<<<<<<< HEAD
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
             {senderIDs.map((senderID) => (
               <Card key={senderID.id} className="p-4 sm:p-6 bg-white border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-4">
+=======
+          <div className="grid md:grid-cols-2 gap-6">
+            {senderIDs.map((senderID) => (
+              <Card key={senderID.id} className="p-6 bg-white border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+                <div className="flex items-start justify-between mb-4">
+>>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
                   <div className="flex items-center gap-3">
                     <div className="p-3 rounded-xl bg-teal-100 text-teal-600">
                       <Radio size={20} />

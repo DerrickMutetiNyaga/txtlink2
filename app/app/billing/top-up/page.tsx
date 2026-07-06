@@ -180,12 +180,20 @@ export default function TopUpPage() {
         </Link>
 
         <div className="mb-6">
+<<<<<<< HEAD
           <h1 className="text-2xl sm:text-3xl font-semibold text-[#1F2937] mb-2">Top Up Account</h1>
+=======
+          <h1 className="text-3xl font-semibold text-[#1F2937] mb-2">Top Up Account</h1>
+>>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
           <p className="text-slate-600">Add funds to your account balance</p>
         </div>
 
         {/* Payment Method Selection */}
+<<<<<<< HEAD
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+=======
+        <div className="grid md:grid-cols-2 gap-4 mb-8">
+>>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
           <Card
             onClick={() => setPaymentMethod('mpesa')}
             className={`p-6 border-2 cursor-pointer transition-all hover:shadow-lg ${
@@ -366,8 +374,13 @@ export default function TopUpPage() {
                 </div>
               )}
 
+<<<<<<< HEAD
               <div className="flex flex-col-reverse sm:flex-row gap-3 sm:gap-4">
                 <Link href="/app/billing" className="flex-1 w-full sm:w-auto">
+=======
+              <div className="flex gap-4">
+                <Link href="/app/billing" className="flex-1">
+>>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
                   <Button variant="outline" className="w-full border-slate-200 text-slate-700 hover:bg-slate-50">
                     Cancel
                   </Button>
@@ -375,7 +388,11 @@ export default function TopUpPage() {
                 <Button
                   onClick={handleTopUp}
                   disabled={!amount || !phoneNumber || processing || paymentStatus === 'pending' || paymentStatus === 'success'}
+<<<<<<< HEAD
                   className="flex-1 w-full sm:w-auto bg-gradient-to-r from-[#059669] to-[#14B8A6] text-white hover:shadow-lg disabled:opacity-50"
+=======
+                  className="flex-1 bg-gradient-to-r from-[#059669] to-[#14B8A6] text-white hover:shadow-lg disabled:opacity-50"
+>>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
                 >
                   {processing ? 'Sending STK Push...' : paymentStatus === 'pending' ? 'Payment Pending...' : paymentStatus === 'success' ? 'Payment Successful!' : `Send STK Push (${amount ? `KSh ${amount.toLocaleString()}` : 'Amount'})`}
                 </Button>
@@ -395,7 +412,11 @@ export default function TopUpPage() {
                 />
               </div>
 
+<<<<<<< HEAD
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+=======
+              <div className="grid grid-cols-2 gap-4">
+>>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-2">Expiry Date</label>
                   <input

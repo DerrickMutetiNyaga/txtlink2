@@ -66,7 +66,11 @@ export default function SupportPage() {
         </div>
 
         {/* Support Options */}
+<<<<<<< HEAD
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+=======
+        <div className="grid md:grid-cols-2 gap-6">
+>>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
           {supportOptions.map((option, idx) => (
             <Card key={idx} className="p-6 bg-white border border-slate-200 shadow-sm hover:shadow-xl transition-all duration-300 group">
               <div className={`p-4 rounded-xl bg-gradient-to-br ${option.color} w-fit mb-4 shadow-lg group-hover:scale-110 transition-transform`}>

@@ -484,9 +484,14 @@ export interface IApiKey {
   _id?: string
   userId: mongoose.Types.ObjectId
   name: string
+<<<<<<< HEAD
   keyHash: string // Hashed API key for authentication
   keyEncrypted?: string // Encrypted full key for owner re-view
   keyPrefix: string // Prefix + first 8 random chars for display (e.g., "sk_live_abc12345")
+=======
+  keyHash: string // Hashed API key (we only store hash, never the plain key)
+  keyPrefix: string // First 8 chars for display (e.g., "sk_live_")
+>>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
   type: 'live' | 'test'
   status: 'active' | 'revoked'
   lastUsedAt?: Date
@@ -499,7 +504,10 @@ const ApiKeySchema = new Schema<IApiKey>(
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     name: { type: String, required: true },
     keyHash: { type: String, required: true, unique: true },
+<<<<<<< HEAD
     keyEncrypted: { type: String },
+=======
+>>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
     keyPrefix: { type: String, required: true },
     type: { type: String, enum: ['live', 'test'], required: true },
     status: { type: String, enum: ['active', 'revoked'], default: 'active' },

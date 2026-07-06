@@ -310,7 +310,11 @@ export function QuickSendForm({
     <div className="grid lg:grid-cols-3 gap-6">
       {/* Left: Message Composer (Primary) */}
       <div className="lg:col-span-2">
+<<<<<<< HEAD
         <Card className="p-4 sm:p-8 bg-white border border-slate-200/80 rounded-2xl shadow-sm">
+=======
+        <Card className="p-8 bg-white border border-slate-200/80 rounded-2xl shadow-sm">
+>>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
           {/* Success Animation */}
           {isSuccess && (
             <div className="mb-6 p-4 bg-emerald-50 border border-emerald-200/50 rounded-xl animate-in fade-in slide-in-from-top-2">
@@ -543,7 +547,11 @@ export function QuickSendForm({
                 <>
                   <Send size={18} className="mr-2" />
                   Send Message
+<<<<<<< HEAD
                   <span className="ml-2 text-xs opacity-70 hidden sm:inline">⌘+Enter</span>
+=======
+                  <span className="ml-2 text-xs opacity-70">⌘+Enter</span>
+>>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
                 </>
               )}
             </Button>

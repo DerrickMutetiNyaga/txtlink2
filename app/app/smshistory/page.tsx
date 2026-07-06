@@ -336,12 +336,21 @@ export default function SMSHistoryPage() {
         <SenderIdAdBanner currentPage="smshistory" />
         
         {/* Header - Compact Toolbar Style */}
+<<<<<<< HEAD
         <Card className="rounded-2xl border border-slate-200/70 bg-white px-4 sm:px-6 py-4 shadow-sm">
           {/* Row 1: Title + Search + Actions */}
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             {/* Left: Title + Breadcrumb */}
             <div className="min-w-0">
               <h1 className="text-lg sm:text-xl font-semibold text-slate-900">SMS History</h1>
+=======
+        <Card className="rounded-2xl border border-slate-200/70 bg-white px-6 py-4 shadow-sm">
+          {/* Row 1: Title + Search + Actions */}
+          <div className="flex items-center justify-between gap-6">
+            {/* Left: Title + Breadcrumb */}
+            <div>
+              <h1 className="text-xl font-semibold text-slate-900">SMS History</h1>
+>>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
               <p className="text-sm text-slate-500">Dashboard / Overview</p>
               <p className="text-xs text-slate-500 mt-1">
                 Delivered/Failed status is updated by HostPinnacle delivery reports (DLR)—so you can see if each message actually reached the recipient.
@@ -349,7 +358,11 @@ export default function SMSHistoryPage() {
             </div>
 
             {/* Center: Search */}
+<<<<<<< HEAD
             <div className="w-full lg:flex-1 lg:max-w-md order-2 lg:order-none">
+=======
+            <div className="flex-1 max-w-md">
+>>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
                 <Input
@@ -363,11 +376,16 @@ export default function SMSHistoryPage() {
             </div>
 
             {/* Right: Actions */}
+<<<<<<< HEAD
             <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto order-3">
+=======
+            <div className="flex items-center gap-2">
+>>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
               <Button
                 variant="outline"
                 onClick={() => fetchSMSHistory(true)}
                 disabled={isAutoRefreshing}
+<<<<<<< HEAD
                 className="h-9 rounded-xl border border-slate-200 px-3 sm:px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 hover:text-slate-900 hover:border-slate-300 disabled:opacity-50"
                 title="Refresh now"
               >
@@ -390,6 +408,30 @@ export default function SMSHistoryPage() {
               </Button>
               <Link href="/app/send-sms" className="w-full sm:w-auto">
                 <Button className="w-full sm:w-auto h-9 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700">
+=======
+                className="h-9 rounded-xl border border-slate-200 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 hover:text-slate-900 hover:border-slate-300 disabled:opacity-50"
+                title="Refresh now"
+              >
+                <RefreshCw className={`w-4 h-4 mr-2 ${isAutoRefreshing ? 'animate-spin' : ''}`} />
+                {isAutoRefreshing ? 'Refreshing...' : 'Refresh'}
+              </Button>
+              <Button
+                variant="outline"
+                className="h-9 rounded-xl border border-slate-200 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 hover:text-slate-900 hover:border-slate-300"
+              >
+                <Calendar className="w-4 h-4 mr-2" />
+                Date Range
+              </Button>
+              <Button
+                variant="outline"
+                className="h-9 rounded-xl border border-slate-200 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 hover:text-slate-900 hover:border-slate-300"
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Export CSV
+              </Button>
+              <Link href="/app/send-sms">
+                <Button className="h-9 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700">
+>>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
                   <Plus className="w-4 h-4 mr-2" />
                   New SMS
                 </Button>
@@ -455,8 +497,13 @@ export default function SMSHistoryPage() {
           {/* SMS Table - LEFT (col-span-8) */}
           <div className="col-span-12 lg:col-span-8 space-y-4">
             {/* Mini KPI Row */}
+<<<<<<< HEAD
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <Card className="rounded-2xl bg-white border border-slate-200/70 p-4 shadow-sm">
+=======
+            <div className="flex gap-3">
+              <Card className="flex-1 rounded-2xl bg-white border border-slate-200/70 p-4 shadow-sm">
+>>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <CheckCircle2 className="w-4 h-4 text-emerald-600" />
@@ -468,7 +515,11 @@ export default function SMSHistoryPage() {
                   </div>
                 </div>
               </Card>
+<<<<<<< HEAD
               <Card className="rounded-2xl bg-white border border-slate-200/70 p-4 shadow-sm">
+=======
+              <Card className="flex-1 rounded-2xl bg-white border border-slate-200/70 p-4 shadow-sm">
+>>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <XCircle className="w-4 h-4 text-red-600" />
@@ -480,7 +531,11 @@ export default function SMSHistoryPage() {
                   </div>
                 </div>
               </Card>
+<<<<<<< HEAD
               <Card className="rounded-2xl bg-white border border-slate-200/70 p-4 shadow-sm">
+=======
+              <Card className="flex-1 rounded-2xl bg-white border border-slate-200/70 p-4 shadow-sm">
+>>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Clock className="w-4 h-4 text-amber-600" />
@@ -686,7 +741,11 @@ export default function SMSHistoryPage() {
             {selectedSms && (
               <div className="mt-6 space-y-6">
                 {/* Status Row */}
+<<<<<<< HEAD
                 <div className="flex flex-col sm:flex-row sm:items-start gap-3">
+=======
+                <div className="flex items-center gap-3">
+>>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
                   <Badge className={`${getStatusBadge(selectedSms.status)} rounded-full px-3 py-1`}>
                     {selectedSms.status === 'retrying' ? 'Retrying' : selectedSms.status.charAt(0).toUpperCase() + selectedSms.status.slice(1)}
                   </Badge>
@@ -702,7 +761,11 @@ export default function SMSHistoryPage() {
                 <div className="border-t border-slate-100"></div>
 
                 {/* Details Grid */}
+<<<<<<< HEAD
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+=======
+                <div className="grid grid-cols-2 gap-4">
+>>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
                   <div className="space-y-1">
                     <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
                       Recipient
