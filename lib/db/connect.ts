@@ -4,11 +4,8 @@
 
 import mongoose from 'mongoose'
 
-const MONGODB_URI = process.env.MONGODB_URI!
-
-if (!MONGODB_URI) {
-  throw new Error('Please define MONGODB_URI in your .env.local file')
-}
+// Note: validated inside connectDB() (not at import time) so `next build`
+// can compile API routes without a database configured.
 
 interface MongooseCache {
   conn: typeof mongoose | null
@@ -28,6 +25,11 @@ if (!global.mongoose) {
 async function connectDB() {
   if (cached.conn) {
     return cached.conn
+  }
+
+  const MONGODB_URI = process.env.MONGODB_URI
+  if (!MONGODB_URI) {
+    throw new Error('Please define MONGODB_URI in your .env.local file')
   }
 
   if (!cached.promise) {

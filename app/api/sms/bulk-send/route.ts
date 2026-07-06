@@ -11,6 +11,7 @@ import { SmsMessage, User, UserSenderId } from '@/lib/db/models'
 import { requireAuth } from '@/lib/auth/middleware'
 import { calculateSegments153, getEffectivePricePerCreditKes } from '@/lib/utils/credits'
 import { advancedSmsQueue } from '@/lib/services/sms/advanced-queue'
+import { initialNextCheckAt } from '@/lib/services/sms-status/build-synchronizer'
 import mongoose from 'mongoose'
 
 // Format phone number to E.164
@@ -147,7 +148,10 @@ export async function POST(request: NextRequest) {
           chargedKes: pricePerCreditKes * segments,
           status: 'queued',
           providerStatus: 'PROCESSING',
+          nextCheckAt: initialNextCheckAt(),
+          lastCheckedAt: null,
           statusCheckAttempts: 0,
+          finalizedAt: null,
           creditDeducted: true,
           channel: 'sms',
           email: dbUser.email,

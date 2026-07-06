@@ -5,9 +5,12 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import connectDB from '@/lib/db/connect'
-import { SmsMessage } from '@/lib/db/models'
+import { SmsMessage, SMS_PENDING_STATUSES } from '@/lib/db/models'
 import { requireAuth } from '@/lib/auth/middleware'
 import mongoose from 'mongoose'
+
+// Final statuses that are surfaced as "failed" in user-facing stats
+const FAILED_LIKE_STATUSES = ['failed', 'expired', 'rejected', 'undeliverable', 'provider_timeout']
 
 export async function GET(request: NextRequest) {
   try {
@@ -32,8 +35,11 @@ export async function GET(request: NextRequest) {
     // Status filter
     if (status !== 'all') {
       if (status === 'pending') {
-        // Pending includes both queued and sent
-        query.status = { $in: ['queued', 'sent'] }
+        // Pending includes all in-flight statuses
+        query.status = { $in: [...SMS_PENDING_STATUSES] }
+      } else if (status === 'failed') {
+        // Failed filter includes all non-delivered final statuses
+        query.status = { $in: FAILED_LIKE_STATUSES }
       } else {
         query.status = status
       }
@@ -94,8 +100,8 @@ export async function GET(request: NextRequest) {
 
     const totalMessages = await SmsMessage.countDocuments({ userId })
     const deliveredCount = statusCounts.delivered || 0
-    const failedCount = statusCounts.failed || 0
-    const pendingCount = (statusCounts.queued || 0) + (statusCounts.sent || 0)
+    const failedCount = FAILED_LIKE_STATUSES.reduce((sum, s) => sum + (statusCounts[s] || 0), 0)
+    const pendingCount = SMS_PENDING_STATUSES.reduce((sum, s) => sum + (statusCounts[s] || 0), 0)
 
     // Helper to normalize failure reasons so we don't show a useless "Unknown error"
     const normalizeFailureReason = (baseReason?: string | null): string | undefined => {
@@ -164,7 +170,7 @@ export async function GET(request: NextRequest) {
 
     // Get failure insights (use deliveryCause if available, otherwise errorMessage)
     const failureReasons = await SmsMessage.aggregate([
-      { $match: { userId, status: 'failed' } },
+      { $match: { userId, status: { $in: FAILED_LIKE_STATUSES } } },
       {
         $group: {
           _id: { $ifNull: ['$deliveryCause', '$errorMessage'] },

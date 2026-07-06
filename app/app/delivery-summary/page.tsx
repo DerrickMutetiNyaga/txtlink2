@@ -325,37 +325,24 @@ export default function DeliverySummaryPage() {
           <p className="text-xs text-slate-500 mb-4">
             Search and download previously archived delivery summaries by date range.
           </p>
-<<<<<<< HEAD
           <div className="flex flex-col sm:flex-row flex-wrap gap-4 items-stretch sm:items-end">
             <div className="w-full sm:w-auto">
-=======
-          <div className="flex flex-wrap gap-4 items-end">
-            <div>
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
               <label htmlFor="archivedFromDate" className="block text-xs font-medium text-slate-600 mb-1">
                 From Date
               </label>
               <Input
                 id="archivedFromDate"
                 type="date"
-<<<<<<< HEAD
                 className="h-10 rounded-xl border border-slate-200 bg-slate-50 w-full sm:w-40"
               />
             </div>
             <div className="w-full sm:w-auto">
-=======
-                className="h-10 rounded-xl border border-slate-200 bg-slate-50 w-40"
-              />
-            </div>
-            <div>
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
               <label htmlFor="archivedToDate" className="block text-xs font-medium text-slate-600 mb-1">
                 To Date
               </label>
               <Input
                 id="archivedToDate"
                 type="date"
-<<<<<<< HEAD
                 className="h-10 rounded-xl border border-slate-200 bg-slate-50 w-full sm:w-40"
               />
             </div>
@@ -364,16 +351,6 @@ export default function DeliverySummaryPage() {
             </Button>
           </div>
           <div className="mt-6 rounded-xl border border-slate-200 overflow-hidden app-table-scroll">
-=======
-                className="h-10 rounded-xl border border-slate-200 bg-slate-50 w-40"
-              />
-            </div>
-            <Button variant="outline" className="rounded-xl gap-2">
-              View Reports
-            </Button>
-          </div>
-          <div className="mt-6 rounded-xl border border-slate-200 overflow-hidden">
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
             <table className="w-full text-sm">
               <thead className="bg-slate-50/80 border-b border-slate-200">
                 <tr>

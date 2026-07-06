@@ -1,16 +1,16 @@
 /**
- * SMS Status Check API
+ * SMS Status Read API
  * GET /api/sms/status?messageId=xxx
- * 
- * Returns current status of a message
- * Used for real-time status updates without page reload
+ *
+ * Returns the current status of a message from MongoDB only.
+ * The database always holds the latest known delivery status - the Render
+ * background worker keeps it up to date. This route never calls the provider.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import connectDB from '@/lib/db/connect'
-import { SmsMessage } from '@/lib/db/models'
+import { SmsMessage, SMS_FINAL_STATUSES } from '@/lib/db/models'
 import { requireAuth } from '@/lib/auth/middleware'
-import { checkMessageUntilComplete } from '@/lib/services/sms/status-checker'
 
 export async function GET(request: NextRequest) {
   try {
@@ -27,9 +27,8 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Find message and verify ownership
-    const message = await SmsMessage.findById(messageId)
-    
+    const message = await SmsMessage.findById(messageId).lean()
+
     if (!message) {
       return NextResponse.json(
         { error: 'Message not found' },
@@ -45,30 +44,6 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Check if message needs status update
-    const needsCheck = message.status === 'queued' || 
-                      message.status === 'sent' || 
-                      message.status === 'processing'
-
-    if (needsCheck) {
-      // Check status (non-blocking, quick check)
-      const result = await checkMessageUntilComplete(messageId, 1, 0)
-      
-      // Refresh message
-      const updatedMessage = await SmsMessage.findById(messageId)
-      
-      return NextResponse.json({
-        messageId,
-        status: updatedMessage?.status || message.status,
-        providerStatus: updatedMessage?.providerStatus || message.providerStatus,
-        errorMessage: updatedMessage?.errorMessage || message.errorMessage,
-        deliveredAt: updatedMessage?.deliveredAt || message.deliveredAt,
-        failedAt: updatedMessage?.failedAt || message.failedAt,
-        completed: result.completed,
-      })
-    }
-
-    // Return current status
     return NextResponse.json({
       messageId,
       status: message.status,
@@ -76,14 +51,17 @@ export async function GET(request: NextRequest) {
       errorMessage: message.errorMessage,
       deliveredAt: message.deliveredAt,
       failedAt: message.failedAt,
-      completed: message.status === 'delivered' || message.status === 'failed',
+      lastCheckedAt: message.lastCheckedAt,
+      completed: (SMS_FINAL_STATUSES as readonly string[]).includes(message.status),
     })
   } catch (error: any) {
-    console.error('Status check error:', error)
+    if (error.message === 'Unauthorized') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    console.error('Status read error:', error)
     return NextResponse.json(
-      { error: error.message || 'Failed to check status' },
+      { error: error.message || 'Failed to read status' },
       { status: 500 }
     )
   }
 }
-

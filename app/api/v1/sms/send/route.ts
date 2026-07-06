@@ -13,6 +13,8 @@ import { User, SenderId, UserSenderId, SmsMessage, HostPinnacleAccount, ApiKey }
 import { hostPinnacleClient } from '@/lib/services/hostpinnacle/client'
 import { decrypt } from '@/lib/utils/encryption'
 import { calculateSegments153, getEffectivePricePerCreditKes } from '@/lib/utils/credits'
+import { initialNextCheckAt } from '@/lib/services/sms-status/build-synchronizer'
+import { maskPhone } from '@/lib/utils/log-sanitize'
 import bcrypt from 'bcryptjs'
 import mongoose from 'mongoose'
 
@@ -365,6 +367,12 @@ export async function POST(request: NextRequest) {
         parts: segments,
         chargedKes: totalCostKes,
         status: 'queued',
+        nextCheckAt: initialNextCheckAt(),
+        lastCheckedAt: null,
+        statusCheckAttempts: 0,
+        finalizedAt: null,
+        creditDeducted: true,
+        channel: 'sms',
       }], { session })
       
       await session.commitTransaction()
@@ -386,7 +394,7 @@ export async function POST(request: NextRequest) {
       Promise.resolve().then(async () => {
         try {
           console.log('Sending SMS via HostPinnacle:', {
-            mobile: formattedPhone.replace('+', ''),
+            mobile: maskPhone(formattedPhone),
             senderid: senderIdObj.senderName,
             messageLength: message.length,
           })
@@ -415,6 +423,8 @@ export async function POST(request: NextRequest) {
               errorCode: 'HP_API_ERROR',
               errorMessage: errorMsg,
               failedAt: new Date(),
+              finalizedAt: new Date(),
+              nextCheckAt: null,
               refunded: true,
             })
           } else {
@@ -422,8 +432,11 @@ export async function POST(request: NextRequest) {
             
             await SmsMessage.findByIdAndUpdate(smsMessage._id, {
               hpTransactionId: transactionId,
+              externalMsgId: transactionId,
               status: 'sent',
+              providerStatus: 'SUBMITTED',
               sentAt: new Date(),
+              nextCheckAt: initialNextCheckAt(),
             })
           }
         } catch (error) {
@@ -438,6 +451,8 @@ export async function POST(request: NextRequest) {
             errorCode: 'ASYNC_ERROR',
             errorMessage: errorMessage || 'Unknown error occurred while sending SMS',
             failedAt: new Date(),
+            finalizedAt: new Date(),
+            nextCheckAt: null,
             refunded: true,
           })
         }

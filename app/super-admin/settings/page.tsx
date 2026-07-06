@@ -555,13 +555,18 @@ export default function SuperAdminSettingsPage() {
                   onClick={async () => {
                     try {
                       const token = localStorage.getItem('token')
-                      const res = await fetch('/api/cron/sms-status?limit=100', {
-                        method: 'GET',
+                      const res = await fetch('/api/super-admin/sms-status/sync?limit=100', {
+                        method: 'POST',
                         headers: token ? { Authorization: `Bearer ${token}` } : {},
                       })
                       const data = await res.json()
                       if (data.success) {
-                        alert(`Status sync completed! Checked ${data.limit || 100} messages.`)
+                        const s = data.summary || {}
+                        alert(
+                          `Status sync completed! Checked ${s.claimed ?? 0} messages: ` +
+                          `${s.finalized ?? 0} finalized, ${s.rescheduled ?? 0} rescheduled, ` +
+                          `${s.errors ?? 0} provider errors. ${data.stillDue ?? 0} still due.`
+                        )
                       } else {
                         alert(data.error || 'Status sync failed')
                       }

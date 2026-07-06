@@ -4,14 +4,9 @@ import { PortalLayout } from '@/components/portal-layout'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { useState, useEffect } from 'react'
-<<<<<<< HEAD
 import { Copy, Trash2, RefreshCw, Plus, Key, Eye, EyeOff, Check } from 'lucide-react'
 import Link from 'next/link'
 import { useToast } from '@/hooks/use-toast'
-=======
-import { Copy, Trash2, RefreshCw, Plus, Key, Eye, EyeOff } from 'lucide-react'
-import Link from 'next/link'
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
 
 interface ApiKey {
   id: string
@@ -21,17 +16,11 @@ interface ApiKey {
   status: 'active' | 'revoked'
   createdAt: string | Date
   lastUsedAt?: string | Date | null
-<<<<<<< HEAD
   canReveal?: boolean
 }
 
 export default function APIKeysPage() {
   const { toast } = useToast()
-=======
-}
-
-export default function APIKeysPage() {
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
   const [showModal, setShowModal] = useState(false)
   const [newKeyVisible, setNewKeyVisible] = useState(false)
   const [newKey, setNewKey] = useState('')
@@ -41,12 +30,9 @@ export default function APIKeysPage() {
   const [loading, setLoading] = useState(true)
   const [hasSenderIds, setHasSenderIds] = useState(false)
   const [visibleKeys, setVisibleKeys] = useState<Set<string>>(new Set())
-<<<<<<< HEAD
   const [revealedKeys, setRevealedKeys] = useState<Record<string, string>>({})
   const [revealingKey, setRevealingKey] = useState<string | null>(null)
   const [copiedKeyId, setCopiedKeyId] = useState<string | null>(null)
-=======
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
   const [creating, setCreating] = useState(false)
   const [revoking, setRevoking] = useState<string | null>(null)
 
@@ -77,7 +63,6 @@ export default function APIKeysPage() {
     fetchApiKeys()
   }, [])
 
-<<<<<<< HEAD
   const handleCopy = async (text: string, keyId?: string) => {
     try {
       await navigator.clipboard.writeText(text)
@@ -161,21 +146,6 @@ export default function APIKeysPage() {
     if (fullKey) {
       await handleCopy(fullKey, key.id)
     }
-=======
-  const handleCopy = (text: string) => {
-    navigator.clipboard.writeText(text)
-    // You could add a toast notification here
-  }
-
-  const toggleKeyVisibility = (id: string) => {
-    const newVisible = new Set(visibleKeys)
-    if (newVisible.has(id)) {
-      newVisible.delete(id)
-    } else {
-      newVisible.add(id)
-    }
-    setVisibleKeys(newVisible)
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
   }
 
   const handleGenerateKey = async () => {
@@ -202,7 +172,6 @@ export default function APIKeysPage() {
       const data = await response.json()
 
       if (response.ok) {
-<<<<<<< HEAD
         const generatedKey = data.apiKey.key
         const generatedId = data.apiKey.id
         setNewKey(generatedKey)
@@ -212,12 +181,6 @@ export default function APIKeysPage() {
         if (generatedId) {
           setRevealedKeys((prev) => ({ ...prev, [generatedId]: generatedKey }))
         }
-=======
-        setNewKey(data.apiKey.key)
-        setNewKeyVisible(true)
-        setShowModal(false)
-        setNewKeyName('')
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
         // Refresh the list
         const listResponse = await fetch('/api/user/api-keys', {
           headers: {
@@ -296,7 +259,6 @@ export default function APIKeysPage() {
     }
   }
 
-<<<<<<< HEAD
   const getKeyPreview = (keyPrefix: string) => {
     return `${keyPrefix}••••••••••••••••`
   }
@@ -306,19 +268,12 @@ export default function APIKeysPage() {
       return revealedKeys[key.id]
     }
     return getKeyPreview(key.keyPrefix)
-=======
-  const getKeyPreview = (keyPrefix: string, id: string) => {
-    // Since we only store the prefix, we can't show the full key
-    // Show prefix + masked part
-    return `${keyPrefix}...${id.substring(0, 8)}`
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
   }
 
   return (
     <PortalLayout activeSection="API Keys">
       <div className="space-y-6">
         {/* Header */}
-<<<<<<< HEAD
         <div className="app-page-header">
           <div>
             <h1 className="text-2xl sm:text-3xl font-semibold text-gray-900 mb-2">API Keys</h1>
@@ -326,15 +281,6 @@ export default function APIKeysPage() {
           </div>
           <Button 
             className="w-full sm:w-auto bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed"
-=======
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-semibold text-gray-900 mb-2">API Keys</h1>
-            <p className="text-gray-600">Manage your API credentials for authentication</p>
-          </div>
-          <Button 
-            className="bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed"
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
             onClick={() => setShowModal(true)}
             disabled={!hasSenderIds}
             title={!hasSenderIds ? 'You need at least one approved sender ID to generate an API key' : ''}
@@ -350,11 +296,7 @@ export default function APIKeysPage() {
             <p className="text-gray-500">Loading API keys...</p>
           </Card>
         ) : apiKeys.length > 0 ? (
-<<<<<<< HEAD
           <Card className="p-4 sm:p-6 bg-white border border-gray-100 shadow-sm app-table-scroll">
-=======
-          <Card className="p-6 bg-white border border-gray-100 shadow-sm overflow-x-auto">
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
             <table className="w-full text-sm">
               <thead className="border-b border-gray-200">
                 <tr className="text-left text-gray-600 font-semibold text-xs uppercase">
@@ -372,17 +314,12 @@ export default function APIKeysPage() {
                   <tr key={key.id} className="border-b border-gray-100 hover:bg-gray-50 transition">
                     <td className="py-4 font-semibold text-gray-900">{key.name}</td>
                     <td className="py-4">
-<<<<<<< HEAD
                       <code className="font-mono text-xs text-gray-600 break-all">
                         {revealingKey === key.id ? (
                           <span className="text-gray-400">Loading...</span>
                         ) : (
                           getDisplayedKey(key)
                         )}
-=======
-                      <code className="font-mono text-xs text-gray-600">
-                        {getKeyPreview(key.keyPrefix, key.id)}
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
                       </code>
                     </td>
                     <td className="py-4">
@@ -403,7 +340,6 @@ export default function APIKeysPage() {
                     </td>
                     <td className="py-4 flex gap-2">
                       <button
-<<<<<<< HEAD
                         onClick={() => toggleKeyVisibility(key.id)}
                         disabled={revealingKey === key.id || key.canReveal === false}
                         className="p-2 hover:bg-gray-100 hover:text-gray-900 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
@@ -436,13 +372,6 @@ export default function APIKeysPage() {
                         ) : (
                           <Copy size={16} className="text-gray-600" />
                         )}
-=======
-                        onClick={() => handleCopy(getKeyPreview(key.keyPrefix, key.id))}
-                        className="p-2 hover:bg-gray-100 hover:text-gray-900 rounded-lg transition"
-                        title="Copy key preview"
-                      >
-                        <Copy size={16} className="text-gray-600" />
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
                       </button>
                       <button
                         onClick={() => handleRevokeKey(key.id)}
@@ -550,11 +479,7 @@ export default function APIKeysPage() {
                 </div>
 
                 <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-800">
-<<<<<<< HEAD
                   You can view and copy this key anytime from your API Keys list.
-=======
-                  After generation, you won't be able to see this key again. Store it securely.
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
                 </div>
               </div>
 
@@ -604,11 +529,7 @@ export default function APIKeysPage() {
                 </Button>
 
                 <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-900">
-<<<<<<< HEAD
                   Save this key in a secure location. You can view and copy it again from the API Keys page.
-=======
-                  Save this key in a secure location. You won't be able to see it again.
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
                 </div>
               </div>
 

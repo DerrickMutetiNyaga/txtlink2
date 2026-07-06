@@ -164,11 +164,7 @@ function KPIPanel({ kpis, loading }: { kpis: any[]; loading?: boolean }) {
             </div>
 
             {/* Caption + Action */}
-<<<<<<< HEAD
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-=======
-            <div className="flex items-center justify-between">
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
               <p className="text-sm text-slate-500">{kpi.footerHint}</p>
               
               {/* Top up button for Account Balance - Premium Primary Action */}
@@ -210,11 +206,7 @@ function ActivityItem({ icon, title, subtitle, time, status, category }: any) {
   const IconComponent = typeof icon === 'string' ? iconMap[icon] || MessageSquare : icon || MessageSquare
 
   return (
-<<<<<<< HEAD
     <div className="flex flex-col sm:flex-row sm:items-start gap-3 sm:gap-4 p-4 sm:p-5 rounded-xl hover:bg-slate-50/50 transition-all duration-200 border border-slate-100 group">
-=======
-    <div className="flex items-start gap-4 p-5 rounded-xl hover:bg-slate-50/50 transition-all duration-200 border border-slate-100 group">
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
       <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center flex-shrink-0 group-hover:bg-[#ECFDF5] transition-colors">
         <IconComponent size={20} className="text-[#0F766E]" />
       </div>
@@ -232,11 +224,7 @@ function ActivityItem({ icon, title, subtitle, time, status, category }: any) {
         </div>
       </div>
       <span
-<<<<<<< HEAD
         className={`text-sm font-semibold px-3 py-1.5 rounded-full border capitalize flex-shrink-0 self-start sm:self-auto ${statusColors[status] || statusColors.completed}`}
-=======
-        className={`text-sm font-semibold px-3 py-1.5 rounded-full border capitalize flex-shrink-0 ${statusColors[status] || statusColors.completed}`}
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
       >
         {status}
       </span>
@@ -404,52 +392,30 @@ export default function DashboardPage() {
 
   return (
     <PortalLayout activeSection="Dashboard">
-<<<<<<< HEAD
       <div className="space-y-6 w-full">
-=======
-      <div className="space-y-6 max-w-7xl mx-auto">
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
         {/* Sender ID Ad Banner */}
         <SenderIdAdBanner currentPage="dashboard" />
         
         {/* Premium Header */}
-<<<<<<< HEAD
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 sm:gap-5 mb-4">
           <div>
             <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-3">
               <h1 className="text-2xl sm:text-3xl md:text-4xl font-semibold text-slate-900">Dashboard</h1>
               <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700 text-xs sm:text-sm font-semibold border border-emerald-200/50 w-fit">
-=======
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-5 mb-4">
-          <div>
-            <div className="flex items-center gap-3 mb-3">
-              <h1 className="text-3xl md:text-4xl font-semibold text-slate-900">Dashboard</h1>
-              <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700 text-sm font-semibold border border-emerald-200/50">
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
                 <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                 All systems operational
               </span>
             </div>
             <p className="text-base text-slate-500 leading-relaxed">Dashboard / Overview</p>
           </div>
-<<<<<<< HEAD
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             {/* Date Range Selector */}
             <div className="flex items-center gap-1 p-1 sm:p-1.5 bg-slate-100 rounded-xl border border-slate-200/60 w-full sm:w-auto">
-=======
-          <div className="flex items-center gap-3">
-            {/* Date Range Selector */}
-            <div className="flex items-center gap-1.5 p-1.5 bg-slate-100 rounded-xl border border-slate-200/60">
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
               {['Today', '7D', '30D'].map((range) => (
                 <button
                   key={range}
                   onClick={() => setDateRange(range)}
-<<<<<<< HEAD
                   className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-=======
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
                     dateRange === range
                       ? 'bg-white text-slate-900 shadow-sm'
                       : 'text-slate-600 hover:text-slate-900'
@@ -484,13 +450,8 @@ export default function DashboardPage() {
                 </Link>
               </div>
             </div>
-<<<<<<< HEAD
             <Link href="/app/send-sms" className="w-full sm:w-auto">
               <Button className="w-full sm:w-auto h-11 px-5 bg-[#0F766E] hover:bg-[#115E59] text-white rounded-xl text-base font-medium shadow-sm hover:shadow-md transition-all">
-=======
-            <Link href="/app/send-sms">
-              <Button className="h-11 px-5 bg-[#0F766E] hover:bg-[#115E59] text-white rounded-xl text-base font-medium shadow-sm hover:shadow-md transition-all">
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
                 <Plus size={18} className="mr-2" />
                 New SMS
               </Button>
@@ -504,17 +465,10 @@ export default function DashboardPage() {
         </div>
 
         {/* Charts Section */}
-<<<<<<< HEAD
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
           {/* SMS Volume Chart - Wider */}
           <Card className="md:col-span-2 app-card-padding bg-white/80 backdrop-blur-sm border border-slate-200/70 rounded-2xl shadow-sm">
             <div className="app-section-header mb-4 sm:mb-6">
-=======
-        <div className="grid lg:grid-cols-3 gap-6">
-          {/* SMS Volume Chart - Wider */}
-          <Card className="lg:col-span-2 p-7 bg-white/80 backdrop-blur-sm border border-slate-200/70 rounded-2xl shadow-sm">
-            <div className="flex items-center justify-between mb-6">
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
               <div className="flex items-center gap-3">
                 <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/60">
                   <BarChart3 size={20} className="text-[#0F766E]" />
@@ -524,11 +478,7 @@ export default function DashboardPage() {
                   <p className="text-sm text-slate-500 leading-relaxed mt-0.5">Messages sent and delivered</p>
                 </div>
               </div>
-<<<<<<< HEAD
               <div className="flex flex-wrap items-center gap-2">
-=======
-              <div className="flex items-center gap-2">
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
                 {['7D', '30D', '90D'].map((period) => (
                   <button
                     key={period}
@@ -546,11 +496,7 @@ export default function DashboardPage() {
                 </button>
               </div>
             </div>
-<<<<<<< HEAD
             <div className="h-56 sm:h-64 lg:h-72">
-=======
-            <div className="h-72">
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
               {loadingStats && smsVolumeData.length === 0 ? (
                 <div className="h-full flex items-center justify-center">
                   <div className="text-center">
@@ -609,13 +555,8 @@ export default function DashboardPage() {
           </Card>
 
           {/* Delivery Breakdown - Narrower */}
-<<<<<<< HEAD
           <Card className="app-card-padding bg-white/80 backdrop-blur-sm border border-slate-200/70 rounded-2xl shadow-sm">
             <div className="app-section-header mb-4 sm:mb-6">
-=======
-          <Card className="p-7 bg-white/80 backdrop-blur-sm border border-slate-200/70 rounded-2xl shadow-sm">
-            <div className="flex items-center justify-between mb-6">
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
               <div className="flex items-center gap-3">
                 <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/60">
                   <Activity size={20} className="text-[#0F766E]" />
@@ -626,11 +567,7 @@ export default function DashboardPage() {
                 </div>
               </div>
             </div>
-<<<<<<< HEAD
             <div className="h-56 sm:h-64 lg:h-72">
-=======
-            <div className="h-72">
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
               {loadingStats && deliveryBreakdown.every(item => item.value === 0) ? (
                 <div className="h-full flex items-center justify-center">
                   <div className="text-center">
@@ -691,17 +628,10 @@ export default function DashboardPage() {
         </div>
 
         {/* Bottom Grid: Activity + System Status */}
-<<<<<<< HEAD
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
           {/* Recent Activity - Wider */}
           <Card className="lg:col-span-2 app-card-padding bg-white/80 backdrop-blur-sm border border-slate-200/70 rounded-2xl shadow-sm">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between mb-4 sm:mb-6">
-=======
-        <div className="grid lg:grid-cols-3 gap-6">
-          {/* Recent Activity - Wider */}
-          <Card className="lg:col-span-2 p-7 bg-white/80 backdrop-blur-sm border border-slate-200/70 rounded-2xl shadow-sm">
-            <div className="flex items-center justify-between mb-6">
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
               <div className="flex items-center gap-3">
                 <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/60">
                   <Calendar size={20} className="text-[#0F766E]" />
@@ -711,13 +641,8 @@ export default function DashboardPage() {
                   <p className="text-sm text-slate-500 leading-relaxed mt-0.5">Latest platform events</p>
                 </div>
               </div>
-<<<<<<< HEAD
               <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                 <div className="flex flex-wrap items-center gap-1.5 p-1.5 bg-slate-100 rounded-lg border border-slate-200/60">
-=======
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-1.5 p-1.5 bg-slate-100 rounded-lg border border-slate-200/60">
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
                   {activityFilters.map((filter) => (
                     <button
                       key={filter}
@@ -777,11 +702,7 @@ export default function DashboardPage() {
           {/* System Status Panel - Narrower */}
           <div className="space-y-6">
             {/* System Status */}
-<<<<<<< HEAD
             <Card className="app-card-padding bg-white/80 backdrop-blur-sm border border-slate-200/70 rounded-2xl shadow-sm">
-=======
-            <Card className="p-7 bg-white/80 backdrop-blur-sm border border-slate-200/70 rounded-2xl shadow-sm">
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
               <div className="flex items-center gap-3 mb-5">
                 <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/60">
                   <Activity size={20} className="text-[#0F766E]" />
@@ -814,11 +735,7 @@ export default function DashboardPage() {
             </Card>
 
             {/* Deliverability Alerts */}
-<<<<<<< HEAD
             <Card className="app-card-padding bg-white/80 backdrop-blur-sm border border-slate-200/70 rounded-2xl shadow-sm">
-=======
-            <Card className="p-7 bg-white/80 backdrop-blur-sm border border-slate-200/70 rounded-2xl shadow-sm">
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
               <div className="flex items-center gap-3 mb-5">
                 <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/60">
                   <AlertCircle size={20} className="text-[#0F766E]" />
@@ -843,11 +760,7 @@ export default function DashboardPage() {
             </Card>
 
             {/* Compliance Quick Links */}
-<<<<<<< HEAD
             <Card className="app-card-padding bg-white/80 backdrop-blur-sm border border-slate-200/70 rounded-2xl shadow-sm">
-=======
-            <Card className="p-7 bg-white/80 backdrop-blur-sm border border-slate-200/70 rounded-2xl shadow-sm">
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
               <div className="flex items-center gap-3 mb-5">
                 <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/60">
                   <Radio size={20} className="text-[#0F766E]" />

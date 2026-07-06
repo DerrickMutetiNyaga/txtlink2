@@ -102,6 +102,23 @@ UserSenderIdSchema.index({ userId: 1, isDefault: 1 }, { unique: true, partialFil
 UserSenderIdSchema.index({ senderId: 1 }, { unique: true })
 
 // SMS Message Model
+
+/** Statuses that mean the message is still in-flight and must be checked by the status worker */
+export const SMS_PENDING_STATUSES = ['queued', 'sent', 'processing', 'retrying'] as const
+/** Statuses that are terminal - the worker never checks these again */
+export const SMS_FINAL_STATUSES = [
+  'delivered',
+  'failed',
+  'expired',
+  'rejected',
+  'undeliverable',
+  'provider_timeout',
+] as const
+
+export type SmsPendingStatus = (typeof SMS_PENDING_STATUSES)[number]
+export type SmsFinalStatus = (typeof SMS_FINAL_STATUSES)[number]
+export type SmsStatus = SmsPendingStatus | SmsFinalStatus
+
 export interface ISmsMessage {
   _id?: string
   userId: mongoose.Types.ObjectId
@@ -114,19 +131,19 @@ export interface ISmsMessage {
   hpTransactionId?: string // HostPinnacle transaction ID
   externalMsgId?: string // Alias for provider's message ID (for status API)
   providerStatus?: string // Raw status returned by provider (DELIVERED/SUBMITTED/FAILED/etc)
+  providerError?: string // Last provider/transport error encountered during a status check
   deliveryCause?: string // Failure/delivery cause from provider
-  statusCheckAttempts?: number // How many times background status job has checked
   creditDeducted?: boolean // Guard flag to prevent double credit deduction
   channel?: string // e.g. 'sms'
   email?: string // User email snapshot (for admin notifications)
-  externalMsgId?: string // Alias for provider's message ID (for status API)
-  providerStatus?: string // Raw status returned by provider (DELIVERED/SUBMITTED/FAILED/etc)
-  deliveryCause?: string // Failure/delivery cause from provider
-  statusCheckAttempts?: number // How many times background status job has checked
-  creditDeducted?: boolean // Guard flag to prevent double credit deduction
-  channel?: string // e.g. 'sms'
-  email?: string // User email snapshot (for admin notifications)
-  status: 'queued' | 'sent' | 'delivered' | 'failed'
+  status: SmsStatus
+  // Delivery-status worker fields
+  nextCheckAt?: Date | null // When the status worker should check this message next (null once final)
+  lastCheckedAt?: Date | null // Last time the provider status API was queried for this message
+  statusCheckAttempts?: number // How many times the status worker has checked
+  statusCheckLockedUntil?: Date | null // Lease: message is claimed by a worker until this time
+  statusCheckWorkerId?: string | null // ID of the worker instance holding the lease
+  finalizedAt?: Date | null // When the message reached a final status
   errorCode?: string
   errorMessage?: string
   sentAt?: Date
@@ -154,14 +171,25 @@ const SmsMessageSchema = new Schema<ISmsMessage>(
     costPerSegment: { type: Number, required: true },
     totalCost: { type: Number, required: true },
     hpTransactionId: { type: String },
-  externalMsgId: { type: String },
-  providerStatus: { type: String },
-  deliveryCause: { type: String },
-  statusCheckAttempts: { type: Number, default: 0 },
-  creditDeducted: { type: Boolean, default: false },
-  channel: { type: String },
-  email: { type: String },
-    status: { type: String, enum: ['queued', 'sent', 'delivered', 'failed'], default: 'queued' },
+    externalMsgId: { type: String },
+    providerStatus: { type: String },
+    providerError: { type: String },
+    deliveryCause: { type: String },
+    creditDeducted: { type: Boolean, default: false },
+    channel: { type: String },
+    email: { type: String },
+    status: {
+      type: String,
+      enum: [...SMS_PENDING_STATUSES, ...SMS_FINAL_STATUSES],
+      default: 'queued',
+    },
+    // Delivery-status worker fields
+    nextCheckAt: { type: Date, default: null },
+    lastCheckedAt: { type: Date, default: null },
+    statusCheckAttempts: { type: Number, default: 0 },
+    statusCheckLockedUntil: { type: Date, default: null },
+    statusCheckWorkerId: { type: String, default: null },
+    finalizedAt: { type: Date, default: null },
     errorCode: { type: String },
     errorMessage: { type: String },
     sentAt: { type: Date },
@@ -178,6 +206,29 @@ const SmsMessageSchema = new Schema<ISmsMessage>(
   },
   { timestamps: true }
 )
+
+// ─── SMS indexes (collection may hold tens of millions of docs; the worker must never collscan) ───
+
+// Partial index covering the worker's claim query: pending messages due for a check.
+// Keeps the index small because final messages (the vast majority over time) are excluded.
+SmsMessageSchema.index(
+  { nextCheckAt: 1, status: 1, createdAt: 1 },
+  {
+    name: 'pending_status_check',
+    partialFilterExpression: { status: { $in: [...SMS_PENDING_STATUSES] } },
+  }
+)
+// General status + schedule access pattern (admin dashboards, ops queries)
+SmsMessageSchema.index({ status: 1, nextCheckAt: 1, createdAt: 1 })
+// Provider message ID lookup (DLR webhook, manual sync by transaction ID)
+SmsMessageSchema.index({ hpTransactionId: 1 }, { sparse: true })
+SmsMessageSchema.index({ externalMsgId: 1 }, { sparse: true })
+// User history / reports
+SmsMessageSchema.index({ userId: 1, createdAt: -1 })
+// Global recency queries (admin analytics)
+SmsMessageSchema.index({ createdAt: -1 })
+// Lease expiry scans / ops visibility into locked messages
+SmsMessageSchema.index({ statusCheckLockedUntil: 1 }, { sparse: true })
 
 // Pricing Rule Model
 export interface IPricingRule {
@@ -377,6 +428,7 @@ export interface ISystemSettings {
   globalProviderCostPerPart: number
   defaultChargeOnFailure: boolean
   defaultRefundOnFailure: boolean
+  exchangeRateKesPerUsd?: number
   
   // Security & Compliance
   requireSenderIdApproval: boolean
@@ -484,14 +536,9 @@ export interface IApiKey {
   _id?: string
   userId: mongoose.Types.ObjectId
   name: string
-<<<<<<< HEAD
   keyHash: string // Hashed API key for authentication
   keyEncrypted?: string // Encrypted full key for owner re-view
   keyPrefix: string // Prefix + first 8 random chars for display (e.g., "sk_live_abc12345")
-=======
-  keyHash: string // Hashed API key (we only store hash, never the plain key)
-  keyPrefix: string // First 8 chars for display (e.g., "sk_live_")
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
   type: 'live' | 'test'
   status: 'active' | 'revoked'
   lastUsedAt?: Date
@@ -504,10 +551,7 @@ const ApiKeySchema = new Schema<IApiKey>(
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     name: { type: String, required: true },
     keyHash: { type: String, required: true, unique: true },
-<<<<<<< HEAD
     keyEncrypted: { type: String },
-=======
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
     keyPrefix: { type: String, required: true },
     type: { type: String, enum: ['live', 'test'], required: true },
     status: { type: String, enum: ['active', 'revoked'], default: 'active' },

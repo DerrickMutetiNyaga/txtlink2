@@ -143,13 +143,8 @@ export default function BillingPage() {
     <PortalLayout activeSection="Billing">
       <div className="space-y-6">
         {/* Hero Balance Card - Premium */}
-<<<<<<< HEAD
         <Card className="p-4 sm:p-6 bg-gradient-to-r from-emerald-50 to-white border border-slate-200/70 shadow-sm rounded-2xl">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-=======
-        <Card className="p-6 bg-gradient-to-r from-emerald-50 to-white border border-slate-200/70 shadow-sm rounded-2xl">
-          <div className="flex items-start justify-between">
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-2">
                 <p className="text-sm font-medium text-slate-600">Available SMS Credits</p>
@@ -159,24 +154,14 @@ export default function BillingPage() {
                   </Badge>
                 )}
               </div>
-<<<<<<< HEAD
               <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-slate-900 mb-2">
-=======
-              <h2 className="text-4xl font-bold text-slate-900 mb-2">
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
                 {loading ? 'Loading...' : `${balance.toLocaleString()} credits`}
               </h2>
               <p className="text-xs text-slate-500">Last updated {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</p>
             </div>
-<<<<<<< HEAD
             <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto shrink-0">
               <Link href="/app/billing/top-up" className="w-full sm:w-auto">
                 <Button className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 hover:shadow-md text-white transition-all">
-=======
-            <div className="flex items-center gap-2">
-              <Link href="/app/billing/top-up">
-                <Button className="bg-emerald-600 hover:bg-emerald-700 hover:shadow-md text-white transition-all">
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
                   <Plus size={16} className="mr-2" />
                   Top up
                 </Button>
@@ -189,11 +174,7 @@ export default function BillingPage() {
         </Card>
 
         {/* KPI Row - 3 Cards */}
-<<<<<<< HEAD
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-=======
-        <div className="grid md:grid-cols-3 gap-6">
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
           <Card className="p-6 bg-white border border-slate-200/70 shadow-sm rounded-2xl">
             <p className="text-sm font-medium text-slate-600 mb-2">Used This Month</p>
             <p className="text-3xl font-bold text-slate-900 mb-1">
@@ -227,39 +208,24 @@ export default function BillingPage() {
 
         {/* Recent Transactions */}
         <Card className="p-6 bg-white border border-slate-200/70 shadow-sm rounded-2xl">
-<<<<<<< HEAD
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between mb-6">
             <h3 className="text-lg font-semibold text-slate-900">Recent Transactions</h3>
             <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
               <div className="relative w-full sm:w-64">
-=======
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-semibold text-slate-900">Recent Transactions</h3>
-            <div className="flex items-center gap-3">
-              <div className="relative">
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <input
                   type="text"
                   placeholder="Search transactions..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-<<<<<<< HEAD
                   className="h-9 w-full pl-10 pr-4 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-=======
-                  className="h-9 w-64 pl-10 pr-4 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
                 />
               </div>
               <Button 
                 onClick={handleExportCSV}
                 disabled={filteredTransactions.length === 0}
                 variant="outline" 
-<<<<<<< HEAD
                 className="w-full sm:w-auto bg-white border-slate-200 text-slate-700 hover:bg-emerald-50 hover:border-emerald-500 hover:text-emerald-700 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-=======
-                className="bg-white border-slate-200 text-slate-700 hover:bg-emerald-50 hover:border-emerald-500 hover:text-emerald-700 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
               >
                 <Download size={16} className="mr-2" />
                 Export
@@ -268,11 +234,7 @@ export default function BillingPage() {
           </div>
 
           {/* Filter Chips */}
-<<<<<<< HEAD
           <div className="flex flex-wrap gap-2 mb-6">
-=======
-          <div className="flex gap-2 mb-6">
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
             {(['all', 'top-ups', 'charges', 'refunds'] as const).map((filter) => (
               <button
                 key={filter}
@@ -369,15 +331,9 @@ export default function BillingPage() {
               {invoices.map((invoice) => (
                 <div
                   key={invoice.id}
-<<<<<<< HEAD
                   className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between p-4 rounded-xl border border-slate-200/70 hover:bg-slate-50/50 transition-colors"
                 >
                   <div className="flex items-center gap-4 min-w-0">
-=======
-                  className="flex items-center justify-between p-4 rounded-xl border border-slate-200/70 hover:bg-slate-50/50 transition-colors"
-                >
-                  <div className="flex items-center gap-4">
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
                     <div className="p-2 rounded-lg bg-slate-100">
                       <FileText size={18} className="text-slate-600" />
                     </div>
@@ -386,11 +342,7 @@ export default function BillingPage() {
                       <p className="text-sm text-slate-500">{invoice.date}</p>
                     </div>
                   </div>
-<<<<<<< HEAD
                   <div className="flex flex-wrap items-center gap-3 sm:gap-4">
-=======
-                  <div className="flex items-center gap-4">
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
                     <p className="text-lg font-semibold text-slate-900">
                       KSh {invoice.amount.toLocaleString()}
                     </p>
@@ -410,15 +362,9 @@ export default function BillingPage() {
 
         {/* Payment Methods */}
         <Card className="p-6 bg-white border border-slate-200/70 shadow-sm rounded-2xl">
-<<<<<<< HEAD
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
             <h3 className="text-lg font-semibold text-slate-900">Payment Methods</h3>
             <Button variant="outline" className="w-full sm:w-auto bg-white border-emerald-600 text-emerald-600 hover:bg-emerald-600 hover:text-white hover:border-emerald-700 rounded-xl transition-all">
-=======
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-semibold text-slate-900">Payment Methods</h3>
-            <Button variant="outline" className="bg-white border-emerald-600 text-emerald-600 hover:bg-emerald-600 hover:text-white hover:border-emerald-700 rounded-xl transition-all">
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
               <Plus size={16} className="mr-2" />
               Add Payment Method
             </Button>
@@ -436,15 +382,9 @@ export default function BillingPage() {
               {paymentMethods.map((method) => (
                 <div
                   key={method.id}
-<<<<<<< HEAD
                   className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between p-4 rounded-xl border border-slate-200/70 hover:bg-slate-50/50 transition-colors"
                 >
                   <div className="flex items-center gap-4 min-w-0">
-=======
-                  className="flex items-center justify-between p-4 rounded-xl border border-slate-200/70 hover:bg-slate-50/50 transition-colors"
-                >
-                  <div className="flex items-center gap-4">
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
                     <div className={`p-3 rounded-xl ${
                       method.type === 'mpesa' 
                         ? 'bg-emerald-100 text-emerald-600'

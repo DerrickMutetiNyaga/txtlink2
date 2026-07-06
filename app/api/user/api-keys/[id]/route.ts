@@ -1,10 +1,6 @@
 /**
-<<<<<<< HEAD
  * User API Key operations
  * GET /api/user/api-keys/[id] - Reveal full API key (owner only)
-=======
- * Update and Delete User API Keys
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
  * DELETE /api/user/api-keys/[id] - Revoke API key
  */
 
@@ -12,7 +8,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import connectDB from '@/lib/db/connect'
 import { ApiKey } from '@/lib/db/models'
 import { requireAuth } from '@/lib/auth/middleware'
-<<<<<<< HEAD
 import { decrypt } from '@/lib/utils/encryption'
 import mongoose from 'mongoose'
 
@@ -59,10 +54,6 @@ export async function GET(
   }
 }
 
-=======
-import mongoose from 'mongoose'
-
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
 export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }

@@ -5,10 +5,13 @@
 import { NextRequest } from 'next/server'
 import jwt from 'jsonwebtoken'
 
-const JWT_SECRET = process.env.JWT_SECRET!
-
-if (!JWT_SECRET) {
-  throw new Error('JWT_SECRET is not set in environment variables')
+// Validated lazily (on first use) so `next build` can compile without secrets.
+function getJwtSecret(): string {
+  const secret = process.env.JWT_SECRET
+  if (!secret) {
+    throw new Error('JWT_SECRET is not set in environment variables')
+  }
+  return secret
 }
 
 export interface AuthUser {
@@ -29,7 +32,7 @@ export function verifyAuth(request: NextRequest): AuthUser | null {
       return null
     }
 
-    const decoded = jwt.verify(token, JWT_SECRET) as AuthUser
+    const decoded = jwt.verify(token, getJwtSecret()) as AuthUser
     return decoded
   } catch (error) {
     return null

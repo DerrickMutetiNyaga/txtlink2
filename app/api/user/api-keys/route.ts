@@ -11,10 +11,7 @@ import { requireAuth } from '@/lib/auth/middleware'
 import mongoose from 'mongoose'
 import crypto from 'crypto'
 import bcrypt from 'bcryptjs'
-<<<<<<< HEAD
 import { encrypt } from '@/lib/utils/encryption'
-=======
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
 
 export async function GET(request: NextRequest) {
   try {
@@ -37,10 +34,7 @@ export async function GET(request: NextRequest) {
       status: key.status,
       createdAt: key.createdAt,
       lastUsedAt: key.lastUsedAt,
-<<<<<<< HEAD
       canReveal: Boolean(key.keyEncrypted),
-=======
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
     }))
 
     return NextResponse.json({
@@ -106,10 +100,7 @@ export async function POST(request: NextRequest) {
       userId,
       name,
       keyHash,
-<<<<<<< HEAD
       keyEncrypted: encrypt(fullKey),
-=======
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
       keyPrefix: `${keyPrefix}${randomBytes.substring(0, 8)}`,
       type,
       status: 'active',

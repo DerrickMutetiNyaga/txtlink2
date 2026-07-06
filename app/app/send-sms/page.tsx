@@ -62,11 +62,7 @@ export default function SendSMSPage() {
 
   return (
     <PortalLayout activeSection="Send SMS">
-<<<<<<< HEAD
       <div className="w-full">
-=======
-      <div className="max-w-7xl mx-auto">
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
         {/* Sender ID Ad Banner */}
         <SenderIdAdBanner currentPage="send-sms" />
         
@@ -80,17 +76,10 @@ export default function SendSMSPage() {
 
         {/* Mode Switch - Segmented Control */}
         <div className="mb-6">
-<<<<<<< HEAD
           <div className="flex w-full sm:inline-flex p-1 bg-slate-100 rounded-xl border border-slate-200/60">
             <button
               onClick={() => setMode('quick')}
               className={`flex-1 sm:flex-none px-4 sm:px-6 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
-=======
-          <div className="inline-flex p-1 bg-slate-100 rounded-xl border border-slate-200/60">
-            <button
-              onClick={() => setMode('quick')}
-              className={`px-6 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
                 mode === 'quick'
                   ? 'bg-white text-slate-900 shadow-sm'
                   : 'text-slate-600 hover:text-slate-900'
@@ -100,11 +89,7 @@ export default function SendSMSPage() {
             </button>
             <button
               onClick={() => setMode('bulk')}
-<<<<<<< HEAD
               className={`flex-1 sm:flex-none px-4 sm:px-6 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
-=======
-              className={`px-6 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
                 mode === 'bulk'
                   ? 'bg-white text-slate-900 shadow-sm'
                   : 'text-slate-600 hover:text-slate-900'

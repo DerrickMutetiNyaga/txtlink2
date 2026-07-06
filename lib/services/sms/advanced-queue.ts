@@ -10,9 +10,9 @@
  * - Multi-account support
  */
 
-import { SmsMessage, User } from '@/lib/db/models'
+import { SmsMessage } from '@/lib/db/models'
 import { hostPinnacleClient } from '@/lib/services/hostpinnacle/client'
-import { checkSmsStatusForMessage } from './status-job'
+import { initialNextCheckAt } from '@/lib/services/sms-status/build-synchronizer'
 import mongoose from 'mongoose'
 
 interface QueueConfig {
@@ -250,11 +250,13 @@ class AdvancedSMSQueue {
           return
         }
 
-        // Max retries reached - mark as failed
+        // Max retries reached - mark as failed (final, no status checks needed)
         await SmsMessage.findByIdAndUpdate(item.messageId, {
           status: 'failed',
           errorMessage: sendResult.error || sendResult.message || 'Send failed after retries',
           failedAt: new Date(),
+          finalizedAt: new Date(),
+          nextCheckAt: null,
         }).catch(err => {
           console.error(`Failed to update message ${item.messageId}:`, err)
         })
@@ -268,25 +270,19 @@ class AdvancedSMSQueue {
                            sendResult.data?.uuid ||
                            sendResult.data?.msgid
 
-      // Update message with transaction ID and mark as sent
+      // Update message with transaction ID and mark as sent.
+      // Delivery status is handled exclusively by the background worker,
+      // which picks this message up at nextCheckAt.
       await SmsMessage.findByIdAndUpdate(item.messageId, {
         status: 'sent',
         hpTransactionId: transactionId,
         externalMsgId: transactionId,
         sentAt: new Date(),
         providerStatus: 'SUBMITTED',
+        nextCheckAt: initialNextCheckAt(),
       }).catch(err => {
         console.error(`Failed to update message ${item.messageId}:`, err)
       })
-
-      // Schedule status check after delay
-      if (mongoose.Types.ObjectId.isValid(item.messageId)) {
-        setTimeout(() => {
-          checkSmsStatusForMessage(item.messageId, 0).catch(err => {
-            console.error(`Failed to check status for message ${item.messageId}:`, err)
-          })
-        }, this.config.statusCheckDelay)
-      }
 
     } catch (error: any) {
       console.error(`Error processing message ${item.messageId}:`, error)
@@ -296,6 +292,8 @@ class AdvancedSMSQueue {
         status: 'failed',
         errorMessage: error.message || 'Unknown error',
         failedAt: new Date(),
+        finalizedAt: new Date(),
+        nextCheckAt: null,
       }).catch(err => {
         console.error(`Failed to update message ${item.messageId}:`, err)
       })

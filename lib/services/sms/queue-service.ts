@@ -8,9 +8,9 @@
  * - Progress tracking
  */
 
-import { SmsMessage, User } from '@/lib/db/models'
+import { SmsMessage } from '@/lib/db/models'
 import { hostPinnacleClient } from '@/lib/services/hostpinnacle/client'
-import { checkSmsStatusForMessage } from './status-job'
+import { initialNextCheckAt } from '@/lib/services/sms-status/build-synchronizer'
 import mongoose from 'mongoose'
 
 interface QueueItem {
@@ -129,11 +129,13 @@ class SMSQueue {
       })
 
       if (!sendResult.success) {
-        // Update message status to failed
+        // Update message status to failed (final)
         await SmsMessage.findByIdAndUpdate(item.messageId, {
           status: 'failed',
           errorMessage: sendResult.error || sendResult.message || 'Send failed',
           failedAt: new Date(),
+          finalizedAt: new Date(),
+          nextCheckAt: null,
         })
 
         return { success: false, error: sendResult.error || sendResult.message || 'Send failed' }
@@ -145,26 +147,16 @@ class SMSQueue {
                            sendResult.data?.uuid ||
                            sendResult.data?.msgid
 
-      // Update message with transaction ID and mark as sent
+      // Update message with transaction ID and mark as sent.
+      // The background status worker picks it up at nextCheckAt.
       await SmsMessage.findByIdAndUpdate(item.messageId, {
         status: 'sent',
         hpTransactionId: transactionId,
         externalMsgId: transactionId,
         sentAt: new Date(),
         providerStatus: 'SUBMITTED',
+        nextCheckAt: initialNextCheckAt(),
       })
-
-      // Schedule status check after 10 seconds
-      // Only check if messageId is a valid MongoDB ObjectId
-      if (mongoose.Types.ObjectId.isValid(item.messageId)) {
-        setTimeout(() => {
-          checkSmsStatusForMessage(item.messageId, 0).catch(err => {
-            console.error(`Failed to check status for message ${item.messageId}:`, err)
-          })
-        }, 10000)
-      } else {
-        console.warn(`Skipping status check for invalid messageId: ${item.messageId}`)
-      }
 
       return { success: true }
     } catch (error: any) {
@@ -173,6 +165,8 @@ class SMSQueue {
         status: 'failed',
         errorMessage: error.message || 'Unknown error',
         failedAt: new Date(),
+        finalizedAt: new Date(),
+        nextCheckAt: null,
       })
 
       return { success: false, error: error.message || 'Unknown error' }

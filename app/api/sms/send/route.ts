@@ -10,6 +10,8 @@ import { hostPinnacleClient } from '@/lib/services/hostpinnacle/client'
 import { requireAuth } from '@/lib/auth/middleware'
 import { decrypt } from '@/lib/utils/encryption'
 import { calculateSegments153, getEffectivePricePerCreditKes } from '@/lib/utils/credits'
+import { initialNextCheckAt } from '@/lib/services/sms-status/build-synchronizer'
+import { maskPhone } from '@/lib/utils/log-sanitize'
 
 // Format phone number to E.164
 function formatPhoneNumber(phone: string): string {
@@ -139,11 +141,8 @@ export async function POST(request: NextRequest) {
       )
     }
     
-    // Log phone number formatting for debugging
-    console.log('Phone number formatting:', {
-      original: recipient,
-      formatted: formattedPhone,
-    })
+    // Log phone number formatting for debugging (masked - phone numbers are PII)
+    console.log('Phone number formatted:', maskPhone(formattedPhone))
 
     // Get HostPinnacle account (user's sub-account if exists, otherwise use master account)
     const hpAccount = await HostPinnacleAccount.findOne({ userId: userObjectId })
@@ -209,7 +208,12 @@ export async function POST(request: NextRequest) {
         chargedKes: totalCostKes,
         status: 'queued',
         providerStatus: 'PROCESSING',
+        // Delivery-status worker scheduling: even if the async send below dies,
+        // the background worker will pick this message up at nextCheckAt.
+        nextCheckAt: initialNextCheckAt(),
+        lastCheckedAt: null,
         statusCheckAttempts: 0,
+        finalizedAt: null,
         creditDeducted: true, // Credits are deducted in this transaction
         channel: 'sms',
         email: dbUser.email,
@@ -233,9 +237,9 @@ export async function POST(request: NextRequest) {
       // Use Promise.resolve().then() for cross-platform compatibility
       Promise.resolve().then(async () => {
         try {
-          // Log the request details for debugging
+          // Log the request details for debugging (phone masked - PII)
           console.log('Sending SMS via HostPinnacle:', {
-            mobile: formattedPhone.replace('+', ''),
+            mobile: maskPhone(formattedPhone),
             senderid: senderId.senderName,
             messageLength: message.length,
             hasApiKey: !!apiKey,
@@ -254,19 +258,14 @@ export async function POST(request: NextRequest) {
             },
           })
 
-          // Log the full response for debugging
-          console.log('═══════════════════════════════════════════════════════')
-          console.log('📤 HOSTPINNACLE SMS SEND API RESPONSE')
-          console.log('═══════════════════════════════════════════════════════')
-          console.log('Message ID:', smsMessage._id?.toString())
-          console.log('Recipient:', formattedPhone)
-          console.log('Sender ID:', senderId.senderName)
-          console.log('Success:', hpResult.success)
-          console.log('Error:', hpResult.error || 'None')
-          console.log('Message:', hpResult.message || 'None')
-          console.log('Full Response Data:', JSON.stringify(hpResult.data, null, 2))
-          console.log('Complete Response Object:', JSON.stringify(hpResult, null, 2))
-          console.log('═══════════════════════════════════════════════════════')
+          // Concise, PII-free response log
+          console.log('HostPinnacle SMS send result:', {
+            messageId: smsMessage._id?.toString(),
+            recipient: maskPhone(formattedPhone),
+            senderId: senderId.senderName,
+            success: hpResult.success,
+            error: hpResult.error || undefined,
+          })
 
           // Note: "success" means HostPinnacle accepted the message. Actual delivery to the
           // handset is confirmed later via the DLR webhook (/api/sms/dlr). If messages
@@ -280,10 +279,9 @@ export async function POST(request: NextRequest) {
             const errorMsg = hpResult.error || hpResult.message || 'HostPinnacle API returned failure'
             console.error('SMS send failed:', {
               smsMessageId: smsMessage._id,
-              recipient: formattedPhone,
+              recipient: maskPhone(formattedPhone),
               senderId: senderId.senderName,
               error: errorMsg,
-              hpResponse: hpResult,
             })
 
             // Refund credits on failure
@@ -291,11 +289,14 @@ export async function POST(request: NextRequest) {
               $inc: { creditsBalance: requiredCredits },
             })
 
+            // Provider rejected the send outright: final failure, no further status checks
             await SmsMessage.findByIdAndUpdate(smsMessage._id, {
               status: 'failed',
               errorCode: 'HP_API_ERROR',
               errorMessage: errorMsg,
               failedAt: new Date(),
+              finalizedAt: new Date(),
+              nextCheckAt: null,
               refunded: true,
             })
           } else {
@@ -305,37 +306,18 @@ export async function POST(request: NextRequest) {
             console.log('SMS sent successfully:', {
               smsMessageId: smsMessage._id,
               transactionId,
-              recipient: formattedPhone,
+              recipient: maskPhone(formattedPhone),
             })
 
+            // The background worker takes over from here: it will check
+            // delivery status at nextCheckAt using the shared retry schedule.
             await SmsMessage.findByIdAndUpdate(smsMessage._id, {
               hpTransactionId: transactionId,
               externalMsgId: transactionId,
               status: 'sent',
               providerStatus: 'SUBMITTED',
               sentAt: new Date(),
-            })
-
-            // Dispatch status check job - check immediately, then retry after delay if needed
-            // Import and call the status check function asynchronously
-            Promise.resolve().then(async () => {
-              try {
-                const { checkSmsStatusForMessage } = await import('@/lib/services/sms/status-job')
-                // Check immediately first (no wait) - status might be available right away
-                await checkSmsStatusForMessage(smsMessage._id.toString(), 0)
-                
-                // If still processing, check again after 5 seconds (reduced from 10)
-                setTimeout(async () => {
-                  try {
-                    await checkSmsStatusForMessage(smsMessage._id.toString(), 0)
-                  } catch (retryError) {
-                    console.error('Failed to retry SMS status check:', retryError)
-                  }
-                }, 5000)
-              } catch (statusError) {
-                console.error('Failed to check SMS status:', statusError)
-                // Don't fail the send if status check fails
-              }
+              nextCheckAt: initialNextCheckAt(),
             })
           }
         } catch (error) {
@@ -344,7 +326,7 @@ export async function POST(request: NextRequest) {
 
           console.error('Async SMS send error:', {
             smsMessageId: smsMessage._id,
-            recipient: formattedPhone,
+            recipient: maskPhone(formattedPhone),
             error: errorMessage,
             stack: errorStack,
           })
@@ -358,6 +340,8 @@ export async function POST(request: NextRequest) {
             errorCode: 'ASYNC_ERROR',
             errorMessage: errorMessage || 'Unknown error occurred while sending SMS',
             failedAt: new Date(),
+            finalizedAt: new Date(),
+            nextCheckAt: null,
             refunded: true,
           })
         }

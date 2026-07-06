@@ -108,36 +108,22 @@ export default function ReportsPage() {
     <PortalLayout activeSection="Reports">
       <div className="space-y-6">
         {/* Header */}
-<<<<<<< HEAD
         <div className="app-page-header">
           <div>
             <h1 className="text-2xl sm:text-3xl font-semibold text-gray-900 mb-2">SMS Reports</h1>
-=======
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-semibold text-gray-900 mb-2">SMS Reports</h1>
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
             <p className="text-gray-600">Track and analyze your SMS delivery performance</p>
           </div>
           <Button 
             onClick={handleExportCSV}
             disabled={loading || reports.length === 0}
-<<<<<<< HEAD
             className="w-full sm:w-auto bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed"
-=======
-            className="bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed"
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
           >
             <Download size={18} className="mr-2" /> Export CSV
           </Button>
         </div>
 
         {/* Summary Cards */}
-<<<<<<< HEAD
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-=======
-        <div className="grid md:grid-cols-4 gap-6">
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
           <Card className="p-6 bg-white border border-gray-100 shadow-sm">
             <div className="flex items-center gap-4">
               <div className="p-3 rounded-xl bg-blue-100 text-blue-600">
@@ -266,11 +252,7 @@ export default function ReportsPage() {
         </Card>
 
         {/* Reports Table */}
-<<<<<<< HEAD
         <Card className="p-4 sm:p-6 bg-white border border-gray-100 shadow-sm app-table-scroll">
-=======
-        <Card className="p-6 bg-white border border-gray-100 shadow-sm overflow-x-auto">
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
           {loading ? (
             <div className="p-12 text-center text-gray-500">
               <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-2" />

@@ -28,6 +28,7 @@ import {
   FileText,
   AlertCircle,
   Plus,
+  Download,
 } from 'lucide-react'
 import Link from 'next/link'
 import { authFetch } from '@/lib/utils/auth'
@@ -43,10 +44,10 @@ const csvPreview = [
   { phone: '+254723456789', name: 'Jane Smith' },
   { phone: '+254734567890', name: 'Bob Johnson' },
 ]
-const totalRows = 1250
-const validNumbers = 1230
-const invalidNumbers = 20
-const duplicatesRemoved = 5
+const totalRows: number = 1250
+const validNumbers: number = 1230
+const invalidNumbers: number = 20
+const duplicatesRemoved: number = 5
 
 
 interface SenderIdOption {
@@ -147,13 +148,8 @@ export function BulkSendForm({ balance, pricePerCreditKes }: BulkSendFormProps) 
       {/* Left: Main Step Content */}
       <div className="lg:col-span-2 space-y-6">
         {/* Step Indicator - Premium Stepper */}
-<<<<<<< HEAD
         <Card className="p-4 sm:p-6 bg-white border border-slate-200/80 rounded-2xl shadow-sm">
           <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-3 mb-4">
-=======
-        <Card className="p-6 bg-white border border-slate-200/80 rounded-2xl shadow-sm">
-          <div className="flex items-center gap-3 mb-4">
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
             {[
               { num: 1, label: 'Audience' },
               { num: 2, label: 'Message' },
@@ -161,13 +157,8 @@ export function BulkSendForm({ balance, pricePerCreditKes }: BulkSendFormProps) 
               { num: 4, label: 'Review' },
             ].map((step, idx) => (
               <React.Fragment key={step.num}>
-<<<<<<< HEAD
                 <div className="flex items-center gap-3 w-full sm:flex-1">
                   <div className="flex flex-row sm:flex-col items-center gap-2 sm:gap-2 flex-1 sm:flex-none">
-=======
-                <div className="flex items-center gap-3 flex-1">
-                  <div className="flex flex-col items-center gap-2">
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
                     <div
                       className={`flex items-center justify-center w-11 h-11 rounded-xl border-2 transition-all duration-200 ${
                         bulkStep === step.num
@@ -198,11 +189,7 @@ export function BulkSendForm({ balance, pricePerCreditKes }: BulkSendFormProps) 
                 </div>
                 {idx < 3 && (
                   <div
-<<<<<<< HEAD
                     className={`hidden sm:block h-0.5 flex-1 mx-2 transition-colors ${
-=======
-                    className={`h-0.5 flex-1 mx-2 transition-colors ${
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
                       bulkStep > step.num ? 'bg-emerald-200' : 'bg-slate-200'
                     }`}
                   />
@@ -214,11 +201,7 @@ export function BulkSendForm({ balance, pricePerCreditKes }: BulkSendFormProps) 
 
         {/* Step 1: Audience */}
         {bulkStep === 1 && (
-<<<<<<< HEAD
           <Card className="p-4 sm:p-8 bg-white border border-slate-200/80 rounded-2xl shadow-sm">
-=======
-          <Card className="p-8 bg-white border border-slate-200/80 rounded-2xl shadow-sm">
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
             <h2 className="text-2xl font-semibold text-slate-900 mb-2">Select Audience</h2>
             <p className="text-base text-slate-500 mb-6">
               Choose how you want to select your recipients
@@ -310,11 +293,7 @@ export function BulkSendForm({ balance, pricePerCreditKes }: BulkSendFormProps) 
 
                 {csvFile && (
                   <div className="space-y-4">
-<<<<<<< HEAD
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-=======
-                    <div className="grid grid-cols-3 gap-4">
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
                       <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/60">
                         <p className="text-sm text-slate-500 mb-1">Total Rows</p>
                         <p className="text-2xl font-bold text-slate-900">{totalRows}</p>
@@ -524,11 +503,7 @@ export function BulkSendForm({ balance, pricePerCreditKes }: BulkSendFormProps) 
 
         {/* Step 2: Message */}
         {bulkStep === 2 && (
-<<<<<<< HEAD
           <Card className="p-4 sm:p-8 bg-white border border-slate-200/80 rounded-2xl shadow-sm">
-=======
-          <Card className="p-8 bg-white border border-slate-200/80 rounded-2xl shadow-sm">
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
             <h2 className="text-2xl font-semibold text-slate-900 mb-2">Compose Message</h2>
             <p className="text-base text-slate-500 mb-6">
               Write your message with optional personalization
@@ -603,17 +578,10 @@ export function BulkSendForm({ balance, pricePerCreditKes }: BulkSendFormProps) 
 
             {/* Message Composer */}
             <div className="mb-6">
-<<<<<<< HEAD
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
                 <label className="block text-sm font-medium text-slate-700">Message</label>
                 <Select defaultValue="name">
                   <SelectTrigger className="h-9 w-full sm:w-40 text-xs">
-=======
-              <div className="flex items-center justify-between mb-2">
-                <label className="block text-sm font-medium text-slate-700">Message</label>
-                <Select defaultValue="name">
-                  <SelectTrigger className="h-9 w-40 text-xs">
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
                     <SelectValue placeholder="Insert variable" />
                   </SelectTrigger>
                   <SelectContent>
@@ -676,11 +644,7 @@ export function BulkSendForm({ balance, pricePerCreditKes }: BulkSendFormProps) 
 
         {/* Step 3: Schedule */}
         {bulkStep === 3 && (
-<<<<<<< HEAD
           <Card className="p-4 sm:p-8 bg-white border border-slate-200/80 rounded-2xl shadow-sm">
-=======
-          <Card className="p-8 bg-white border border-slate-200/80 rounded-2xl shadow-sm">
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
             <h2 className="text-2xl font-semibold text-slate-900 mb-2">Schedule Campaign</h2>
             <p className="text-base text-slate-500 mb-6">
               Choose when to send your campaign
@@ -804,11 +768,7 @@ export function BulkSendForm({ balance, pricePerCreditKes }: BulkSendFormProps) 
 
         {/* Step 4: Review & Send */}
         {bulkStep === 4 && (
-<<<<<<< HEAD
           <Card className="p-4 sm:p-8 bg-white border border-slate-200/80 rounded-2xl shadow-sm">
-=======
-          <Card className="p-8 bg-white border border-slate-200/80 rounded-2xl shadow-sm">
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
             <h2 className="text-2xl font-semibold text-slate-900 mb-2">Review & Send</h2>
             <p className="text-base text-slate-500 mb-6">
               Review your campaign details before sending
@@ -934,11 +894,7 @@ export function BulkSendForm({ balance, pricePerCreditKes }: BulkSendFormProps) 
               </label>
 
               {/* Actions */}
-<<<<<<< HEAD
               <div className="flex flex-col sm:flex-row gap-3 pt-4">
-=======
-              <div className="flex gap-3 pt-4">
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
                 <Button
                   variant="outline"
                   onClick={() => setBulkStep(3)}

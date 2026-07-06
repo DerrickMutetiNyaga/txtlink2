@@ -8,7 +8,6 @@
   .text-balance {
     text-wrap: balance;
   }
-<<<<<<< HEAD
 
   .app-page-header {
     @apply flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between;
@@ -25,8 +24,6 @@
   .app-section-header {
     @apply flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between;
   }
-=======
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
 }
 
 @keyframes fadeInUp {

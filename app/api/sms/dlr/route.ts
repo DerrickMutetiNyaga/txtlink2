@@ -11,9 +11,10 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import connectDB from '@/lib/db/connect'
-import { SmsMessage, User, WebhookLog, UserWebhook } from '@/lib/db/models'
-import { getPricingRule } from '@/lib/utils/pricing'
+import { SmsMessage, WebhookLog, UserWebhook } from '@/lib/db/models'
 import { sendWebhook } from '@/lib/services/webhook/delivery'
+import { getSharedSynchronizer } from '@/lib/services/sms-status/build-synchronizer'
+import { maskPhone } from '@/lib/utils/log-sanitize'
 
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET
 
@@ -99,7 +100,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (!transactionId) {
-      console.log('DLR received but no transaction ID found in payload:', data)
+      console.log('DLR received but no transaction ID found in payload (keys:', Object.keys(data).join(','), ')')
       return ok()
     }
 
@@ -132,8 +133,7 @@ export async function POST(request: NextRequest) {
       if (!smsMessage) {
         console.warn('DLR received but no matching SMS message found:', {
           transactionId: String(transactionId),
-          mobileNumber: data.mobileNumber || data.MobileNumber || data.mobileNo,
-          payload: data,
+          mobileNumber: maskPhone(String(data.mobileNumber || data.MobileNumber || data.mobileNo || '')),
         })
         // Still mark the webhook log as processed even if we can't match it
         await WebhookLog.findOneAndUpdate(
@@ -153,79 +153,49 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    let mappedStatus: 'sent' | 'delivered' | 'failed' = 'sent'
-    const statusLower = (status || '').toString().toLowerCase()
-
-    // Enhanced status mapping - check multiple indicators
+    // Derive the raw provider status string from the DLR payload.
+    // Priority: explicit deliveredTime -> DELIVERED; error code -> FAILED;
+    // otherwise use the status field verbatim (the shared StatusMapper
+    // normalizes provider vocabulary like DLVRD/UNDELIV/EXPIRED).
+    let providerStatusRaw: string
     if (deliveredTime != null && deliveredTime !== '' && deliveredTime !== '0' && deliveredTime !== 'null') {
-      mappedStatus = 'delivered'
-      console.log('DLR: Status set to delivered based on deliveredTime:', deliveredTime)
+      providerStatusRaw = 'DELIVERED'
     } else if (errorCode != null && errorCode !== '' && errorCode !== '0' && errorCode !== 'null') {
-      mappedStatus = 'failed'
-      console.log('DLR: Status set to failed based on errorCode:', errorCode)
-    } else if (
-      statusLower.includes('deliver') || 
-      statusLower === 'success' || 
-      statusLower === 'delivered' ||
-      statusLower === 'dlvrd' ||
-      statusLower === 'dlv' ||
-      data.deliveryStatus?.toLowerCase() === 'delivered' ||
-      data.DeliveryStatus?.toLowerCase() === 'delivered'
-    ) {
-      mappedStatus = 'delivered'
-      console.log('DLR: Status set to delivered based on status field:', status)
-    } else if (
-      statusLower.includes('fail') ||
-      statusLower.includes('reject') ||
-      statusLower === 'error' ||
-      statusLower === 'undeliv' ||
-      statusLower === 'expired'
-    ) {
-      mappedStatus = 'failed'
-      console.log('DLR: Status set to failed based on status field:', status)
+      providerStatusRaw = 'FAILED'
     } else {
-      // If status is explicitly "sent" or "submitted", keep it as sent
-      if (statusLower === 'sent' || statusLower === 'submitted' || statusLower === 'pending') {
-        mappedStatus = 'sent'
-      }
-      console.log('DLR: Status kept as sent. Status value:', status, 'deliveredTime:', deliveredTime, 'errorCode:', errorCode)
+      providerStatusRaw = String(status || 'SUBMITTED')
     }
 
-    const updateData: any = {
-      status: mappedStatus,
-    }
+    const cause = data.errorMessage ?? data.errormessage ?? data.message ?? undefined
 
-    if (mappedStatus === 'delivered') {
-      // Handle Unix timestamp in milliseconds (like "1772111471005")
-      if (deliveredTime) {
-        const deliveredTimeNum = Number(deliveredTime)
-        if (!isNaN(deliveredTimeNum) && deliveredTimeNum > 1000000000000) {
-          // It's a Unix timestamp in milliseconds
-          updateData.deliveredAt = new Date(deliveredTimeNum)
-        } else {
-          // Try parsing as date string
-          updateData.deliveredAt = new Date(deliveredTime)
-        }
-      } else {
-        updateData.deliveredAt = new Date()
-      }
-    } else if (mappedStatus === 'failed') {
-      updateData.failedAt = new Date()
-      updateData.errorCode = data.errorCode ?? data.ErrorCode
-      updateData.errorMessage = data.errorMessage ?? data.errormessage ?? data.message
+    // Apply the status through the shared synchronizer - the same code path
+    // used by the background worker and admin manual sync (refund rules,
+    // finalization, and rescheduling live in exactly one place).
+    const { synchronizer } = await getSharedSynchronizer()
+    const applyResult = await synchronizer.applyProviderStatus(
+      String(transactionId),
+      providerStatusRaw,
+      cause ? String(cause) : undefined
+    )
+    const mappedStatus = applyResult.status || 'sent'
 
-      const rule = await getPricingRule(smsMessage.userId.toString())
-      if (rule.refundOnFail && !smsMessage.refunded) {
-        const refundAmount = smsMessage.chargedKes || smsMessage.totalCost
-        await User.findByIdAndUpdate(smsMessage.userId, {
-          $inc: { credits: refundAmount },
-        })
-        updateData.refunded = true
-        updateData.refundAmountKes = refundAmount
+    // Preserve the provider's exact delivery timestamp when supplied
+    if (mappedStatus === 'delivered' && deliveredTime) {
+      const deliveredTimeNum = Number(deliveredTime)
+      const deliveredAt =
+        !isNaN(deliveredTimeNum) && deliveredTimeNum > 1000000000000
+          ? new Date(deliveredTimeNum) // Unix timestamp in milliseconds
+          : new Date(deliveredTime)
+      if (!isNaN(deliveredAt.getTime())) {
+        await SmsMessage.updateOne({ _id: smsMessage._id }, { $set: { deliveredAt } })
       }
     }
-
-    await SmsMessage.findByIdAndUpdate(smsMessage._id, updateData)
+    if (mappedStatus !== 'delivered' && errorCode != null && errorCode !== '' && errorCode !== '0') {
+      await SmsMessage.updateOne(
+        { _id: smsMessage._id },
+        { $set: { errorCode: String(errorCode) } }
+      )
+    }
 
     // Mark webhook log as processed
     await WebhookLog.findOneAndUpdate(
@@ -237,7 +207,7 @@ export async function POST(request: NextRequest) {
       transactionId: String(transactionId),
       messageId: smsMessage._id?.toString(),
       status: mappedStatus,
-      mobileNumber: smsMessage.toNumbers?.[0],
+      mobileNumber: maskPhone(smsMessage.toNumbers?.[0]),
     })
 
     // Trigger user webhooks for DLR

@@ -351,7 +351,6 @@ export default function WebhooksPage() {
     <PortalLayout activeSection="Webhooks">
       <div className="space-y-6">
         {/* Header */}
-<<<<<<< HEAD
         <div className="app-page-header">
           <div>
             <h1 className="text-2xl sm:text-3xl font-semibold text-[#1F2937] mb-2">Webhooks</h1>
@@ -360,26 +359,12 @@ export default function WebhooksPage() {
           <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
             <Button
               className="w-full sm:w-auto bg-gradient-to-r from-[#059669] to-[#14B8A6] text-white hover:from-[#064E3B] hover:to-[#059669]"
-=======
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-semibold text-[#1F2937] mb-2">Webhooks</h1>
-            <p className="text-slate-600">Configure webhooks to receive real-time DLR and MO responses</p>
-          </div>
-          <div className="flex gap-2">
-            <Button
-              className="bg-gradient-to-r from-[#059669] to-[#14B8A6] text-white hover:from-[#064E3B] hover:to-[#059669]"
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
               onClick={() => openModal('DLR')}
             >
               <Plus size={18} className="mr-2" /> Add DLR Webhook
             </Button>
             <Button
-<<<<<<< HEAD
               className="w-full sm:w-auto bg-gradient-to-r from-[#059669] to-[#14B8A6] text-white hover:from-[#064E3B] hover:to-[#059669]"
-=======
-              className="bg-gradient-to-r from-[#059669] to-[#14B8A6] text-white hover:from-[#064E3B] hover:to-[#059669]"
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
               onClick={() => openModal('MO')}
             >
               <Plus size={18} className="mr-2" /> Add MO Webhook
@@ -489,7 +474,6 @@ export default function WebhooksPage() {
         {/* Create/Edit Webhook Modal */}
         {showModal && (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
-<<<<<<< HEAD
             <Card className="w-full max-w-4xl p-4 sm:p-8 bg-white border border-gray-200 shadow-xl max-h-[90vh] overflow-y-auto">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between mb-6">
                 <div className="flex items-start gap-3 min-w-0">
@@ -497,15 +481,6 @@ export default function WebhooksPage() {
                     <Webhook size={24} />
                   </div>
                   <h3 className="text-lg sm:text-2xl font-semibold text-gray-900">
-=======
-            <Card className="w-full max-w-4xl p-8 bg-white border border-gray-200 shadow-xl max-h-[90vh] overflow-y-auto">
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                  <div className="p-3 rounded-xl bg-teal-100 text-teal-600">
-                    <Webhook size={24} />
-                  </div>
-                  <h3 className="text-2xl font-semibold text-gray-900">
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
                     {editingWebhook ? 'Edit' : 'Add'} Webhook for{' '}
                     {modalType === 'DLR' ? 'DLR (SMS/WhatsApp)' : "WhatsApp's MO Response"}
                   </h3>
@@ -520,11 +495,7 @@ export default function WebhooksPage() {
 
               <div className="space-y-6">
                 {/* Basic Fields */}
-<<<<<<< HEAD
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-=======
-                <div className="grid grid-cols-2 gap-4">
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
                   <div>
                     <Label htmlFor="product">Product *</Label>
                     <Select
@@ -613,11 +584,7 @@ export default function WebhooksPage() {
                 {formData.reportType === 'DLR' && (
                   <div className="space-y-4 border-t pt-4">
                     <h4 className="font-semibold text-slate-900">Required Parameters</h4>
-<<<<<<< HEAD
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-=======
-                    <div className="grid grid-cols-2 gap-4">
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
                       <div>
                         <Label htmlFor="transactionIdParam">Transaction ID Parameter *</Label>
                         <Input
@@ -688,11 +655,7 @@ export default function WebhooksPage() {
 
                     {/* WhatsApp-specific parameters */}
                     {formData.product === 'WhatsApp' && (
-<<<<<<< HEAD
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-=======
-                      <div className="grid grid-cols-2 gap-4 mt-4">
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
                         <div>
                           <Label htmlFor="readTimeParam">Read Time Parameter</Label>
                           <Input
@@ -823,11 +786,7 @@ export default function WebhooksPage() {
                 )}
 
                 {/* Actions */}
-<<<<<<< HEAD
                 <div className="flex flex-col-reverse sm:flex-row gap-3 sm:gap-4 border-t pt-4">
-=======
-                <div className="flex gap-4 border-t pt-4">
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
                   <Button
                     variant="outline"
                     className="flex-1"

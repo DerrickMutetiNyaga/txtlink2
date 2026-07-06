@@ -1,0 +1,115 @@
+# Render Blueprint for TxtLink
+#
+# Two services:
+#   1. txtlink-web               - Next.js web service (API, dashboard, admin)
+#   2. txtlink-sms-status-worker - Background worker that keeps SMS delivery
+#                                  statuses in MongoDB up to date
+#
+# MongoDB is external (e.g. MongoDB Atlas) - set MONGODB_URI on both services.
+# Multiple worker instances are safe: work claiming uses atomic MongoDB leases.
+
+services:
+  - type: web
+    name: txtlink-web
+    runtime: node
+    plan: starter
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: ENCRYPTION_KEY
+        sync: false
+      - key: WEBHOOK_SECRET
+        sync: false
+      - key: NEXT_PUBLIC_BASE_URL
+        sync: false
+      - key: OWNER_EMAIL
+        sync: false
+      - key: OWNER_USER_ID
+        sync: false
+      - key: HOSTPINNACLE_BASE_URL
+        value: https://smsportal.hostpinnacle.co.ke
+      - key: HOSTPINNACLE_USERID
+        sync: false
+      - key: HOSTPINNACLE_PASSWORD
+        sync: false
+      - key: HOSTPINNACLE_API_KEY
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      # Used by admin manual sync (shares the worker's retry/timeout policy)
+      - key: RETRY_INTERVALS_SECONDS
+        value: "30,120,300,900,1800,3600,10800,21600,43200,86400"
+      - key: PROVIDER_FINAL_TIMEOUT_HOURS
+        value: "72"
+      - key: HOSTPINNACLE_TIMEOUT_MS
+        value: "10000"
+      - key: MAX_RETRIES
+        value: "3"
+      - key: RATE_LIMIT_PER_SECOND
+        value: "10"
+      - key: WORKER_CONCURRENCY
+        value: "10"
+      - key: CLAIM_LEASE_SECONDS
+        value: "120"
+      - key: CIRCUIT_BREAKER_FAILURE_THRESHOLD
+        value: "10"
+      - key: CIRCUIT_BREAKER_COOLDOWN_MS
+        value: "60000"
+      - key: LOG_LEVEL
+        value: info
+
+  - type: worker
+    name: txtlink-sms-status-worker
+    runtime: node
+    plan: starter
+    buildCommand: npm install
+    startCommand: npm run worker:sms-status
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGODB_URI
+        sync: false
+      - key: ENCRYPTION_KEY
+        sync: false
+      - key: HOSTPINNACLE_BASE_URL
+        value: https://smsportal.hostpinnacle.co.ke
+      - key: HOSTPINNACLE_USERID
+        sync: false
+      - key: HOSTPINNACLE_PASSWORD
+        sync: false
+      - key: HOSTPINNACLE_API_KEY
+        sync: false
+      - key: BATCH_SIZE
+        value: "500"
+      - key: POLL_INTERVAL_MS
+        value: "5000"
+      - key: CLAIM_LEASE_SECONDS
+        value: "120"
+      - key: HOSTPINNACLE_TIMEOUT_MS
+        value: "10000"
+      - key: MAX_RETRIES
+        value: "3"
+      - key: RETRY_INTERVALS_SECONDS
+        value: "30,120,300,900,1800,3600,10800,21600,43200,86400"
+      - key: RATE_LIMIT_PER_SECOND
+        value: "10"
+      - key: WORKER_CONCURRENCY
+        value: "10"
+      - key: PROVIDER_FINAL_TIMEOUT_HOURS
+        value: "72"
+      - key: CIRCUIT_BREAKER_FAILURE_THRESHOLD
+        value: "10"
+      - key: CIRCUIT_BREAKER_COOLDOWN_MS
+        value: "60000"
+      - key: LOG_LEVEL
+        value: info
+      # WORKER_ID is optional; auto-generated per instance when unset

@@ -182,19 +182,11 @@ export default function SettingsPage() {
         <div className="grid md:grid-cols-12 gap-6">
           {/* Left: Settings Navigation Card */}
           <div className="md:col-span-3">
-<<<<<<< HEAD
             <Card className="p-3 sm:p-4 bg-white border border-slate-200/70 shadow-sm rounded-2xl overflow-x-auto">
               <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4 px-2 hidden md:block">
                 Settings
               </h3>
               <nav className="flex md:flex-col gap-1 md:gap-1 min-w-max md:min-w-0">
-=======
-            <Card className="p-4 bg-white border border-slate-200/70 shadow-sm rounded-2xl">
-              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4 px-2">
-                Settings
-              </h3>
-              <nav className="space-y-1">
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
                 {tabs.map((tab) => {
                   const IconComponent = tab.icon
                   const isActive = activeTab === tab.id
@@ -202,11 +194,7 @@ export default function SettingsPage() {
                     <button
                       key={tab.id}
                       onClick={() => setActiveTab(tab.id)}
-<<<<<<< HEAD
                       className={`flex-shrink-0 md:w-full flex items-center gap-2 sm:gap-3 px-3 py-2.5 rounded-xl transition-all relative whitespace-nowrap ${
-=======
-                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all relative ${
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
                         isActive
                           ? 'bg-emerald-50 text-emerald-700'
                           : 'text-slate-600 hover:bg-slate-50'
@@ -396,7 +384,6 @@ export default function SettingsPage() {
 
                 {/* API Keys Section */}
                 <Card className="p-6 bg-white border border-slate-200/70 shadow-sm rounded-2xl">
-<<<<<<< HEAD
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-center mb-4">
                     <div className="flex items-center gap-4">
                       <div className="p-3 rounded-xl bg-slate-100 text-slate-600">
@@ -409,18 +396,6 @@ export default function SettingsPage() {
                     </div>
                     <Link href="/app/api-keys" className="w-full sm:w-auto">
                       <Button variant="outline" className="w-full sm:w-auto border-slate-200 text-slate-700 hover:bg-emerald-50 hover:border-emerald-500 hover:text-emerald-700 rounded-xl">
-=======
-                  <div className="flex items-center gap-4 mb-4">
-                    <div className="p-3 rounded-xl bg-slate-100 text-slate-600">
-                      <Key size={20} />
-                    </div>
-                    <div className="flex-1">
-                      <h3 className="text-lg font-semibold text-slate-900">API Keys</h3>
-                      <p className="text-sm text-slate-500">Manage your API keys for programmatic access</p>
-                    </div>
-                    <Link href="/app/api-keys">
-                      <Button variant="outline" className="border-slate-200 text-slate-700 hover:bg-emerald-50 hover:border-emerald-500 hover:text-emerald-700 rounded-xl">
->>>>>>> 4a3d95970903f9fc28665c46227114641494cea8
                         Manage Keys
                         <ArrowRight size={16} className="ml-2" />
                       </Button>
