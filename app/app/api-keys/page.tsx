@@ -270,17 +270,154 @@ export default function APIKeysPage() {
     return getKeyPreview(key.keyPrefix)
   }
 
+  const renderStatusBadge = (status: ApiKey['status']) => (
+    <span
+      className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${
+        status === 'active'
+          ? 'bg-[#ECFDF5] text-[#047857]'
+          : 'bg-slate-100 text-slate-600'
+      }`}
+    >
+      {status === 'active' ? 'Active' : 'Revoked'}
+    </span>
+  )
+
+  const renderTypeBadge = (type: ApiKey['type']) => (
+    <span
+      className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${
+        type === 'live' ? 'bg-emerald-50 text-emerald-700' : 'bg-blue-50 text-blue-700'
+      }`}
+    >
+      {type === 'live' ? 'Live' : 'Test'}
+    </span>
+  )
+
+  const renderDesktopActions = (key: ApiKey) => (
+    <div className="flex gap-2">
+      <button
+        onClick={() => toggleKeyVisibility(key.id)}
+        disabled={revealingKey === key.id || key.canReveal === false}
+        className="p-2 hover:bg-gray-100 hover:text-gray-900 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+        title={
+          key.canReveal === false
+            ? 'This key was created before re-view was supported. Generate a new key to view and copy it.'
+            : visibleKeys.has(key.id)
+              ? 'Hide key'
+              : 'View key'
+        }
+      >
+        {visibleKeys.has(key.id) ? (
+          <EyeOff size={16} className="text-gray-600" />
+        ) : (
+          <Eye size={16} className="text-gray-600" />
+        )}
+      </button>
+      <button
+        onClick={() => handleCopyKey(key)}
+        disabled={revealingKey === key.id || key.canReveal === false}
+        className="p-2 hover:bg-gray-100 hover:text-gray-900 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+        title={
+          key.canReveal === false
+            ? 'This key was created before re-view was supported. Generate a new key to copy it.'
+            : 'Copy API key'
+        }
+      >
+        {copiedKeyId === key.id ? (
+          <Check size={16} className="text-emerald-600" />
+        ) : (
+          <Copy size={16} className="text-gray-600" />
+        )}
+      </button>
+      <button
+        onClick={() => handleRevokeKey(key.id)}
+        disabled={revoking === key.id}
+        className="p-2 hover:bg-red-50 rounded-lg transition disabled:opacity-50"
+        title="Revoke key"
+      >
+        <Trash2 size={16} className="text-red-600" />
+      </button>
+    </div>
+  )
+
+  const renderMobileActions = (key: ApiKey) => (
+    <div className="grid grid-cols-3 gap-2 pt-4 border-t border-[#E2E8F0]">
+      <button
+        onClick={() => toggleKeyVisibility(key.id)}
+        disabled={revealingKey === key.id || key.canReveal === false}
+        className="flex items-center justify-center gap-1.5 min-h-[44px] rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-700 hover:bg-slate-50 transition disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {visibleKeys.has(key.id) ? <EyeOff size={16} /> : <Eye size={16} />}
+        <span>View</span>
+      </button>
+      <button
+        onClick={() => handleCopyKey(key)}
+        disabled={revealingKey === key.id || key.canReveal === false}
+        className="flex items-center justify-center gap-1.5 min-h-[44px] rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-700 hover:bg-slate-50 transition disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {copiedKeyId === key.id ? <Check size={16} className="text-emerald-600" /> : <Copy size={16} />}
+        <span>Copy</span>
+      </button>
+      <button
+        onClick={() => handleRevokeKey(key.id)}
+        disabled={revoking === key.id}
+        className="flex items-center justify-center gap-1.5 min-h-[44px] rounded-xl border border-red-200 bg-red-50 text-sm font-medium text-red-600 hover:bg-red-100 transition disabled:opacity-50"
+      >
+        <Trash2 size={16} />
+        <span>Delete</span>
+      </button>
+    </div>
+  )
+
+  const renderMobileKeyCard = (key: ApiKey) => (
+    <div
+      key={key.id}
+      className="w-full max-w-full min-w-0 rounded-2xl border border-[#E2E8F0] bg-white p-4 shadow-sm"
+    >
+      <div className="flex items-start justify-between gap-3 min-w-0">
+        <h3 className="text-base font-semibold text-gray-900 break-words min-w-0 flex-1">
+          {key.name}
+        </h3>
+        <div className="shrink-0">{renderStatusBadge(key.status)}</div>
+      </div>
+
+      <div className="mt-3 min-w-0 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
+        <code className="block max-w-full overflow-hidden text-ellipsis whitespace-nowrap font-mono text-xs text-slate-700">
+          {revealingKey === key.id ? 'Loading…' : getDisplayedKey(key)}
+        </code>
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+        <div className="min-w-0">
+          <p className="text-xs text-slate-500 mb-0.5">Type</p>
+          <div>{renderTypeBadge(key.type)}</div>
+        </div>
+        <div className="min-w-0">
+          <p className="text-xs text-slate-500 mb-0.5">Created</p>
+          <p className="text-slate-900 font-medium">{formatDate(key.createdAt)}</p>
+        </div>
+        <div className="min-w-0 col-span-2 sm:col-span-1">
+          <p className="text-xs text-slate-500 mb-0.5">Last Used</p>
+          <p className="text-slate-900 font-medium">{getTimeAgo(key.lastUsedAt)}</p>
+        </div>
+      </div>
+
+      {renderMobileActions(key)}
+    </div>
+  )
+
   return (
     <PortalLayout activeSection="API Keys">
-      <div className="space-y-6">
+      <div className="space-y-4 md:space-y-6 w-full max-w-full min-w-0">
         {/* Header */}
         <div className="app-page-header">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-semibold text-gray-900 mb-2">API Keys</h1>
-            <p className="text-gray-600">Manage your API credentials for authentication</p>
+          <div className="min-w-0">
+            <h1 className="text-2xl sm:text-3xl font-semibold text-gray-900 mb-1 sm:mb-2">API Keys</h1>
+            <p className="text-sm sm:text-base text-gray-600">
+              Manage your API credentials for authentication
+            </p>
           </div>
-          <Button 
-            className="w-full sm:w-auto bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          <Button
+            className="w-full md:w-auto h-11 md:h-10 bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl"
             onClick={() => setShowModal(true)}
             disabled={!hasSenderIds}
             title={!hasSenderIds ? 'You need at least one approved sender ID to generate an API key' : ''}
@@ -289,121 +426,76 @@ export default function APIKeysPage() {
           </Button>
         </div>
 
-        {/* Keys Table */}
+        {/* Keys list */}
         {loading ? (
           <Card className="p-12 bg-white border border-gray-100 shadow-sm text-center">
             <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-2 text-gray-400" />
             <p className="text-gray-500">Loading API keys...</p>
           </Card>
         ) : apiKeys.length > 0 ? (
-          <Card className="p-4 sm:p-6 bg-white border border-gray-100 shadow-sm app-table-scroll">
-            <table className="w-full text-sm">
-              <thead className="border-b border-gray-200">
-                <tr className="text-left text-gray-600 font-semibold text-xs uppercase">
-                  <th className="pb-4">Name</th>
-                  <th className="pb-4">Key Preview</th>
-                  <th className="pb-4">Type</th>
-                  <th className="pb-4">Created</th>
-                  <th className="pb-4">Last Used</th>
-                  <th className="pb-4">Status</th>
-                  <th className="pb-4">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {apiKeys.map((key) => (
-                  <tr key={key.id} className="border-b border-gray-100 hover:bg-gray-50 transition">
-                    <td className="py-4 font-semibold text-gray-900">{key.name}</td>
-                    <td className="py-4">
-                      <code className="font-mono text-xs text-gray-600 break-all">
-                        {revealingKey === key.id ? (
-                          <span className="text-gray-400">Loading...</span>
-                        ) : (
-                          getDisplayedKey(key)
-                        )}
-                      </code>
-                    </td>
-                    <td className="py-4">
-                      <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
-                        key.type === 'live' 
-                          ? 'bg-emerald-50 text-emerald-700' 
-                          : 'bg-blue-50 text-blue-700'
-                      }`}>
-                        {key.type === 'live' ? 'Live' : 'Test'}
-                      </span>
-                    </td>
-                    <td className="py-4 text-gray-600">{formatDate(key.createdAt)}</td>
-                    <td className="py-4 text-gray-600">{getTimeAgo(key.lastUsedAt)}</td>
-                    <td className="py-4">
-                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700">
-                        {key.status === 'active' ? 'Active' : 'Revoked'}
-                      </span>
-                    </td>
-                    <td className="py-4 flex gap-2">
-                      <button
-                        onClick={() => toggleKeyVisibility(key.id)}
-                        disabled={revealingKey === key.id || key.canReveal === false}
-                        className="p-2 hover:bg-gray-100 hover:text-gray-900 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
-                        title={
-                          key.canReveal === false
-                            ? 'This key was created before re-view was supported. Generate a new key to view and copy it.'
-                            : visibleKeys.has(key.id)
-                              ? 'Hide key'
-                              : 'View key'
-                        }
-                      >
-                        {visibleKeys.has(key.id) ? (
-                          <EyeOff size={16} className="text-gray-600" />
-                        ) : (
-                          <Eye size={16} className="text-gray-600" />
-                        )}
-                      </button>
-                      <button
-                        onClick={() => handleCopyKey(key)}
-                        disabled={revealingKey === key.id || key.canReveal === false}
-                        className="p-2 hover:bg-gray-100 hover:text-gray-900 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
-                        title={
-                          key.canReveal === false
-                            ? 'This key was created before re-view was supported. Generate a new key to copy it.'
-                            : 'Copy API key'
-                        }
-                      >
-                        {copiedKeyId === key.id ? (
-                          <Check size={16} className="text-emerald-600" />
-                        ) : (
-                          <Copy size={16} className="text-gray-600" />
-                        )}
-                      </button>
-                      <button
-                        onClick={() => handleRevokeKey(key.id)}
-                        disabled={revoking === key.id}
-                        className="p-2 hover:bg-red-50 rounded-lg transition disabled:opacity-50"
-                        title="Revoke key"
-                      >
-                        <Trash2 size={16} className="text-red-600" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </Card>
+          <>
+            {/* Desktop table */}
+            <Card className="hidden md:block p-4 sm:p-6 bg-white border border-gray-100 shadow-sm">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="border-b border-gray-200">
+                    <tr className="text-left text-gray-600 font-semibold text-xs uppercase">
+                      <th className="pb-4 pr-4">Name</th>
+                      <th className="pb-4 pr-4">Key Preview</th>
+                      <th className="pb-4 pr-4">Type</th>
+                      <th className="pb-4 pr-4">Created</th>
+                      <th className="pb-4 pr-4">Last Used</th>
+                      <th className="pb-4 pr-4">Status</th>
+                      <th className="pb-4">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {apiKeys.map((key) => (
+                      <tr key={key.id} className="border-b border-gray-100 hover:bg-gray-50 transition">
+                        <td className="py-4 pr-4 font-semibold text-gray-900">{key.name}</td>
+                        <td className="py-4 pr-4 max-w-[220px]">
+                          <code className="block font-mono text-xs text-gray-600 truncate max-w-full">
+                            {revealingKey === key.id ? (
+                              <span className="text-gray-400">Loading...</span>
+                            ) : (
+                              getDisplayedKey(key)
+                            )}
+                          </code>
+                        </td>
+                        <td className="py-4 pr-4">{renderTypeBadge(key.type)}</td>
+                        <td className="py-4 pr-4 text-gray-600 whitespace-nowrap">{formatDate(key.createdAt)}</td>
+                        <td className="py-4 pr-4 text-gray-600 whitespace-nowrap">{getTimeAgo(key.lastUsedAt)}</td>
+                        <td className="py-4 pr-4">{renderStatusBadge(key.status)}</td>
+                        <td className="py-4">{renderDesktopActions(key)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+
+            {/* Mobile cards */}
+            <div className="md:hidden space-y-3 w-full max-w-full min-w-0">
+              {apiKeys.map((key) => renderMobileKeyCard(key))}
+            </div>
+          </>
         ) : (
-          <Card className="p-16 bg-white border border-gray-100 shadow-sm">
-            <div className="flex flex-col items-center justify-center text-center max-w-md mx-auto">
+          <Card className="p-8 sm:p-16 bg-white border border-gray-100 shadow-sm">
+            <div className="flex flex-col items-center justify-center text-center max-w-md mx-auto min-w-0">
               <div className="p-5 rounded-2xl bg-gradient-to-br from-teal-50 to-emerald-50 border border-teal-100 mb-6">
                 <Key size={48} className="text-teal-600" />
               </div>
-              <h3 className="text-2xl font-semibold text-gray-900 mb-3">No API Keys Yet</h3>
+              <h3 className="text-xl sm:text-2xl font-semibold text-gray-900 mb-3">No API keys yet</h3>
               {!hasSenderIds ? (
                 <>
-                  <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl mb-6 w-full">
+                  <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl mb-6 w-full text-left">
                     <p className="text-sm text-amber-800 font-medium mb-2">Sender ID Required</p>
                     <p className="text-sm text-amber-700">
                       You need at least one approved sender ID before you can generate an API key. Request a sender ID to get started.
                     </p>
                   </div>
-                  <Link href="/app/sender-ids/request">
-                    <Button className="bg-teal-600 text-white hover:bg-teal-700 px-6 py-3 rounded-xl font-medium shadow-sm hover:shadow-md transition-all">
+                  <Link href="/app/sender-ids/request" className="w-full">
+                    <Button className="w-full h-11 bg-teal-600 text-white hover:bg-teal-700 rounded-xl font-medium shadow-sm hover:shadow-md transition-all">
                       <Plus size={18} className="mr-2" />
                       Request Sender ID
                     </Button>
@@ -411,15 +503,15 @@ export default function APIKeysPage() {
                 </>
               ) : (
                 <>
-                  <p className="text-gray-600 mb-8 leading-relaxed">
-                    Generate your first API key to start integrating with TXTLINK. Use API keys to authenticate your requests and send SMS programmatically.
+                  <p className="text-sm sm:text-base text-gray-600 mb-8 leading-relaxed">
+                    Generate your first API key to connect external systems.
                   </p>
                   <Button
                     onClick={() => setShowModal(true)}
-                    className="bg-teal-600 text-white hover:bg-teal-700 px-6 py-3 rounded-xl font-medium shadow-sm hover:shadow-md transition-all"
+                    className="w-full h-11 bg-teal-600 text-white hover:bg-teal-700 rounded-xl font-medium shadow-sm hover:shadow-md transition-all"
                   >
                     <Plus size={18} className="mr-2" />
-                    Generate Your First API Key
+                    Generate New Key
                   </Button>
                 </>
               )}

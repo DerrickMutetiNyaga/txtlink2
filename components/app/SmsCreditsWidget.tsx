@@ -63,8 +63,8 @@ export function SmsCreditsWidget() {
   }, [])
 
   return (
-    <div className="flex items-center gap-3">
-      {/* SMS Credits Mini-Card - Premium & Calm */}
+    <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 shrink">
+      {/* Desktop */}
       <div className="hidden md:flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2">
         <div className="leading-tight">
           <div className="flex items-center gap-1.5 mb-0.5">
@@ -74,14 +74,13 @@ export function SmsCreditsWidget() {
             )}
           </div>
           <p className="text-base font-semibold text-slate-900">
-            {credits.toLocaleString()}
+            {loading ? '…' : credits.toLocaleString()}
           </p>
           <p className={`text-[11px] ${isLowBalance ? 'text-amber-600' : 'text-slate-400'}`}>
             {isLowBalance ? 'Low balance' : `${deliveryRate}% delivery rate`}
           </p>
         </div>
-        
-        {/* Top up Button - Only CTA */}
+
         <Link href="/app/billing/top-up">
           <Button className="ml-2 h-9 rounded-xl bg-emerald-600 px-3 text-sm font-medium text-white hover:bg-emerald-700">
             <Plus className="h-4 w-4 mr-1.5" />
@@ -90,18 +89,25 @@ export function SmsCreditsWidget() {
         </Link>
       </div>
 
-      {/* Mobile: Compact version */}
-      <div className="md:hidden flex items-center gap-2">
-        <div className="text-sm font-semibold text-slate-900">
-          {credits.toLocaleString()}
+      {/* Mobile: compact credits + small top-up */}
+      <div className="md:hidden flex items-center gap-1.5 min-w-0">
+        <div className="flex items-center gap-1 min-w-0 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1">
+          <span className="text-[10px] text-slate-500 hidden min-[380px]:inline">Credits</span>
+          <span className="text-xs font-semibold text-slate-900 tabular-nums truncate">
+            {loading ? '…' : credits.toLocaleString()}
+          </span>
+          {isLowBalance && (
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0" />
+          )}
         </div>
-        {isLowBalance && (
-          <span className="inline-block h-2 w-2 rounded-full bg-amber-500"></span>
-        )}
-        <Link href="/app/billing/top-up">
-          <Button className="h-8 rounded-xl bg-emerald-600 px-3 text-xs font-medium text-white hover:bg-emerald-700">
-            <Plus className="h-3.5 w-3.5 mr-1" />
-            Top up
+        <Link href="/app/billing/top-up" className="shrink-0">
+          <Button
+            size="sm"
+            className="h-8 rounded-lg bg-emerald-600 px-2 text-xs font-medium text-white hover:bg-emerald-700"
+            aria-label="Top up credits"
+          >
+            <Plus className="h-3.5 w-3.5 sm:mr-1" />
+            <span className="hidden min-[380px]:inline">Top up</span>
           </Button>
         </Link>
       </div>

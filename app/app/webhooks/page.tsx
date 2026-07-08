@@ -12,13 +12,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Checkbox } from '@/components/ui/checkbox'
 import {
   Webhook,
   Plus,
   Trash2,
   Edit,
-  Eye,
   TestTube,
   X,
   CheckCircle,
@@ -26,7 +24,7 @@ import {
   RefreshCw,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
-import Link from 'next/link'
+import { cn } from '@/lib/utils'
 
 interface WebhookConfig {
   id: string
@@ -52,6 +50,21 @@ interface WebhookConfig {
   createdAt: string | Date
 }
 
+const fieldClass =
+  'h-11 rounded-xl border border-[#CBD5E1] bg-white text-[#0F172A] placeholder:text-[#94A3B8] shadow-none focus-visible:border-[#2F9B73] focus-visible:ring-2 focus-visible:ring-[#2F9B73]/20 focus-visible:ring-offset-0 disabled:cursor-not-allowed disabled:bg-[#F1F5F9] disabled:text-[#94A3B8] disabled:border-[#E2E8F0] [&:-webkit-autofill]:[-webkit-text-fill-color:#0F172A] [&:-webkit-autofill]:[box-shadow:0_0_0_1000px_#FFFFFF_inset]'
+
+const selectTriggerClass =
+  'h-11 rounded-xl border border-[#CBD5E1] bg-white text-[#0F172A] shadow-none focus:ring-2 focus:ring-[#2F9B73]/20 focus:ring-offset-0 focus:border-[#2F9B73] disabled:bg-[#F1F5F9] disabled:text-[#94A3B8] disabled:border-[#E2E8F0]'
+
+const labelClass = 'text-sm font-medium text-[#0F172A] mb-1.5 block'
+
+const sectionTitleClass = 'text-sm font-semibold text-[#0F172A]'
+
+const helperClass = 'text-xs text-[#64748B] mt-1'
+
+const outlineActionClass =
+  'inline-flex items-center justify-center gap-2 h-[42px] w-full sm:w-auto px-4 rounded-[10px] border border-[#E2E8F0] bg-white text-sm font-medium text-[#2F9B73] hover:bg-[#ECFDF5] hover:border-[#2F9B73]/30 transition-colors'
+
 export default function WebhooksPage() {
   const [webhooks, setWebhooks] = useState<WebhookConfig[]>([])
   const [loading, setLoading] = useState(true)
@@ -63,7 +76,6 @@ export default function WebhooksPage() {
   const [testing, setTesting] = useState<string | null>(null)
   const [testResponse, setTestResponse] = useState<string>('')
 
-  // Form state
   const [formData, setFormData] = useState({
     name: '',
     product: 'SMS' as 'SMS' | 'WhatsApp',
@@ -86,10 +98,20 @@ export default function WebhooksPage() {
   })
   const [creating, setCreating] = useState(false)
 
-  // Fetch webhooks
   useEffect(() => {
     fetchWebhooks()
   }, [])
+
+  useEffect(() => {
+    if (showModal) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = ''
+    }
+    return () => {
+      document.body.style.overflow = ''
+    }
+  }, [showModal])
 
   const fetchWebhooks = async () => {
     try {
@@ -138,6 +160,11 @@ export default function WebhooksPage() {
     setTestResponse('')
   }
 
+  const closeModal = () => {
+    setShowModal(false)
+    resetForm()
+  }
+
   const openModal = (type: 'DLR' | 'MO', webhook?: WebhookConfig) => {
     setModalType(type)
     if (webhook) {
@@ -170,7 +197,6 @@ export default function WebhooksPage() {
   }
 
   const handleCreateWebhook = async () => {
-    // Validation
     if (!formData.url.trim()) {
       alert('Webhook URL is required')
       return
@@ -347,24 +373,89 @@ export default function WebhooksPage() {
     }))
   }
 
+  const renderStatusBadge = (status: WebhookConfig['status']) =>
+    status === 'active' ? (
+      <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-[#ECFDF5] text-[#047857]">
+        <CheckCircle size={12} /> Active
+      </span>
+    ) : (
+      <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 text-[#64748B]">
+        <XCircle size={12} /> Inactive
+      </span>
+    )
+
+  const renderWebhookActions = (webhook: WebhookConfig, mobile = false) => (
+    <div className={cn('flex gap-2', mobile && 'grid grid-cols-3 pt-3 border-t border-[#E2E8F0]')}>
+      <Button
+        variant="outline"
+        size={mobile ? 'default' : 'sm'}
+        onClick={() => handleTestWebhook(webhook.id)}
+        disabled={testing === webhook.id}
+        title="Test Webhook"
+        className={cn(
+          mobile && 'h-11 rounded-xl border-[#E2E8F0] bg-white text-[#0F172A] hover:bg-[#F8FAFC]',
+          !mobile && 'border-[#E2E8F0] bg-white hover:bg-[#F8FAFC]'
+        )}
+      >
+        <TestTube size={14} />
+        {mobile && <span className="ml-1.5">Test</span>}
+      </Button>
+      <Button
+        variant="outline"
+        size={mobile ? 'default' : 'sm'}
+        onClick={() => openModal(webhook.reportType, webhook)}
+        title="Edit Webhook"
+        className={cn(
+          mobile && 'h-11 rounded-xl border-[#E2E8F0] bg-white text-[#0F172A] hover:bg-[#F8FAFC]',
+          !mobile && 'border-[#E2E8F0] bg-white hover:bg-[#F8FAFC]'
+        )}
+      >
+        <Edit size={14} />
+        {mobile && <span className="ml-1.5">Edit</span>}
+      </Button>
+      <Button
+        variant="outline"
+        size={mobile ? 'default' : 'sm'}
+        onClick={() => handleDeleteWebhook(webhook.id)}
+        disabled={deleting === webhook.id}
+        title="Delete Webhook"
+        className={cn(
+          'text-[#EF4444] hover:text-[#EF4444] hover:bg-red-50 border-red-200',
+          mobile && 'h-11 rounded-xl'
+        )}
+      >
+        <Trash2 size={14} />
+        {mobile && <span className="ml-1.5">Delete</span>}
+      </Button>
+    </div>
+  )
+
+  const modalTitle = editingWebhook
+    ? `Edit Webhook for ${modalType}`
+    : modalType === 'DLR'
+      ? 'Add Webhook for DLR'
+      : 'Add Webhook for MO'
+
   return (
     <PortalLayout activeSection="Webhooks">
-      <div className="space-y-6">
+      <div className="space-y-4 md:space-y-6 w-full max-w-full min-w-0">
         {/* Header */}
         <div className="app-page-header">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-semibold text-[#1F2937] mb-2">Webhooks</h1>
-            <p className="text-slate-600">Configure webhooks to receive real-time DLR and MO responses</p>
+          <div className="min-w-0">
+            <h1 className="text-2xl sm:text-3xl font-semibold text-[#0F172A] mb-1 sm:mb-2">Webhooks</h1>
+            <p className="text-sm sm:text-base text-[#64748B]">
+              Configure webhooks to receive real-time DLR and MO responses.
+            </p>
           </div>
-          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+          <div className="flex flex-col gap-2 w-full md:w-auto shrink-0">
             <Button
-              className="w-full sm:w-auto bg-gradient-to-r from-[#059669] to-[#14B8A6] text-white hover:from-[#064E3B] hover:to-[#059669]"
+              className="w-full md:w-auto h-11 rounded-xl bg-[#2F9B73] text-white hover:bg-[#267D5E] shadow-sm"
               onClick={() => openModal('DLR')}
             >
               <Plus size={18} className="mr-2" /> Add DLR Webhook
             </Button>
             <Button
-              className="w-full sm:w-auto bg-gradient-to-r from-[#059669] to-[#14B8A6] text-white hover:from-[#064E3B] hover:to-[#059669]"
+              className="w-full md:w-auto h-11 rounded-xl bg-[#2F9B73] text-white hover:bg-[#267D5E] shadow-sm"
               onClick={() => openModal('MO')}
             >
               <Plus size={18} className="mr-2" /> Add MO Webhook
@@ -372,292 +463,275 @@ export default function WebhooksPage() {
           </div>
         </div>
 
-        {/* Webhooks Table */}
+        {/* Webhooks list */}
         {loading ? (
-          <Card className="p-12 bg-white border border-slate-200 shadow-sm text-center">
-            <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-2 text-gray-400" />
-            <p className="text-gray-500">Loading webhooks...</p>
+          <Card className="p-12 bg-white border border-[#E2E8F0] shadow-sm text-center">
+            <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-2 text-[#64748B]" />
+            <p className="text-[#64748B]">Loading webhooks...</p>
           </Card>
         ) : webhooks.length === 0 ? (
-          <Card className="p-16 bg-white border border-gray-100 shadow-sm">
-            <div className="flex flex-col items-center justify-center text-center max-w-md mx-auto">
-              <div className="p-5 rounded-2xl bg-gradient-to-br from-teal-50 to-emerald-50 border border-teal-100 mb-6">
-                <Webhook size={48} className="text-teal-600" />
-              </div>
-              <h3 className="text-2xl font-semibold text-gray-900 mb-3">No Webhooks Yet</h3>
-              <p className="text-gray-600 mb-8 leading-relaxed">
-                Create webhooks to receive real-time DLR and MO notifications.
-              </p>
+          <div className="rounded-[18px] border border-[#E2E8F0] bg-white px-5 py-8 sm:py-10 text-center shadow-sm">
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#ECFDF5]">
+              <Webhook size={28} className="text-[#2F9B73]" />
             </div>
-          </Card>
+            <h3 className="text-lg sm:text-xl font-semibold text-[#0F172A] mb-2">No Webhooks Yet</h3>
+            <p className="text-sm text-[#64748B] max-w-sm mx-auto leading-relaxed">
+              Create webhooks to receive real-time DLR and MO notifications.
+            </p>
+          </div>
         ) : (
-          <Card className="p-6 bg-white border border-slate-200 shadow-sm">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-slate-200">
-                    <th className="text-left py-3 px-4 text-sm font-semibold text-slate-700">ID</th>
-                    <th className="text-left py-3 px-4 text-sm font-semibold text-slate-700">Product</th>
-                    <th className="text-left py-3 px-4 text-sm font-semibold text-slate-700">Webhook</th>
-                    <th className="text-left py-3 px-4 text-sm font-semibold text-slate-700">Report Type</th>
-                    <th className="text-left py-3 px-4 text-sm font-semibold text-slate-700">Server Method</th>
-                    <th className="text-left py-3 px-4 text-sm font-semibold text-slate-700">Product Unique ID</th>
-                    <th className="text-left py-3 px-4 text-sm font-semibold text-slate-700">Status</th>
-                    <th className="text-left py-3 px-4 text-sm font-semibold text-slate-700">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {webhooks.map((webhook) => (
-                    <tr key={webhook.id} className="border-b border-slate-100 hover:bg-slate-50">
-                      <td className="py-3 px-4 text-sm text-slate-600 font-mono">
-                        {webhook.id.substring(0, 8)}...
-                      </td>
-                      <td className="py-3 px-4 text-sm text-slate-900">{webhook.product}</td>
-                      <td className="py-3 px-4 text-sm text-slate-600 font-mono max-w-xs truncate">
-                        {webhook.url}
-                      </td>
-                      <td className="py-3 px-4 text-sm text-slate-900">{webhook.reportType}</td>
-                      <td className="py-3 px-4 text-sm text-slate-900">{webhook.serverSendMethod}</td>
-                      <td className="py-3 px-4 text-sm text-slate-600">
-                        {webhook.wabaNumber || '-'}
-                      </td>
-                      <td className="py-3 px-4">
-                        {webhook.status === 'active' ? (
-                          <span className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700">
-                            <CheckCircle size={12} /> Active
-                          </span>
-                        ) : (
-                          <span className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">
-                            <XCircle size={12} /> Inactive
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="flex gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleTestWebhook(webhook.id)}
-                            disabled={testing === webhook.id}
-                            title="Test Webhook"
-                          >
-                            <TestTube size={14} />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => openModal(webhook.reportType, webhook)}
-                            title="Edit Webhook"
-                          >
-                            <Edit size={14} />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleDeleteWebhook(webhook.id)}
-                            disabled={deleting === webhook.id}
-                            className="text-red-600 hover:text-red-700"
-                            title="Delete Webhook"
-                          >
-                            <Trash2 size={14} />
-                          </Button>
-                        </div>
-                      </td>
+          <>
+            {/* Desktop table */}
+            <Card className="hidden md:block p-6 bg-white border border-[#E2E8F0] shadow-sm">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-[#E2E8F0]">
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-[#64748B]">ID</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-[#64748B]">Product</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-[#64748B]">Webhook</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-[#64748B]">Report Type</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-[#64748B]">Server Method</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-[#64748B]">Product Unique ID</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-[#64748B]">Status</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-[#64748B]">Action</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {webhooks.map((webhook) => (
+                      <tr key={webhook.id} className="border-b border-[#E2E8F0]/60 hover:bg-[#F8FAFC]">
+                        <td className="py-3 px-4 text-sm text-[#64748B] font-mono">
+                          {webhook.id.substring(0, 8)}...
+                        </td>
+                        <td className="py-3 px-4 text-sm text-[#0F172A]">{webhook.product}</td>
+                        <td className="py-3 px-4 text-sm text-[#64748B] font-mono max-w-xs truncate">
+                          {webhook.url}
+                        </td>
+                        <td className="py-3 px-4 text-sm text-[#0F172A]">{webhook.reportType}</td>
+                        <td className="py-3 px-4 text-sm text-[#0F172A]">{webhook.serverSendMethod}</td>
+                        <td className="py-3 px-4 text-sm text-[#64748B]">{webhook.wabaNumber || '-'}</td>
+                        <td className="py-3 px-4">{renderStatusBadge(webhook.status)}</td>
+                        <td className="py-3 px-4">{renderWebhookActions(webhook)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+
+            {/* Mobile cards */}
+            <div className="md:hidden space-y-3">
+              {webhooks.map((webhook) => (
+                <div
+                  key={webhook.id}
+                  className="rounded-2xl border border-[#E2E8F0] bg-white p-4 shadow-sm w-full min-w-0"
+                >
+                  <div className="flex items-start justify-between gap-3 mb-3 min-w-0">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-[#0F172A]">{webhook.reportType} · {webhook.product}</p>
+                      <p className="text-xs text-[#64748B] font-mono truncate mt-0.5">{webhook.url}</p>
+                    </div>
+                    {renderStatusBadge(webhook.status)}
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 text-sm mb-1">
+                    <div>
+                      <p className="text-xs text-[#64748B]">Method</p>
+                      <p className="font-medium text-[#0F172A]">{webhook.serverSendMethod}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-[#64748B]">ID</p>
+                      <p className="font-mono text-xs text-[#64748B] truncate">{webhook.id.substring(0, 12)}…</p>
+                    </div>
+                  </div>
+                  {renderWebhookActions(webhook, true)}
+                </div>
+              ))}
             </div>
-          </Card>
+          </>
         )}
 
         {/* Create/Edit Webhook Modal */}
         {showModal && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
-            <Card className="w-full max-w-4xl p-4 sm:p-8 bg-white border border-gray-200 shadow-xl max-h-[90vh] overflow-y-auto">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between mb-6">
-                <div className="flex items-start gap-3 min-w-0">
-                  <div className="p-3 rounded-xl bg-teal-100 text-teal-600 shrink-0">
-                    <Webhook size={24} />
-                  </div>
-                  <h3 className="text-lg sm:text-2xl font-semibold text-gray-900">
-                    {editingWebhook ? 'Edit' : 'Add'} Webhook for{' '}
-                    {modalType === 'DLR' ? 'DLR (SMS/WhatsApp)' : "WhatsApp's MO Response"}
-                  </h3>
+          <div
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+            onClick={closeModal}
+          >
+            <div
+              role="dialog"
+              aria-modal="true"
+              className="flex w-[calc(100vw-32px)] max-w-[560px] max-h-[calc(100vh-48px)] flex-col overflow-hidden rounded-2xl border border-[#E2E8F0] bg-white shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Sticky header */}
+              <div className="sticky top-0 z-10 flex items-start gap-3 border-b border-[#E2E8F0] bg-white px-4 py-4 sm:px-5">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#ECFDF5] text-[#2F9B73]">
+                  <Webhook size={20} />
                 </div>
-                <Button variant="ghost" size="sm" onClick={() => {
-                  setShowModal(false)
-                  resetForm()
-                }}>
+                <div className="min-w-0 flex-1 pr-2">
+                  <h3 className="text-base sm:text-lg font-semibold text-[#0F172A] leading-snug">
+                    {modalTitle}
+                  </h3>
+                  <p className="text-xs sm:text-sm text-[#64748B] mt-0.5">
+                    Configure delivery report callback settings.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeModal}
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[#64748B] hover:bg-[#F8FAFC] hover:text-[#0F172A] transition-colors"
+                  aria-label="Close"
+                >
                   <X size={20} />
-                </Button>
+                </button>
               </div>
 
-              <div className="space-y-6">
-                {/* Basic Fields */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="product">Product *</Label>
-                    <Select
-                      value={formData.product}
-                      onValueChange={(value: 'SMS' | 'WhatsApp') =>
-                        setFormData((prev) => ({ ...prev, product: value, wabaNumber: value === 'SMS' ? '' : prev.wabaNumber }))
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="SMS">SMS</SelectItem>
-                        <SelectItem value="WhatsApp">WhatsApp</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div>
-                    <Label htmlFor="serverSendMethod">Webhook Server Send Method *</Label>
-                    <Select
-                      value={formData.serverSendMethod}
-                      onValueChange={(value: 'POST' | 'GET' | 'JSON' | 'XML') =>
-                        setFormData((prev) => ({ ...prev, serverSendMethod: value }))
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="POST">POST</SelectItem>
-                        <SelectItem value="GET">GET</SelectItem>
-                        <SelectItem value="JSON">JSON</SelectItem>
-                        <SelectItem value="XML">XML</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div>
-                  <Label htmlFor="reportType">Webhook Report Type *</Label>
-                  <Select
-                    value={formData.reportType}
-                    onValueChange={(value: 'DLR' | 'MO') =>
-                      setFormData((prev) => ({ ...prev, reportType: value }))
-                    }
-                    disabled={formData.product === 'SMS'}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="DLR">DLR</SelectItem>
-                      <SelectItem value="MO" disabled={formData.product === 'SMS'}>MO</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  {formData.product === 'SMS' && (
-                    <p className="text-xs text-slate-500 mt-1">MO is disabled for SMS product</p>
-                  )}
-                </div>
-
-                {formData.product === 'WhatsApp' && (
-                  <div>
-                    <Label htmlFor="wabaNumber">Waba Number *</Label>
-                    <Input
-                      id="wabaNumber"
-                      value={formData.wabaNumber}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, wabaNumber: e.target.value }))}
-                      placeholder="Enter Waba number"
-                    />
-                  </div>
-                )}
-
-                <div>
-                  <Label htmlFor="url">Webhook (URL Endpoint) *</Label>
-                  <Input
-                    id="url"
-                    type="url"
-                    value={formData.url}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, url: e.target.value }))}
-                    placeholder="https://api.example.com/webhook"
-                  />
-                </div>
-
-                {/* Required Parameters for DLR */}
-                {formData.reportType === 'DLR' && (
-                  <div className="space-y-4 border-t pt-4">
-                    <h4 className="font-semibold text-slate-900">Required Parameters</h4>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="transactionIdParam">Transaction ID Parameter *</Label>
-                        <Input
-                          id="transactionIdParam"
-                          value={formData.transactionIdParam}
-                          onChange={(e) =>
-                            setFormData((prev) => ({ ...prev, transactionIdParam: e.target.value }))
-                          }
-                          placeholder="Transactionid"
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="messageIdParam">Message ID Parameter *</Label>
-                        <Input
-                          id="messageIdParam"
-                          value={formData.messageIdParam}
-                          onChange={(e) =>
-                            setFormData((prev) => ({ ...prev, messageIdParam: e.target.value }))
-                          }
-                          placeholder="Messageid"
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="errorCodeParam">Error Code Parameter *</Label>
-                        <Input
-                          id="errorCodeParam"
-                          value={formData.errorCodeParam}
-                          onChange={(e) =>
-                            setFormData((prev) => ({ ...prev, errorCodeParam: e.target.value }))
-                          }
-                          placeholder="ErrorCode"
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="mobileNumberParam">Mobile Number Parameter *</Label>
-                        <Input
-                          id="mobileNumberParam"
-                          value={formData.mobileNumberParam}
-                          onChange={(e) =>
-                            setFormData((prev) => ({ ...prev, mobileNumberParam: e.target.value }))
-                          }
-                          placeholder="mobileNo"
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="receivedTimeParam">Received Time Parameter *</Label>
-                        <Input
-                          id="receivedTimeParam"
-                          value={formData.receivedTimeParam}
-                          onChange={(e) =>
-                            setFormData((prev) => ({ ...prev, receivedTimeParam: e.target.value }))
-                          }
-                          placeholder="ReceivedTime"
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="deliveredTimeParam">Delivered Time Parameter *</Label>
-                        <Input
-                          id="deliveredTimeParam"
-                          value={formData.deliveredTimeParam}
-                          onChange={(e) =>
-                            setFormData((prev) => ({ ...prev, deliveredTimeParam: e.target.value }))
-                          }
-                          placeholder="DeliveredTime"
-                        />
-                      </div>
+              {/* Scrollable body */}
+              <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-5 sm:px-5 space-y-6">
+                {/* Section 1: Webhook Settings */}
+                <section className="space-y-4">
+                  <h4 className={sectionTitleClass}>Webhook Settings</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="product" className={labelClass}>
+                        Product <span className="text-[#EF4444]">*</span>
+                      </Label>
+                      <Select
+                        value={formData.product}
+                        onValueChange={(value: 'SMS' | 'WhatsApp') =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            product: value,
+                            wabaNumber: value === 'SMS' ? '' : prev.wabaNumber,
+                          }))
+                        }
+                      >
+                        <SelectTrigger id="product" className={selectTriggerClass}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="border-[#E2E8F0] bg-white">
+                          <SelectItem value="SMS">SMS</SelectItem>
+                          <SelectItem value="WhatsApp">WhatsApp</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
 
-                    {/* WhatsApp-specific parameters */}
+                    <div>
+                      <Label htmlFor="serverSendMethod" className={labelClass}>
+                        Webhook Server Send Method <span className="text-[#EF4444]">*</span>
+                      </Label>
+                      <Select
+                        value={formData.serverSendMethod}
+                        onValueChange={(value: 'POST' | 'GET' | 'JSON' | 'XML') =>
+                          setFormData((prev) => ({ ...prev, serverSendMethod: value }))
+                        }
+                      >
+                        <SelectTrigger id="serverSendMethod" className={selectTriggerClass}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="border-[#E2E8F0] bg-white">
+                          <SelectItem value="POST">POST</SelectItem>
+                          <SelectItem value="GET">GET</SelectItem>
+                          <SelectItem value="JSON">JSON</SelectItem>
+                          <SelectItem value="XML">XML</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="reportType" className={labelClass}>
+                      Webhook Report Type <span className="text-[#EF4444]">*</span>
+                    </Label>
+                    <Select
+                      value={formData.reportType}
+                      onValueChange={(value: 'DLR' | 'MO') =>
+                        setFormData((prev) => ({ ...prev, reportType: value }))
+                      }
+                      disabled={formData.product === 'SMS'}
+                    >
+                      <SelectTrigger id="reportType" className={selectTriggerClass}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="border-[#E2E8F0] bg-white">
+                        <SelectItem value="DLR">DLR</SelectItem>
+                        <SelectItem value="MO" disabled={formData.product === 'SMS'}>
+                          MO
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {formData.product === 'SMS' && (
+                      <p className={helperClass}>MO is disabled for SMS product</p>
+                    )}
+                  </div>
+
+                  {formData.product === 'WhatsApp' && (
+                    <div>
+                      <Label htmlFor="wabaNumber" className={labelClass}>
+                        Waba Number <span className="text-[#EF4444]">*</span>
+                      </Label>
+                      <Input
+                        id="wabaNumber"
+                        value={formData.wabaNumber}
+                        onChange={(e) =>
+                          setFormData((prev) => ({ ...prev, wabaNumber: e.target.value }))
+                        }
+                        placeholder="Enter Waba number"
+                        className={fieldClass}
+                      />
+                    </div>
+                  )}
+
+                  <div>
+                    <Label htmlFor="url" className={labelClass}>
+                      Webhook URL Endpoint <span className="text-[#EF4444]">*</span>
+                    </Label>
+                    <Input
+                      id="url"
+                      type="url"
+                      value={formData.url}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, url: e.target.value }))}
+                      placeholder="https://api.example.com/webhook"
+                      className={fieldClass}
+                    />
+                  </div>
+                </section>
+
+                {/* Section 2: Required Parameters */}
+                {formData.reportType === 'DLR' && (
+                  <section className="space-y-4 border-t border-[#E2E8F0] pt-6">
+                    <h4 className={sectionTitleClass}>Required Parameters</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {[
+                        { id: 'transactionIdParam', label: 'Transaction ID Parameter', placeholder: 'Transactionid' },
+                        { id: 'messageIdParam', label: 'Message ID Parameter', placeholder: 'Messageid' },
+                        { id: 'errorCodeParam', label: 'Error Code Parameter', placeholder: 'ErrorCode' },
+                        { id: 'mobileNumberParam', label: 'Mobile Number Parameter', placeholder: 'mobileNo' },
+                        { id: 'receivedTimeParam', label: 'Received Time Parameter', placeholder: 'ReceivedTime' },
+                        { id: 'deliveredTimeParam', label: 'Delivered Time Parameter', placeholder: 'DeliveredTime' },
+                      ].map((field) => (
+                        <div key={field.id}>
+                          <Label htmlFor={field.id} className={labelClass}>
+                            {field.label} <span className="text-[#EF4444]">*</span>
+                          </Label>
+                          <Input
+                            id={field.id}
+                            value={formData[field.id as keyof typeof formData] as string}
+                            onChange={(e) =>
+                              setFormData((prev) => ({ ...prev, [field.id]: e.target.value }))
+                            }
+                            placeholder={field.placeholder}
+                            className={fieldClass}
+                          />
+                        </div>
+                      ))}
+                    </div>
+
                     {formData.product === 'WhatsApp' && (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                          <Label htmlFor="readTimeParam">Read Time Parameter</Label>
+                          <Label htmlFor="readTimeParam" className={labelClass}>
+                            Read Time Parameter
+                          </Label>
                           <Input
                             id="readTimeParam"
                             value={formData.readTimeParam}
@@ -665,10 +739,13 @@ export default function WebhooksPage() {
                               setFormData((prev) => ({ ...prev, readTimeParam: e.target.value }))
                             }
                             placeholder="ReadTime"
+                            className={fieldClass}
                           />
                         </div>
                         <div>
-                          <Label htmlFor="statusParam">Status Parameter</Label>
+                          <Label htmlFor="statusParam" className={labelClass}>
+                            Status Parameter
+                          </Label>
                           <Input
                             id="statusParam"
                             value={formData.statusParam}
@@ -676,131 +753,138 @@ export default function WebhooksPage() {
                               setFormData((prev) => ({ ...prev, statusParam: e.target.value }))
                             }
                             placeholder="Status"
+                            className={fieldClass}
                           />
                         </div>
                       </div>
                     )}
-                  </div>
+                  </section>
                 )}
 
-                {/* Custom Parameters */}
-                <div className="border-t pt-4">
-                  <div className="flex items-center gap-2 mb-4">
-                    <Checkbox
-                      id="addCustomParams"
-                      checked={formData.addCustomParams}
-                      onCheckedChange={(checked) =>
-                        setFormData((prev) => ({ ...prev, addCustomParams: checked as boolean }))
-                      }
-                    />
-                    <Label htmlFor="addCustomParams" className="font-semibold">
-                      Add Custom Parameters
-                    </Label>
-                  </div>
+                {/* Section 3: Optional */}
+                <section className="space-y-4 border-t border-[#E2E8F0] pt-6">
+                  <h4 className={sectionTitleClass}>Optional</h4>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setFormData((prev) => ({ ...prev, addCustomParams: !prev.addCustomParams }))
+                    }
+                    className={cn(
+                      outlineActionClass,
+                      formData.addCustomParams && 'border-[#2F9B73] bg-[#ECFDF5]'
+                    )}
+                  >
+                    <Plus size={16} />
+                    Add Custom Parameters
+                  </button>
                   {formData.addCustomParams && (
                     <div className="space-y-2">
                       {formData.customParameters.map((param, index) => (
-                        <div key={index} className="flex gap-2">
+                        <div key={index} className="flex flex-col sm:flex-row gap-2 min-w-0">
                           <Input
                             placeholder="Parameter name"
                             value={param.name}
                             onChange={(e) => updateCustomParam(index, 'name', e.target.value)}
-                            className="flex-1"
+                            className={cn(fieldClass, 'flex-1 min-w-0')}
                           />
                           <Input
                             placeholder="Parameter value"
                             value={param.value}
                             onChange={(e) => updateCustomParam(index, 'value', e.target.value)}
-                            className="flex-1"
+                            className={cn(fieldClass, 'flex-1 min-w-0')}
                           />
                           <Button
+                            type="button"
                             variant="outline"
                             size="sm"
                             onClick={() => removeCustomParam(index)}
+                            className="h-11 shrink-0 border-[#E2E8F0] bg-white hover:bg-red-50 text-[#EF4444]"
                           >
                             <X size={16} />
                           </Button>
                         </div>
                       ))}
-                      <Button variant="outline" size="sm" onClick={addCustomParam}>
-                        <Plus size={16} className="mr-2" /> Add More
-                      </Button>
+                      <button type="button" onClick={addCustomParam} className={outlineActionClass}>
+                        <Plus size={16} className="mr-1" /> Add More
+                      </button>
                     </div>
                   )}
-                </div>
 
-                {/* Custom Headers */}
-                <div className="border-t pt-4">
-                  <div className="flex items-center gap-2 mb-4">
-                    <Checkbox
-                      id="addCustomHeaders"
-                      checked={formData.addCustomHeaders}
-                      onCheckedChange={(checked) =>
-                        setFormData((prev) => ({ ...prev, addCustomHeaders: checked as boolean }))
-                      }
-                    />
-                    <Label htmlFor="addCustomHeaders" className="font-semibold">
-                      Add Custom Headers
-                    </Label>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setFormData((prev) => ({ ...prev, addCustomHeaders: !prev.addCustomHeaders }))
+                    }
+                    className={cn(
+                      outlineActionClass,
+                      formData.addCustomHeaders && 'border-[#2F9B73] bg-[#ECFDF5]'
+                    )}
+                  >
+                    <Plus size={16} />
+                    Add Custom Headers
+                  </button>
                   {formData.addCustomHeaders && (
                     <div className="space-y-2">
                       {formData.customHeaders.map((header, index) => (
-                        <div key={index} className="flex gap-2">
+                        <div key={index} className="flex flex-col sm:flex-row gap-2 min-w-0">
                           <Input
                             placeholder="Header name"
                             value={header.name}
                             onChange={(e) => updateCustomHeader(index, 'name', e.target.value)}
-                            className="flex-1"
+                            className={cn(fieldClass, 'flex-1 min-w-0')}
                           />
                           <Input
                             placeholder="Header value"
                             value={header.value}
                             onChange={(e) => updateCustomHeader(index, 'value', e.target.value)}
-                            className="flex-1"
+                            className={cn(fieldClass, 'flex-1 min-w-0')}
                           />
                           <Button
+                            type="button"
                             variant="outline"
                             size="sm"
                             onClick={() => removeCustomHeader(index)}
+                            className="h-11 shrink-0 border-[#E2E8F0] bg-white hover:bg-red-50 text-[#EF4444]"
                           >
                             <X size={16} />
                           </Button>
                         </div>
                       ))}
-                      <Button variant="outline" size="sm" onClick={addCustomHeader}>
-                        <Plus size={16} className="mr-2" /> Add More
-                      </Button>
+                      <button type="button" onClick={addCustomHeader} className={outlineActionClass}>
+                        <Plus size={16} className="mr-1" /> Add More
+                      </button>
                     </div>
                   )}
-                </div>
+                </section>
 
-                {/* Test Webhook Response */}
                 {testResponse && (
-                  <div className="border-t pt-4">
-                    <Label>Webhook Test Response</Label>
-                    <div className="mt-2 p-4 bg-slate-50 border border-slate-200 rounded-lg">
-                      <pre className="text-xs text-slate-700 whitespace-pre-wrap">{testResponse}</pre>
+                  <section className="border-t border-[#E2E8F0] pt-6">
+                    <Label className={labelClass}>Webhook Test Response</Label>
+                    <div className="mt-2 rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] p-4 max-w-full overflow-x-auto">
+                      <pre className="text-xs text-[#64748B] whitespace-pre-wrap break-words">
+                        {testResponse}
+                      </pre>
                     </div>
-                  </div>
+                  </section>
                 )}
+              </div>
 
-                {/* Actions */}
-                <div className="flex flex-col-reverse sm:flex-row gap-3 sm:gap-4 border-t pt-4">
+              {/* Sticky footer */}
+              <div className="sticky bottom-0 z-10 border-t border-[#E2E8F0] bg-white px-4 py-4 sm:px-5">
+                <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
                   <Button
-                    variant="outline"
-                    className="flex-1"
-                    onClick={() => {
-                      setShowModal(false)
-                      resetForm()
-                    }}
+                    className="h-[46px] w-full sm:w-auto sm:min-w-[120px] rounded-xl bg-[#2F9B73] text-white hover:bg-[#267D5E] disabled:opacity-50 order-1"
+                    onClick={handleCreateWebhook}
+                    disabled={creating}
                   >
-                    Cancel
+                    {creating ? 'Saving...' : editingWebhook ? 'Save Changes' : 'Save'}
                   </Button>
                   {editingWebhook && (
                     <Button
+                      type="button"
                       variant="outline"
-                      className="flex-1"
+                      className="h-[46px] w-full sm:w-auto sm:min-w-[120px] rounded-xl border-[#E2E8F0] bg-white text-[#0F172A] hover:bg-[#F8FAFC] order-2 sm:order-none"
                       onClick={() => handleTestWebhook(editingWebhook.id)}
                       disabled={testing === editingWebhook.id}
                     >
@@ -809,15 +893,16 @@ export default function WebhooksPage() {
                     </Button>
                   )}
                   <Button
-                    className="flex-1 bg-gradient-to-r from-[#059669] to-[#14B8A6] text-white hover:from-[#064E3B] hover:to-[#059669] disabled:opacity-50"
-                    onClick={handleCreateWebhook}
-                    disabled={creating}
+                    type="button"
+                    variant="outline"
+                    className="h-[46px] w-full sm:w-auto sm:min-w-[120px] rounded-xl border-[#E2E8F0] bg-white text-[#0F172A] hover:bg-[#F8FAFC] order-3 sm:order-none"
+                    onClick={closeModal}
                   >
-                    {creating ? 'Saving...' : editingWebhook ? 'Save Changes' : 'Save'}
+                    Cancel
                   </Button>
                 </div>
               </div>
-            </Card>
+            </div>
           </div>
         )}
       </div>

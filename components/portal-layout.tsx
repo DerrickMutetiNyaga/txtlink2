@@ -356,19 +356,19 @@ export function PortalLayout({ children, activeSection }: PortalLayoutProps) {
             </div>
 
             {/* Right: Actions + User */}
-            <div className="flex items-center gap-1 sm:gap-2 shrink-0">
-              {/* SMS Credits Widget */}
+            <div className="flex items-center gap-0.5 sm:gap-1.5 shrink-0 min-w-0">
               <SmsCreditsWidget />
-              
-              {/* Notifications */}
-              <button className="p-2 hover:bg-slate-100 rounded-lg transition-colors relative">
+
+              <button
+                className="p-2 hover:bg-slate-100 rounded-lg transition-colors relative shrink-0 min-h-[40px] min-w-[40px] flex items-center justify-center"
+                aria-label="Notifications"
+              >
                 <Bell size={18} className="text-slate-600" />
                 <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
               </button>
-              
-              {/* User Avatar */}
-              <button className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-100 rounded-xl transition-colors">
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#0F766E] to-[#115E59] flex items-center justify-center">
+
+              <button className="flex items-center gap-2 px-1.5 sm:px-2 py-1.5 hover:bg-slate-100 rounded-xl transition-colors shrink-0 min-h-[40px]">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#0F766E] to-[#115E59] flex items-center justify-center shrink-0">
                   <User size={16} className="text-white" />
                 </div>
                 <ChevronDown size={14} className="text-slate-600 hidden md:block" />
@@ -453,8 +453,8 @@ export function PortalLayout({ children, activeSection }: PortalLayoutProps) {
         )}
 
         {/* Page Content */}
-        <main className="flex-1 p-3 sm:p-4 md:p-6 lg:p-8 overflow-x-hidden overflow-y-auto bg-[#F9FAFB]">
-          <div className="max-w-7xl mx-auto w-full">
+        <main className="flex-1 p-4 sm:p-4 md:p-6 lg:p-8 overflow-x-hidden overflow-y-auto bg-[#F9FAFB]">
+          <div className="max-w-7xl mx-auto w-full min-w-0 max-w-full">
             {children}
           </div>
         </main>
