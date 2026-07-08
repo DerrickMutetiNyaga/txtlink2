@@ -545,6 +545,70 @@ export default function SettingsPage() {
                       </Button>
                     </div>
                   </div>
+
+                  <div className="rounded-xl border border-slate-200 p-5 bg-slate-50/50">
+                    <h3 className="text-base font-semibold text-slate-900 mb-1">
+                      Phone Fallback Queue Retention
+                    </h3>
+                    <p className="text-sm text-slate-600 mb-4">
+                      Completed phone fallback jobs are automatically removed after this many days.
+                      Maximum retention is 3 days.
+                    </p>
+                    <div className="space-y-3">
+                      <label className="block text-sm font-medium text-slate-700">
+                        Auto-delete completed queue jobs after
+                      </label>
+                      <select
+                        value={String(userProfile?.smsFallbackRetentionDays ?? 3)}
+                        onChange={(e) => {
+                          setUserProfile((prev: any) => ({
+                            ...prev,
+                            smsFallbackRetentionDays: parseInt(e.target.value, 10),
+                          }))
+                        }}
+                        className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                      >
+                        <option value="1">1 day</option>
+                        <option value="2">2 days</option>
+                        <option value="3">3 days (maximum)</option>
+                      </select>
+                      <Button
+                        type="button"
+                        disabled={saving}
+                        onClick={async () => {
+                          setSaving(true)
+                          try {
+                            const token = localStorage.getItem('token')
+                            const response = await fetch('/api/user/profile', {
+                              method: 'PATCH',
+                              headers: {
+                                'Content-Type': 'application/json',
+                                Authorization: `Bearer ${token}`,
+                              },
+                              body: JSON.stringify({
+                                smsFallbackRetentionDays:
+                                  userProfile?.smsFallbackRetentionDays ?? 3,
+                              }),
+                            })
+                            const data = await response.json()
+                            if (response.ok) {
+                              setUserProfile(data.user)
+                              alert('Phone fallback retention saved.')
+                            } else {
+                              alert(data.error || 'Failed to save fallback retention setting')
+                            }
+                          } catch {
+                            alert('Failed to save fallback retention setting')
+                          } finally {
+                            setSaving(false)
+                          }
+                        }}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl"
+                      >
+                        {saving ? 'Saving…' : 'Save Fallback Retention'}
+                      </Button>
+                    </div>
+                  </div>
                 </div>
               </Card>
             )}

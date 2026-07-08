@@ -6,6 +6,11 @@ import {
   ACTIVE_FALLBACK_JOB_STATUSES,
   COMPLETED_FALLBACK_JOB_STATUSES,
 } from '@/lib/services/sms-fallback/phone-status'
+import {
+  cleanupOldFallbackJobsForUser,
+  FALLBACK_QUEUE_PAGE_SIZE,
+  resolveUserFallbackRetentionDays,
+} from '@/lib/services/sms-fallback/job-cleanup'
 import mongoose from 'mongoose'
 
 export async function GET(request: NextRequest) {
@@ -16,6 +21,14 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url)
     const filter = searchParams.get('filter') || 'active'
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1)
+    const limit = Math.min(
+      FALLBACK_QUEUE_PAGE_SIZE,
+      Math.max(1, parseInt(searchParams.get('limit') || String(FALLBACK_QUEUE_PAGE_SIZE), 10) || FALLBACK_QUEUE_PAGE_SIZE)
+    )
+
+    const retentionDays = await resolveUserFallbackRetentionDays(userId)
+    await cleanupOldFallbackJobsForUser(userId, retentionDays)
 
     let statusFilter: Record<string, unknown> = {}
     if (filter === 'active') {
@@ -24,14 +37,29 @@ export async function GET(request: NextRequest) {
       statusFilter = { status: { $in: [...COMPLETED_FALLBACK_JOB_STATUSES] } }
     }
 
-    const jobs = await SmsFallbackJob.find({ userId, ...statusFilter })
-      .sort({ createdAt: -1 })
-      .limit(50)
-      .lean()
+    const query = { userId, ...statusFilter }
+    const skip = (page - 1) * limit
+
+    const [total, jobs] = await Promise.all([
+      SmsFallbackJob.countDocuments(query),
+      SmsFallbackJob.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+    ])
+
+    const totalPages = Math.max(1, Math.ceil(total / limit))
 
     return NextResponse.json({
       success: true,
       filter,
+      retentionDays,
+      maxRetentionDays: 3,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages,
+        hasNext: page < totalPages,
+        hasPrev: page > 1,
+      },
       jobs: jobs.map((job) => ({
         id: String(job._id),
         originalSmsId: job.originalSmsId,

@@ -19,6 +19,8 @@ export interface IUser {
   isActive: boolean
   /** Max SMS history records to keep; null = unlimited */
   smsHistoryRetentionLimit?: number | null
+  /** Completed phone fallback queue jobs auto-delete after this many days (max 3) */
+  smsFallbackRetentionDays?: number
   createdAt: Date
   updatedAt: Date
 }
@@ -35,6 +37,7 @@ const UserSchema = new Schema<IUser>(
     smsPriceUsdOverride: { type: Number },
     isActive: { type: Boolean, default: true },
     smsHistoryRetentionLimit: { type: Number, default: 10000 },
+    smsFallbackRetentionDays: { type: Number, default: 3, min: 1, max: 3 },
   },
   { timestamps: true }
 )

@@ -25,6 +25,7 @@ import {
   RotateCw,
   CheckCircle2,
   ChevronRight,
+  ChevronLeft,
 } from 'lucide-react'
 import {
   Collapsible,
@@ -84,6 +85,15 @@ interface FallbackJobRow {
   failureCode?: string | null
   resetReason?: string | null
   isTest?: boolean
+}
+
+interface QueuePagination {
+  page: number
+  limit: number
+  total: number
+  totalPages: number
+  hasNext: boolean
+  hasPrev: boolean
 }
 
 const BTN = {
@@ -169,6 +179,16 @@ export default function SmsGatewayPage() {
   const [copiedField, setCopiedField] = useState<string | null>(null)
   const [fallbackJobs, setFallbackJobs] = useState<FallbackJobRow[]>([])
   const [queueFilter, setQueueFilter] = useState<'active' | 'completed' | 'all'>('active')
+  const [queuePage, setQueuePage] = useState(1)
+  const [queuePagination, setQueuePagination] = useState<QueuePagination>({
+    page: 1,
+    limit: 5,
+    total: 0,
+    totalPages: 1,
+    hasNext: false,
+    hasPrev: false,
+  })
+  const [fallbackRetentionDays, setFallbackRetentionDays] = useState(3)
   const [showTestModal, setShowTestModal] = useState(false)
   const [testPhone, setTestPhone] = useState('')
   const [testMessage, setTestMessage] = useState('TXTLINK test — phone gateway connection OK.')
@@ -197,7 +217,7 @@ export default function SmsGatewayPage() {
         fetch('/api/user/sms-gateway', {
           headers: { Authorization: `Bearer ${token}` },
         }),
-        fetch(`/api/user/sms-fallback?filter=${queueFilter}`, {
+        fetch(`/api/user/sms-fallback?filter=${queueFilter}&page=${queuePage}&limit=5`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
       ])
@@ -208,13 +228,19 @@ export default function SmsGatewayPage() {
       if (jobsRes.ok) {
         const data = await jobsRes.json()
         setFallbackJobs(data.jobs || [])
+        if (data.pagination) {
+          setQueuePagination(data.pagination)
+        }
+        if (typeof data.retentionDays === 'number') {
+          setFallbackRetentionDays(data.retentionDays)
+        }
       }
     } catch (error) {
       console.error('Failed to fetch gateway status:', error)
     } finally {
       setLoading(false)
     }
-  }, [queueFilter])
+  }, [queueFilter, queuePage])
 
   useEffect(() => {
     fetchStatus()
@@ -925,15 +951,6 @@ export default function SmsGatewayPage() {
                 <span className="text-sm text-[#64748B]">Replace old active token</span>
               </label>
 
-              <div className="mb-5 max-w-2xl rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] p-3">
-                <p className="text-xs font-medium text-[#64748B] mb-1">
-                  API URL inside connection code
-                </p>
-                <code className="text-xs font-mono text-[#0F172A] break-all">
-                  {apiBaseUrl || 'Loading...'}
-                </code>
-              </div>
-
               {!connectionCode ? (
                 <Button
                   className={`w-full sm:w-auto ${BTN.primary}`}
@@ -1131,7 +1148,10 @@ export default function SmsGatewayPage() {
                       <button
                         key={f}
                         type="button"
-                        onClick={() => setQueueFilter(f)}
+                        onClick={() => {
+                          setQueueFilter(f)
+                          setQueuePage(1)
+                        }}
                         className={`px-3 py-1.5 text-xs font-semibold capitalize transition-colors ${
                           queueFilter === f
                             ? 'bg-[#2F9B73] text-white'
@@ -1157,6 +1177,16 @@ export default function SmsGatewayPage() {
                 </div>
               </div>
 
+              <p className="text-xs text-[#64748B] mb-4">
+                Showing up to 5 jobs per page. Completed jobs auto-delete after{' '}
+                <strong className="text-[#0F172A]">{fallbackRetentionDays}</strong> day
+                {fallbackRetentionDays === 1 ? '' : 's'} (max 3 days). Change in{' '}
+                <a href="/app/settings" className="text-[#2F9B73] hover:underline">
+                  Settings → Preferences
+                </a>
+                .
+              </p>
+
               {fallbackJobs.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-[#E2E8F0] bg-[#F8FAFC] py-10 px-6 text-center">
                   <Inbox className="mx-auto mb-3 h-8 w-8 text-[#64748B]" />
@@ -1164,8 +1194,13 @@ export default function SmsGatewayPage() {
                   <p className="text-sm text-[#64748B] mt-1">
                     Phone fallback jobs will appear here when provider delivery fails.
                   </p>
+                  <p className="text-xs text-[#64748B] mt-3">
+                    Completed jobs auto-delete after {fallbackRetentionDays} day
+                    {fallbackRetentionDays === 1 ? '' : 's'} (max 3 days).
+                  </p>
                 </div>
               ) : (
+                <>
                 <div className="overflow-x-auto -mx-1 px-1">
                   <table className="w-full text-sm min-w-[900px]">
                     <thead>
@@ -1276,6 +1311,38 @@ export default function SmsGatewayPage() {
                     </tbody>
                   </table>
                 </div>
+
+                {queuePagination.totalPages > 1 && (
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4 pt-4 border-t border-[#E2E8F0]">
+                    <p className="text-xs text-[#64748B]">
+                      Page {queuePagination.page} of {queuePagination.totalPages} ·{' '}
+                      {queuePagination.total} job{queuePagination.total === 1 ? '' : 's'}
+                    </p>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className={BTN.secondary}
+                        disabled={!queuePagination.hasPrev}
+                        onClick={() => setQueuePage((p) => Math.max(1, p - 1))}
+                      >
+                        <ChevronLeft size={16} className="mr-1" />
+                        Previous
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className={BTN.secondary}
+                        disabled={!queuePagination.hasNext}
+                        onClick={() => setQueuePage((p) => p + 1)}
+                      >
+                        Next
+                        <ChevronRight size={16} className="ml-1" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                </>
               )}
             </Card>
 

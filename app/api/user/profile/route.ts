@@ -10,6 +10,7 @@ import { User } from '@/lib/db/models'
 import { requireAuth } from '@/lib/auth/middleware'
 import mongoose from 'mongoose'
 import { normalizeRetentionLimit, DEFAULT_SMS_HISTORY_RETENTION } from '@/lib/services/sms-history/constants'
+import { normalizeFallbackRetentionDays } from '@/lib/services/sms-fallback/job-cleanup'
 
 export async function GET(request: NextRequest) {
   try {
@@ -36,6 +37,9 @@ export async function GET(request: NextRequest) {
           userDoc.smsHistoryRetentionLimit === null
             ? null
             : userDoc.smsHistoryRetentionLimit ?? DEFAULT_SMS_HISTORY_RETENTION,
+        smsFallbackRetentionDays: normalizeFallbackRetentionDays(
+          userDoc.smsFallbackRetentionDays
+        ),
         createdAt: userDoc.createdAt,
       },
     })
@@ -66,6 +70,11 @@ export async function PATCH(request: NextRequest) {
     if (body.smsHistoryRetentionLimit !== undefined) {
       allowedFields.smsHistoryRetentionLimit = normalizeRetentionLimit(body.smsHistoryRetentionLimit)
     }
+    if (body.smsFallbackRetentionDays !== undefined) {
+      allowedFields.smsFallbackRetentionDays = normalizeFallbackRetentionDays(
+        body.smsFallbackRetentionDays
+      )
+    }
 
     // Email cannot be changed through this endpoint (would need separate verification)
     // Password changes should go through a separate endpoint
@@ -94,6 +103,9 @@ export async function PATCH(request: NextRequest) {
           userDoc.smsHistoryRetentionLimit === null
             ? null
             : userDoc.smsHistoryRetentionLimit ?? DEFAULT_SMS_HISTORY_RETENTION,
+        smsFallbackRetentionDays: normalizeFallbackRetentionDays(
+          userDoc.smsFallbackRetentionDays
+        ),
       },
     })
   } catch (error: any) {
