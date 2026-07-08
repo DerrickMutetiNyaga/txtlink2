@@ -58,7 +58,21 @@ export async function GET(request: NextRequest) {
           $group: {
             _id: null,
             totalRequested: { $sum: 1 },
-            totalDelivered: { $sum: { $cond: [{ $eq: ['$status', 'delivered'] }, 1, 0] } },
+            totalDelivered: {
+              $sum: {
+                $cond: [
+                  {
+                    $or: [
+                      { $eq: ['$status', 'delivered'] },
+                      { $eq: ['$deliveryMethod', 'android_phone_gateway'] },
+                      { $in: ['$fallbackStatus', ['delivered_via_phone', 'sent_via_phone']] },
+                    ],
+                  },
+                  1,
+                  0,
+                ],
+              },
+            },
             pending: {
               $sum: {
                 $cond: [
@@ -106,7 +120,21 @@ export async function GET(request: NextRequest) {
           $group: {
             _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
             totalRequested: { $sum: 1 },
-            totalDelivered: { $sum: { $cond: [{ $eq: ['$status', 'delivered'] }, 1, 0] } },
+            totalDelivered: {
+              $sum: {
+                $cond: [
+                  {
+                    $or: [
+                      { $eq: ['$status', 'delivered'] },
+                      { $eq: ['$deliveryMethod', 'android_phone_gateway'] },
+                      { $in: ['$fallbackStatus', ['delivered_via_phone', 'sent_via_phone']] },
+                    ],
+                  },
+                  1,
+                  0,
+                ],
+              },
+            },
             pending: {
               $sum: { $cond: [{ $in: ['$status', ['queued', 'sent']] }, 1, 0] },
             },

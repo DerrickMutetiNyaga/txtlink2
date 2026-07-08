@@ -22,6 +22,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { useToast } from '@/hooks/use-toast'
 import { 
   Search, 
@@ -36,9 +44,11 @@ import {
   Phone,
   MessageSquare,
   FileText,
-  DollarSign
+  DollarSign,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import Link from 'next/link'
 import SenderIdAdBanner from '@/components/sender-id-ad/SenderIdAdBanner'
 
@@ -46,11 +56,13 @@ import SenderIdAdBanner from '@/components/sender-id-ad/SenderIdAdBanner'
 interface SMSMessage {
   id: string
   time: string
+  createdAt?: string
   recipient: string
   senderId: string
   campaign: string
   message: string
   status: string
+  displayStatus?: string
   deliveryMethod?: string
   fallbackStatus?: string | null
   fallbackJobId?: string | null
@@ -60,10 +72,30 @@ interface SMSMessage {
   providerRetryStatus?: string | null
   failureReason?: string
   messageId: string
-  sentAt: string | Date
+  sentAt: string | Date | null
+  deliveredAt?: string | null
   cost: number
   retryCount: number
   lastAttemptAt: string | Date | null
+  source?: string | null
+  apiKeyName?: string | null
+}
+
+interface PaginationInfo {
+  page: number
+  limit: number
+  total: number
+  totalPages: number
+  hasNext: boolean
+  hasPrev: boolean
+}
+
+function formatDateLabel(dateStr: string): string {
+  return new Date(dateStr).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })
 }
 
 function getFallbackBadgeClass(fallbackStatus?: string | null): string {
@@ -117,6 +149,7 @@ function getFallbackBadgeLabel(
 }
 
 function getPrimaryStatusLabel(sms: SMSMessage): string {
+  if (sms.displayStatus) return sms.displayStatus
   if (sms.status === 'delivered' && sms.deliveryMethod === 'android_phone_gateway') {
     return 'Delivered via Phone'
   }
@@ -127,10 +160,27 @@ function getPrimaryStatusLabel(sms: SMSMessage): string {
 export default function SMSHistoryPage() {
   const { toast } = useToast()
   const [searchQuery, setSearchQuery] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [senderIdFilter, setSenderIdFilter] = useState('all')
   const [campaignFilter, setCampaignFilter] = useState('all')
   const [countryFilter, setCountryFilter] = useState('all')
+  const [page, setPage] = useState(1)
+  const [limit, setLimit] = useState(25)
+  const [pagination, setPagination] = useState<PaginationInfo>({
+    page: 1,
+    limit: 25,
+    total: 0,
+    totalPages: 1,
+    hasNext: false,
+    hasPrev: false,
+  })
+  const [fromDate, setFromDate] = useState('')
+  const [toDate, setToDate] = useState('')
+  const [draftFromDate, setDraftFromDate] = useState('')
+  const [draftToDate, setDraftToDate] = useState('')
+  const [isDateDialogOpen, setIsDateDialogOpen] = useState(false)
+  const [exportingCsv, setExportingCsv] = useState(false)
   const [smsHistory, setSmsHistory] = useState<SMSMessage[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedSms, setSelectedSms] = useState<SMSMessage | null>(null)
@@ -143,7 +193,41 @@ export default function SMSHistoryPage() {
   })
   const [failureInsights, setFailureInsights] = useState<Array<{ reason: string; count: number; percentage: number }>>([])
   const [availableSenderIds, setAvailableSenderIds] = useState<string[]>([])
+  const [availableCampaigns, setAvailableCampaigns] = useState<string[]>([
+    'Send SMS',
+    'Bulk SMS',
+    'API',
+    'System',
+    'Test',
+  ])
   const [isAutoRefreshing, setIsAutoRefreshing] = useState(false)
+
+  const buildQueryParams = useCallback(() => {
+    const params = new URLSearchParams({
+      page: String(page),
+      limit: String(limit),
+      status: statusFilter,
+      senderId: senderIdFilter,
+      campaign: campaignFilter,
+      country: countryFilter,
+      search: debouncedSearch.trim(),
+    })
+    if (fromDate) params.set('fromDate', fromDate)
+    if (toDate) params.set('toDate', toDate)
+    return params
+  }, [page, limit, statusFilter, senderIdFilter, campaignFilter, countryFilter, debouncedSearch, fromDate, toDate])
+
+  const hasActiveFilters = useMemo(() => {
+    return (
+      statusFilter !== 'all' ||
+      senderIdFilter !== 'all' ||
+      campaignFilter !== 'all' ||
+      countryFilter !== 'all' ||
+      Boolean(searchQuery.trim()) ||
+      Boolean(fromDate) ||
+      Boolean(toDate)
+    )
+  }, [statusFilter, senderIdFilter, campaignFilter, countryFilter, searchQuery, fromDate, toDate])
 
   // Fetch SMS history function
   const fetchSMSHistory = useCallback(async (showLoading = true) => {
@@ -151,13 +235,9 @@ export default function SMSHistoryPage() {
       if (showLoading) setLoading(true)
       setIsAutoRefreshing(true)
       const token = localStorage.getItem('token')
-      const params = new URLSearchParams({
-        status: statusFilter,
-        senderId: senderIdFilter,
-        search: searchQuery,
-      })
+      const params = buildQueryParams()
 
-      const response = await fetch(`/api/user/sms-history?${params.toString()}`, {
+      const response = await fetch(`/api/user/sms/history?${params.toString()}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -165,17 +245,27 @@ export default function SMSHistoryPage() {
 
       if (response.ok) {
         const data = await response.json()
-        setSmsHistory(data.messages || [])
+        setSmsHistory(data.data || data.messages || [])
+        setPagination(
+          data.pagination || {
+            page,
+            limit,
+            total: 0,
+            totalPages: 1,
+            hasNext: false,
+            hasPrev: false,
+          }
+        )
         setDeliveryStats(data.stats || {
           delivered: { count: 0, percentage: 0 },
           failed: { count: 0, percentage: 0 },
           pending: { count: 0, percentage: 0 },
         })
         setFailureInsights(data.failureInsights || [])
-        
-        // Extract unique sender IDs
-        const senderIds = [...new Set(data.messages?.map((msg: SMSMessage) => msg.senderId) || [])] as string[]
-        setAvailableSenderIds(senderIds)
+        setAvailableSenderIds(data.filters?.availableSenderIds || [])
+        if (data.filters?.availableCampaigns?.length) {
+          setAvailableCampaigns(data.filters.availableCampaigns)
+        }
       }
     } catch (error) {
       console.error('Failed to fetch SMS history:', error)
@@ -190,12 +280,21 @@ export default function SMSHistoryPage() {
       if (showLoading) setLoading(false)
       setIsAutoRefreshing(false)
     }
-  }, [statusFilter, senderIdFilter, searchQuery, toast])
+  }, [buildQueryParams, page, limit, toast])
+
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery)
+      setPage(1)
+    }, 400)
+    return () => clearTimeout(timer)
+  }, [searchQuery])
 
   // Initial fetch and when filters change
   useEffect(() => {
     fetchSMSHistory(true)
-  }, [statusFilter, senderIdFilter, searchQuery])
+  }, [page, limit, statusFilter, senderIdFilter, campaignFilter, countryFilter, debouncedSearch, fromDate, toDate])
 
   // NOTE: No automatic status polling here by design.
   // Delivery statuses are kept up to date in MongoDB by the dedicated Render
@@ -222,11 +321,80 @@ export default function SMSHistoryPage() {
     }
   }
 
-  // Filter is now handled server-side, but we can add client-side filtering for campaign if needed
-  const filteredHistory = smsHistory.filter((sms) => {
-    const matchesCampaign = campaignFilter === 'all' || sms.campaign === campaignFilter
-    return matchesCampaign
-  })
+  // Server-side filtering handles all filters
+  const filteredHistory = smsHistory
+
+  const handleExportCsv = async () => {
+    try {
+      setExportingCsv(true)
+      const token = localStorage.getItem('token')
+      const params = buildQueryParams()
+      params.delete('page')
+      params.delete('limit')
+
+      const response = await fetch(`/api/user/sms/history/export.csv?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+
+      if (!response.ok) {
+        throw new Error('Export failed')
+      }
+
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = `sms-history-${new Date().toISOString().slice(0, 10)}.csv`
+      document.body.appendChild(anchor)
+      anchor.click()
+      anchor.remove()
+      window.URL.revokeObjectURL(url)
+
+      toast({ title: 'Export started', description: 'Your CSV download should begin shortly.' })
+    } catch {
+      toast({
+        title: 'Export failed',
+        description: 'Could not export SMS history.',
+        variant: 'destructive',
+      })
+    } finally {
+      setExportingCsv(false)
+    }
+  }
+
+  const handleApplyDateRange = () => {
+    setFromDate(draftFromDate)
+    setToDate(draftToDate)
+    setPage(1)
+    setIsDateDialogOpen(false)
+  }
+
+  const handleClearDateRange = () => {
+    setDraftFromDate('')
+    setDraftToDate('')
+    setFromDate('')
+    setToDate('')
+    setPage(1)
+    setIsDateDialogOpen(false)
+  }
+
+  const handleClearAllFilters = () => {
+    setStatusFilter('all')
+    setSenderIdFilter('all')
+    setCampaignFilter('all')
+    setCountryFilter('all')
+    setSearchQuery('')
+    setFromDate('')
+    setToDate('')
+    setDraftFromDate('')
+    setDraftToDate('')
+    setPage(1)
+  }
+
+  const resetPageOnFilter = (setter: (value: string) => void) => (value: string) => {
+    setter(value)
+    setPage(1)
+  }
 
   const failedMessages = filteredHistory.filter(sms => sms.status === 'failed')
   const canRetry = failedMessages.length > 0 && failedMessages.every(sms => {
@@ -357,6 +525,11 @@ export default function SMSHistoryPage() {
               </Button>
               <Button
                 variant="outline"
+                onClick={() => {
+                  setDraftFromDate(fromDate)
+                  setDraftToDate(toDate)
+                  setIsDateDialogOpen(true)
+                }}
                 className="h-9 rounded-xl border border-slate-200 px-3 sm:px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 hover:text-slate-900 hover:border-slate-300"
               >
                 <Calendar className="w-4 h-4 sm:mr-2" />
@@ -364,10 +537,12 @@ export default function SMSHistoryPage() {
               </Button>
               <Button
                 variant="outline"
-                className="h-9 rounded-xl border border-slate-200 px-3 sm:px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 hover:text-slate-900 hover:border-slate-300"
+                onClick={handleExportCsv}
+                disabled={exportingCsv}
+                className="h-9 rounded-xl border border-slate-200 px-3 sm:px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 hover:text-slate-900 hover:border-slate-300 disabled:opacity-50"
               >
                 <Download className="w-4 h-4 sm:mr-2" />
-                <span className="hidden sm:inline">Export CSV</span>
+                <span className="hidden sm:inline">{exportingCsv ? 'Exporting…' : 'Export CSV'}</span>
               </Button>
               <Link href="/app/send-sms" className="w-full sm:w-auto">
                 <Button className="w-full sm:w-auto h-9 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700">
@@ -382,20 +557,25 @@ export default function SMSHistoryPage() {
           <div className="mt-4 flex flex-wrap gap-2">
             <select
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
+              onChange={(e) => resetPageOnFilter(setStatusFilter)(e.target.value)}
               className="h-9 rounded-full border border-slate-200 bg-slate-50 px-4 text-sm text-slate-700 hover:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
             >
               <option value="all">All Status</option>
               <option value="delivered">Delivered</option>
-              <option value="failed">Failed</option>
-              <option value="pending">Pending</option>
-              <option value="queued">Queued</option>
+              <option value="delivered_via_phone">Delivered via Phone</option>
               <option value="sent">Sent</option>
+              <option value="pending">Pending</option>
+              <option value="failed">Failed</option>
+              <option value="queued_for_phone">Queued for Phone</option>
+              <option value="retrying_provider">Retrying Provider</option>
+              <option value="retry_waiting_delivery">Retry Waiting Delivery</option>
+              <option value="phone_failed">Phone Failed</option>
+              <option value="phone_requires_topup">Phone Needs Reload</option>
             </select>
 
             <select
               value={senderIdFilter}
-              onChange={(e) => setSenderIdFilter(e.target.value)}
+              onChange={(e) => resetPageOnFilter(setSenderIdFilter)(e.target.value)}
               className="h-9 rounded-full border border-slate-200 bg-slate-50 px-4 text-sm text-slate-700 hover:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
             >
               <option value="all">All Sender IDs</option>
@@ -408,19 +588,20 @@ export default function SMSHistoryPage() {
 
             <select
               value={campaignFilter}
-              onChange={(e) => setCampaignFilter(e.target.value)}
+              onChange={(e) => resetPageOnFilter(setCampaignFilter)(e.target.value)}
               className="h-9 rounded-full border border-slate-200 bg-slate-50 px-4 text-sm text-slate-700 hover:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
             >
               <option value="all">All Campaigns</option>
-              <option value="Payment Reminder">Payment Reminder</option>
-              <option value="Welcome Message">Welcome Message</option>
-              <option value="Order Confirmation">Order Confirmation</option>
-              <option value="System Alert">System Alert</option>
+              {availableCampaigns.map((campaign) => (
+                <option key={campaign} value={campaign}>
+                  {campaign}
+                </option>
+              ))}
             </select>
 
             <select
               value={countryFilter}
-              onChange={(e) => setCountryFilter(e.target.value)}
+              onChange={(e) => resetPageOnFilter(setCountryFilter)(e.target.value)}
               className="h-9 rounded-full border border-slate-200 bg-slate-50 px-4 text-sm text-slate-700 hover:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
             >
               <option value="all">All Countries</option>
@@ -428,8 +609,90 @@ export default function SMSHistoryPage() {
               <option value="UG">Uganda</option>
               <option value="TZ">Tanzania</option>
             </select>
+
+            <select
+              value={String(limit)}
+              onChange={(e) => {
+                setLimit(parseInt(e.target.value, 10))
+                setPage(1)
+              }}
+              className="h-9 rounded-full border border-slate-200 bg-slate-50 px-4 text-sm text-slate-700 hover:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            >
+              <option value="25">25 / page</option>
+              <option value="50">50 / page</option>
+              <option value="100">100 / page</option>
+            </select>
           </div>
+
+          {(fromDate || toDate || hasActiveFilters) && (
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              {fromDate && toDate && (
+                <Badge variant="outline" className="rounded-full bg-emerald-50 text-emerald-800 border-emerald-200">
+                  Showing {formatDateLabel(fromDate)} - {formatDateLabel(toDate)}
+                </Badge>
+              )}
+              {fromDate && !toDate && (
+                <Badge variant="outline" className="rounded-full bg-emerald-50 text-emerald-800 border-emerald-200">
+                  From {formatDateLabel(fromDate)}
+                </Badge>
+              )}
+              {!fromDate && toDate && (
+                <Badge variant="outline" className="rounded-full bg-emerald-50 text-emerald-800 border-emerald-200">
+                  Until {formatDateLabel(toDate)}
+                </Badge>
+              )}
+              {statusFilter !== 'all' && (
+                <Badge variant="outline" className="rounded-full">Status: {statusFilter.replace(/_/g, ' ')}</Badge>
+              )}
+              {searchQuery.trim() && (
+                <Badge variant="outline" className="rounded-full">Search: {searchQuery.trim()}</Badge>
+              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleClearAllFilters}
+                className="h-7 text-xs text-slate-600 hover:text-emerald-700"
+              >
+                Clear filters
+              </Button>
+            </div>
+          )}
         </Card>
+
+        <Dialog open={isDateDialogOpen} onOpenChange={setIsDateDialogOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Date Range</DialogTitle>
+              <DialogDescription>Filter SMS history by created date.</DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-2">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">From Date</label>
+                <Input
+                  type="date"
+                  value={draftFromDate}
+                  onChange={(e) => setDraftFromDate(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">To Date</label>
+                <Input
+                  type="date"
+                  value={draftToDate}
+                  onChange={(e) => setDraftToDate(e.target.value)}
+                />
+              </div>
+            </div>
+            <DialogFooter className="gap-2">
+              <Button variant="outline" onClick={handleClearDateRange}>
+                Clear
+              </Button>
+              <Button onClick={handleApplyDateRange} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+                Apply
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Main Content - 2-column layout */}
         <div className="grid grid-cols-12 gap-6">
@@ -485,14 +748,22 @@ export default function SMSHistoryPage() {
               ) : filteredHistory.length === 0 ? (
                 <div className="p-12 text-center text-slate-500">
                   <MessageSquare className="w-12 h-12 mx-auto mb-4 text-slate-300" />
-                  <p className="text-base font-medium text-slate-600 mb-1">No SMS messages found</p>
-                  <p className="text-sm text-slate-400">Start sending SMS to see your history here</p>
-                  <Link href="/app/send-sms">
-                    <Button className="mt-4 bg-emerald-600 hover:bg-emerald-700 text-white">
-                      <Plus className="w-4 h-4 mr-2" />
-                      Send Your First SMS
-                    </Button>
-                  </Link>
+                  <p className="text-base font-medium text-slate-600 mb-1">
+                    {hasActiveFilters
+                      ? 'No SMS records found for the selected filters.'
+                      : 'No SMS messages found'}
+                  </p>
+                  {!hasActiveFilters && (
+                    <>
+                      <p className="text-sm text-slate-400">Start sending SMS to see your history here</p>
+                      <Link href="/app/send-sms">
+                        <Button className="mt-4 bg-emerald-600 hover:bg-emerald-700 text-white">
+                          <Plus className="w-4 h-4 mr-2" />
+                          Send Your First SMS
+                        </Button>
+                      </Link>
+                    </>
+                  )}
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -554,6 +825,39 @@ export default function SMSHistoryPage() {
                       ))}
                     </tbody>
                   </table>
+                </div>
+              )}
+
+              {!loading && filteredHistory.length > 0 && (
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-t border-slate-200 px-5 py-4 bg-slate-50/60">
+                  <p className="text-sm text-slate-600">
+                    Total records: <span className="font-semibold text-slate-900">{pagination.total}</span>
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPage((p) => Math.max(p - 1, 1))}
+                      disabled={!pagination.hasPrev}
+                      className="h-8 rounded-lg"
+                    >
+                      <ChevronLeft className="w-4 h-4 mr-1" />
+                      Previous
+                    </Button>
+                    <span className="text-sm text-slate-600 px-2">
+                      Page {pagination.page} of {pagination.totalPages}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPage((p) => p + 1)}
+                      disabled={!pagination.hasNext}
+                      className="h-8 rounded-lg"
+                    >
+                      Next
+                      <ChevronRight className="w-4 h-4 ml-1" />
+                    </Button>
+                  </div>
                 </div>
               )}
             </Card>

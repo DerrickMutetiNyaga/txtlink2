@@ -9,7 +9,7 @@ import connectDB from '@/lib/db/connect'
 import { User } from '@/lib/db/models'
 import { requireAuth } from '@/lib/auth/middleware'
 import mongoose from 'mongoose'
-import bcrypt from 'bcryptjs'
+import { normalizeRetentionLimit, DEFAULT_SMS_HISTORY_RETENTION } from '@/lib/services/sms-history/constants'
 
 export async function GET(request: NextRequest) {
   try {
@@ -32,6 +32,10 @@ export async function GET(request: NextRequest) {
         phone: userDoc.phone || '',
         role: userDoc.role,
         isActive: userDoc.isActive,
+        smsHistoryRetentionLimit:
+          userDoc.smsHistoryRetentionLimit === null
+            ? null
+            : userDoc.smsHistoryRetentionLimit ?? DEFAULT_SMS_HISTORY_RETENTION,
         createdAt: userDoc.createdAt,
       },
     })
@@ -59,6 +63,9 @@ export async function PATCH(request: NextRequest) {
     const allowedFields: Record<string, any> = {}
     if (body.name !== undefined) allowedFields.name = body.name
     if (body.phone !== undefined) allowedFields.phone = body.phone
+    if (body.smsHistoryRetentionLimit !== undefined) {
+      allowedFields.smsHistoryRetentionLimit = normalizeRetentionLimit(body.smsHistoryRetentionLimit)
+    }
 
     // Email cannot be changed through this endpoint (would need separate verification)
     // Password changes should go through a separate endpoint
@@ -83,6 +90,10 @@ export async function PATCH(request: NextRequest) {
         phone: userDoc.phone || '',
         role: userDoc.role,
         isActive: userDoc.isActive,
+        smsHistoryRetentionLimit:
+          userDoc.smsHistoryRetentionLimit === null
+            ? null
+            : userDoc.smsHistoryRetentionLimit ?? DEFAULT_SMS_HISTORY_RETENTION,
       },
     })
   } catch (error: any) {

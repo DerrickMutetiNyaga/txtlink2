@@ -17,6 +17,8 @@ export interface IUser {
   creditsBalance?: number // Wallet balance in SMS credits (integer; 1 credit = 1 SMS segment up to 153 chars)
   smsPriceUsdOverride?: number // (Deprecated) was used for USD pricing; no longer in active use
   isActive: boolean
+  /** Max SMS history records to keep; null = unlimited */
+  smsHistoryRetentionLimit?: number | null
   createdAt: Date
   updatedAt: Date
 }
@@ -32,6 +34,7 @@ const UserSchema = new Schema<IUser>(
     creditsBalance: { type: Number, default: 0 },
     smsPriceUsdOverride: { type: Number },
     isActive: { type: Boolean, default: true },
+    smsHistoryRetentionLimit: { type: Number, default: 10000 },
   },
   { timestamps: true }
 )

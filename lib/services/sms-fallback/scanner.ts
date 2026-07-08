@@ -6,6 +6,7 @@ import {
   cancelDeliveredFallbackJobs,
 } from './queue-phone'
 import { resetStaleSendingJobs } from './stale-sending'
+import { cleanupOldSmsHistory } from '@/lib/services/sms-history/cleanup'
 import { getFallbackStaleMinutes } from './config'
 import { minutesAgo } from './helpers'
 import {
@@ -33,6 +34,10 @@ export interface FallbackScanResult {
     system: number
     test: number
     unset: number
+  }
+  smsHistoryCleanup?: {
+    usersProcessed: number
+    totalDeleted: number
   }
 }
 
@@ -118,13 +123,14 @@ export async function runSmsFallbackScan(): Promise<FallbackScanResult> {
   const providerDebug = createScanDebugStats()
   const phoneDebug = createScanDebugStats()
 
-  const [retriedProvider, queuedForPhone, cancelledBecauseDelivered, resetStaleSending, sourcesScanned] =
+  const [retriedProvider, queuedForPhone, cancelledBecauseDelivered, resetStaleSending, sourcesScanned, smsHistoryCleanup] =
     await Promise.all([
       scanAndRetryUndeliveredSms(providerDebug),
       scanRetryResultsAndQueuePhoneFallback(phoneDebug),
       cancelDeliveredFallbackJobs(),
       resetStaleSendingJobs(),
       countEligibleBySource(),
+      cleanupOldSmsHistory(),
     ])
 
   const merged = mergeDebugStats(providerDebug, phoneDebug)
@@ -137,5 +143,9 @@ export async function runSmsFallbackScan(): Promise<FallbackScanResult> {
     cancelledBecauseDelivered,
     resetStaleSending,
     sourcesScanned,
+    smsHistoryCleanup: {
+      usersProcessed: smsHistoryCleanup.usersProcessed,
+      totalDeleted: smsHistoryCleanup.totalDeleted,
+    },
   }
 }

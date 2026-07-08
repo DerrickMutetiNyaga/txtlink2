@@ -441,26 +441,110 @@ export default function SettingsPage() {
                     <p className="text-sm text-slate-500">Customize your experience</p>
                   </div>
                 </div>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">Language</label>
-                    <select className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
-                      <option>English</option>
-                      <option>Spanish</option>
-                      <option>French</option>
-                    </select>
+                <div className="space-y-6">
+                  <div className="rounded-xl border border-slate-200 p-5 bg-slate-50/50">
+                    <h3 className="text-base font-semibold text-slate-900 mb-1">SMS History Retention</h3>
+                    <p className="text-sm text-slate-600 mb-4">
+                      This controls how many SMS history records are kept in your account. When the limit
+                      is exceeded, the oldest records are automatically removed.
+                    </p>
+                    <div className="space-y-3">
+                      <label className="block text-sm font-medium text-slate-700">
+                        Maximum SMS history records to keep
+                      </label>
+                      <select
+                        value={
+                          userProfile?.smsHistoryRetentionLimit === null
+                            ? 'unlimited'
+                            : String(userProfile?.smsHistoryRetentionLimit ?? 10000)
+                        }
+                        onChange={(e) => {
+                          const value = e.target.value
+                          setUserProfile((prev: any) => ({
+                            ...prev,
+                            smsHistoryRetentionLimit:
+                              value === 'unlimited' ? null : parseInt(value, 10),
+                          }))
+                        }}
+                        className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                      >
+                        <option value="1000">1,000</option>
+                        <option value="5000">5,000</option>
+                        <option value="10000">10,000 (default)</option>
+                        <option value="25000">25,000</option>
+                        <option value="50000">50,000</option>
+                        <option value="100000">100,000</option>
+                        <option value="unlimited">Unlimited</option>
+                      </select>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-2">
+                          Custom limit (optional)
+                        </label>
+                        <input
+                          type="number"
+                          min={1000}
+                          max={1000000}
+                          placeholder="Enter custom number"
+                          value={
+                            userProfile?.smsHistoryRetentionLimit &&
+                            ![1000, 5000, 10000, 25000, 50000, 100000].includes(
+                              userProfile.smsHistoryRetentionLimit
+                            )
+                              ? userProfile.smsHistoryRetentionLimit
+                              : ''
+                          }
+                          onChange={(e) => {
+                            const raw = e.target.value
+                            setUserProfile((prev: any) => ({
+                              ...prev,
+                              smsHistoryRetentionLimit: raw ? parseInt(raw, 10) : 10000,
+                            }))
+                          }}
+                          className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                        />
+                      </div>
+                      <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                        Deleting old SMS history is permanent unless you export CSV first.
+                      </p>
+                      <Button
+                        type="button"
+                        disabled={saving}
+                        onClick={async () => {
+                          setSaving(true)
+                          try {
+                            const token = localStorage.getItem('token')
+                            const response = await fetch('/api/user/profile', {
+                              method: 'PATCH',
+                              headers: {
+                                'Content-Type': 'application/json',
+                                Authorization: `Bearer ${token}`,
+                              },
+                              body: JSON.stringify({
+                                smsHistoryRetentionLimit:
+                                  userProfile?.smsHistoryRetentionLimit === null
+                                    ? 'unlimited'
+                                    : userProfile?.smsHistoryRetentionLimit ?? 10000,
+                              }),
+                            })
+                            const data = await response.json()
+                            if (response.ok) {
+                              setUserProfile(data.user)
+                              alert('SMS history retention saved.')
+                            } else {
+                              alert(data.error || 'Failed to save retention setting')
+                            }
+                          } catch {
+                            alert('Failed to save retention setting')
+                          } finally {
+                            setSaving(false)
+                          }
+                        }}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl"
+                      >
+                        {saving ? 'Saving…' : 'Save Retention Setting'}
+                      </Button>
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">Timezone</label>
-                    <select className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
-                      <option>UTC</option>
-                      <option>EST</option>
-                      <option>PST</option>
-                    </select>
-                  </div>
-                  <Button className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl">
-                    Save Preferences
-                  </Button>
                 </div>
               </Card>
             )}
