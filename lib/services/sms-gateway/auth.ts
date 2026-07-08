@@ -65,8 +65,12 @@ export async function authenticateGatewayDevice(
   const tokenHash = hashGatewayToken(token)
   const device = await SmsGatewayDevice.findOne({ tokenHash })
 
-  if (!device || !device.isActive) {
+  if (!device) {
     return { ok: false, status: 401, message: 'Unauthorized' }
+  }
+
+  if (!device.isActive) {
+    return { ok: false, status: 403, message: 'Device token disabled' }
   }
 
   const userAgent = request.headers.get('user-agent') || 'unknown'

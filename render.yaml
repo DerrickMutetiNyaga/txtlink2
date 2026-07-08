@@ -29,6 +29,16 @@ services:
         sync: false
       - key: SMS_GATEWAY_TOKEN_SECRET
         sync: false
+      - key: SMS_FALLBACK_ENABLED
+        value: "true"
+      - key: SMS_PROVIDER_RETRY_ENABLED
+        value: "true"
+      - key: SMS_FALLBACK_STALE_MINUTES
+        value: "7"
+      - key: SMS_PROVIDER_RETRY_WAIT_MINUTES
+        value: "7"
+      - key: CRON_SECRET
+        sync: false
       - key: NEXT_PUBLIC_BASE_URL
         sync: false
       - key: OWNER_EMAIL

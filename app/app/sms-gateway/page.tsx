@@ -13,6 +13,9 @@ import {
   Wifi,
   Shield,
   AlertTriangle,
+  ListOrdered,
+  Inbox,
+  FlaskConical,
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 
@@ -35,18 +38,33 @@ interface GatewayStatus {
   isGatewayRunning?: boolean | null
 }
 
+interface FallbackJobRow {
+  id: string
+  originalSmsId: string
+  recipientPhone: string
+  message: string
+  originalStatus?: string
+  retryStatus?: string
+  status: string
+  attempts: number
+  createdAt: string
+  isTest?: boolean
+}
+
 function StatusBadge({
   label,
   variant,
 }: {
   label: string
-  variant: 'green' | 'red' | 'amber' | 'gray'
+  variant: 'green' | 'red' | 'amber' | 'gray' | 'blue' | 'purple'
 }) {
   const styles = {
     green: 'bg-emerald-50 text-emerald-700 border-emerald-200',
     red: 'bg-red-50 text-red-700 border-red-200',
     amber: 'bg-amber-50 text-amber-700 border-amber-200',
     gray: 'bg-gray-100 text-gray-600 border-gray-200',
+    blue: 'bg-blue-50 text-blue-700 border-blue-200',
+    purple: 'bg-purple-50 text-purple-700 border-purple-200',
   }
 
   return (
@@ -69,6 +87,11 @@ export default function SmsGatewayPage() {
   const [newToken, setNewToken] = useState('')
   const [showTokenModal, setShowTokenModal] = useState(false)
   const [copiedField, setCopiedField] = useState<string | null>(null)
+  const [fallbackJobs, setFallbackJobs] = useState<FallbackJobRow[]>([])
+  const [showTestModal, setShowTestModal] = useState(false)
+  const [testPhone, setTestPhone] = useState('')
+  const [testMessage, setTestMessage] = useState('TXTLINK test — phone gateway connection OK.')
+  const [creatingTest, setCreatingTest] = useState(false)
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -79,12 +102,21 @@ export default function SmsGatewayPage() {
   const fetchStatus = useCallback(async () => {
     try {
       const token = localStorage.getItem('token')
-      const response = await fetch('/api/user/sms-gateway', {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      if (response.ok) {
-        const data = await response.json()
+      const [gatewayRes, jobsRes] = await Promise.all([
+        fetch('/api/user/sms-gateway', {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        fetch('/api/user/sms-fallback', {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+      ])
+      if (gatewayRes.ok) {
+        const data = await gatewayRes.json()
         setGateway(data.gateway)
+      }
+      if (jobsRes.ok) {
+        const data = await jobsRes.json()
+        setFallbackJobs(data.jobs || [])
       }
     } catch (error) {
       console.error('Failed to fetch gateway status:', error)
@@ -219,6 +251,53 @@ export default function SmsGatewayPage() {
     }
   }
 
+  const handleCreateTestJob = async () => {
+    if (!testPhone.trim() || !testMessage.trim()) {
+      toast({
+        title: 'Missing fields',
+        description: 'Enter a phone number and message.',
+        variant: 'destructive',
+      })
+      return
+    }
+    setCreatingTest(true)
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch('/api/user/sms-gateway/test-job', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ phone: testPhone.trim(), message: testMessage.trim() }),
+      })
+      const data = await response.json()
+      if (response.ok) {
+        toast({
+          title: 'Test job created',
+          description: 'Your Android app can fetch it from /jobs/pending.',
+        })
+        setShowTestModal(false)
+        setTestPhone('')
+        await fetchStatus()
+      } else {
+        toast({
+          title: 'Error',
+          description: data.error || 'Failed to create test job.',
+          variant: 'destructive',
+        })
+      }
+    } catch {
+      toast({
+        title: 'Error',
+        description: 'Failed to create test job.',
+        variant: 'destructive',
+      })
+    } finally {
+      setCreatingTest(false)
+    }
+  }
+
   const formatDate = (date: string | null | undefined) => {
     if (!date) return '—'
     return new Date(date).toLocaleString('en-US', {
@@ -262,7 +341,7 @@ export default function SmsGatewayPage() {
               SMS Gateway
             </h1>
             <p className="text-gray-600">
-              Connect your Android phone gateway to send messages through your SIM.
+              Connect your Android phone gateway and manage automatic phone fallback.
             </p>
           </div>
           <Button
@@ -527,6 +606,13 @@ export default function SmsGatewayPage() {
                 </div>
               </dl>
 
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg mb-4">
+                <p className="text-xs text-amber-800">
+                  Resetting device binding allows this token to be linked to a different
+                  phone on the next connection.
+                </p>
+              </div>
+
               <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg mb-4">
                 <p className="text-xs text-blue-800">
                   Each token works on one phone at a time. If another device tries
@@ -552,6 +638,189 @@ export default function SmsGatewayPage() {
                   disabled={revoking || !gateway?.hasToken || !gateway?.isActive}
                 >
                   {revoking ? 'Revoking...' : 'Revoke Token'}
+                </Button>
+              </div>
+            </Card>
+
+            {/* Card 5: Fallback Rules */}
+            <Card className="p-6 bg-white border border-gray-100 shadow-sm lg:col-span-2">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2.5 rounded-xl bg-teal-50 text-teal-600">
+                  <ListOrdered size={20} />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">Fallback Rules</h2>
+                  <p className="text-sm text-gray-500">Automatic retry and phone fallback flow</p>
+                </div>
+              </div>
+              <ol className="space-y-2 text-sm text-gray-700 list-decimal list-inside">
+                <li>Provider sends the original SMS.</li>
+                <li>
+                  If not delivered after 7 minutes, the website retries once using the
+                  provider.
+                </li>
+                <li>
+                  If the retry also fails or is not delivered after 7 minutes, the message
+                  is queued in MongoDB for phone fallback.
+                </li>
+                <li>
+                  The Android app fetches pending jobs from the website API when online.
+                </li>
+                <li>
+                  If the app is offline, jobs remain pending in MongoDB until the app comes
+                  back online.
+                </li>
+              </ol>
+            </Card>
+
+            {/* Card 6: Phone Fallback Queue */}
+            <Card className="p-6 bg-white border border-gray-100 shadow-sm lg:col-span-2 app-table-scroll">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-xl bg-teal-50 text-teal-600">
+                    <Inbox size={20} />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-semibold text-gray-900">
+                      Phone Fallback Queue
+                    </h2>
+                    <p className="text-sm text-gray-500">
+                      Jobs waiting for your Android gateway
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  className="border-teal-200 text-teal-700 hover:bg-teal-50 shrink-0"
+                  onClick={() => setShowTestModal(true)}
+                >
+                  <FlaskConical size={16} className="mr-2" />
+                  Create Test Phone Gateway Job
+                </Button>
+              </div>
+
+              {fallbackJobs.length === 0 ? (
+                <p className="text-sm text-gray-500 text-center py-6">
+                  No fallback jobs in queue.
+                </p>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead className="border-b border-gray-200">
+                    <tr className="text-left text-gray-600 font-semibold text-xs uppercase">
+                      <th className="pb-3 pr-2">Created</th>
+                      <th className="pb-3 pr-2">Phone</th>
+                      <th className="pb-3 pr-2">Message</th>
+                      <th className="pb-3 pr-2">Original</th>
+                      <th className="pb-3 pr-2">Retry</th>
+                      <th className="pb-3 pr-2">Phone Status</th>
+                      <th className="pb-3 pr-2">Type</th>
+                      <th className="pb-3">Attempts</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {fallbackJobs.map((job) => (
+                      <tr key={job.id} className="border-b border-gray-100">
+                        <td className="py-3 pr-2 text-gray-600 whitespace-nowrap">
+                          {new Date(job.createdAt).toLocaleString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </td>
+                        <td className="py-3 pr-2 font-mono text-xs">{job.recipientPhone}</td>
+                        <td className="py-3 pr-2 max-w-[200px] truncate text-gray-600">
+                          {job.message}
+                        </td>
+                        <td className="py-3 pr-2">{job.originalStatus || '—'}</td>
+                        <td className="py-3 pr-2">{job.retryStatus || '—'}</td>
+                        <td className="py-3 pr-2">
+                          <StatusBadge
+                            label={job.status}
+                            variant={
+                              job.status === 'sent'
+                                ? 'green'
+                                : job.status === 'failed'
+                                  ? 'red'
+                                  : 'amber'
+                            }
+                          />
+                        </td>
+                        <td className="py-3 pr-2">
+                          {job.isTest ? (
+                            <StatusBadge label="Test" variant="blue" />
+                          ) : (
+                            <span className="text-gray-400 text-xs">Live</span>
+                          )}
+                        </td>
+                        <td className="py-3">{job.attempts}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </Card>
+          </div>
+        )}
+
+        {/* Test job modal */}
+        {showTestModal && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <Card className="w-full max-w-md p-8 bg-white border border-gray-200 shadow-xl">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="p-3 rounded-xl bg-teal-100 text-teal-600">
+                  <FlaskConical size={24} />
+                </div>
+                <h3 className="text-2xl font-semibold text-gray-900">
+                  Create Test Job
+                </h3>
+              </div>
+
+              <p className="text-sm text-gray-600 mb-4">
+                Creates a pending fallback job in MongoDB for immediate testing. Does not
+                affect SMS History or the provider retry flow.
+              </p>
+
+              <div className="space-y-4 mb-6">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Phone number
+                  </label>
+                  <input
+                    type="text"
+                    value={testPhone}
+                    onChange={(e) => setTestPhone(e.target.value)}
+                    placeholder="0712345678 or 254712345678"
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-white text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500/50 focus:border-teal-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Message
+                  </label>
+                  <textarea
+                    value={testMessage}
+                    onChange={(e) => setTestMessage(e.target.value)}
+                    rows={3}
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-white text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500/50 focus:border-teal-500 resize-none"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <Button
+                  variant="outline"
+                  className="flex-1 border-gray-300"
+                  onClick={() => setShowTestModal(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  className="flex-1 bg-teal-600 text-white hover:bg-teal-700"
+                  onClick={handleCreateTestJob}
+                  disabled={creatingTest}
+                >
+                  {creatingTest ? 'Creating...' : 'Create Test Job'}
                 </Button>
               </div>
             </Card>

@@ -157,6 +157,32 @@ export interface ISmsMessage {
   providerCostKes?: number
   profitKes?: number
   refundAmountKes?: number
+  // Phone gateway fallback metadata (does not replace core status)
+  fallbackQueued?: boolean
+  fallbackStatus?:
+    | 'not_needed'
+    | 'retrying_provider'
+    | 'retry_waiting_delivery'
+    | 'queued_for_phone'
+    | 'sending_via_phone'
+    | 'sent_via_phone'
+    | 'phone_failed'
+    | 'cancelled'
+  fallbackJobId?: string
+  fallbackQueuedAt?: Date
+  fallbackSentAt?: Date
+  fallbackFailedAt?: Date
+  fallbackFailureReason?: string
+  fallbackProvider?: string
+  deliveryMethod?: 'provider' | 'android_phone_gateway'
+  providerRetryAttempted?: boolean
+  providerRetrySmsId?: string
+  providerRetryAttemptedAt?: Date
+  providerRetryStatus?: 'not_started' | 'sent' | 'delivered' | 'failed' | 'timeout'
+  providerRetrySentAt?: Date
+  providerRetryDeliveredAt?: Date
+  providerRetryFailedAt?: Date
+  providerRetryFailureReason?: string
   createdAt: Date
   updatedAt: Date
 }
@@ -203,6 +229,23 @@ const SmsMessageSchema = new Schema<ISmsMessage>(
     providerCostKes: { type: Number },
     profitKes: { type: Number },
     refundAmountKes: { type: Number },
+    fallbackQueued: { type: Boolean, default: false },
+    fallbackStatus: { type: String },
+    fallbackJobId: { type: String },
+    fallbackQueuedAt: { type: Date },
+    fallbackSentAt: { type: Date },
+    fallbackFailedAt: { type: Date },
+    fallbackFailureReason: { type: String },
+    fallbackProvider: { type: String },
+    deliveryMethod: { type: String, enum: ['provider', 'android_phone_gateway'] },
+    providerRetryAttempted: { type: Boolean, default: false },
+    providerRetrySmsId: { type: String },
+    providerRetryAttemptedAt: { type: Date },
+    providerRetryStatus: { type: String },
+    providerRetrySentAt: { type: Date },
+    providerRetryDeliveredAt: { type: Date },
+    providerRetryFailedAt: { type: Date },
+    providerRetryFailureReason: { type: String },
   },
   { timestamps: true }
 )
@@ -846,6 +889,8 @@ export interface ISmsGatewayDevice {
   batteryLevel?: number
   isSmsPermissionGranted?: boolean
   isGatewayRunning?: boolean
+  hourlyLimit?: number
+  dailyLimit?: number
   createdAt: Date
   updatedAt: Date
 }
@@ -868,9 +913,117 @@ const SmsGatewayDeviceSchema = new Schema<ISmsGatewayDevice>(
     batteryLevel: { type: Number },
     isSmsPermissionGranted: { type: Boolean },
     isGatewayRunning: { type: Boolean },
+    hourlyLimit: { type: Number },
+    dailyLimit: { type: Number },
   },
   { timestamps: true }
 )
+
+SmsGatewayDeviceSchema.index({ isActive: 1 })
+SmsGatewayDeviceSchema.index({ lastHeartbeatAt: 1 })
+
+// SMS Fallback Job Model (phone gateway queue)
+export interface ISmsFallbackJob {
+  _id?: string
+  userId: mongoose.Types.ObjectId
+  originalSmsId: string
+  retrySmsId?: string
+  retryAttempted: boolean
+  retryAttemptedAt?: Date
+  retryProviderMessageId?: string
+  retryStatus?: 'not_started' | 'sending' | 'sent' | 'delivered' | 'failed' | 'timeout'
+  retrySentAt?: Date
+  retryDeliveredAt?: Date
+  retryFailedAt?: Date
+  retryFailureReason?: string
+  recipientName?: string
+  recipientPhone: string
+  normalizedPhone: string
+  message: string
+  originalStatus?: string
+  originalProviderMessageId?: string
+  originalSentAt?: Date
+  originalDeliveredAt?: Date
+  originalFailureReason?: string
+  status:
+    | 'waiting_retry'
+    | 'retrying_provider'
+    | 'retry_sent_waiting_delivery'
+    | 'pending'
+    | 'sending'
+    | 'sent'
+    | 'failed'
+    | 'cancelled'
+  attempts: number
+  deviceId?: string
+  deviceName?: string
+  simLabel?: string
+  localMessageId?: string
+  sendingAt?: Date
+  sentAt?: Date
+  failedAt?: Date
+  failureReason?: string
+  cancelReason?: string
+  isTest?: boolean
+  createdAt: Date
+  updatedAt: Date
+}
+
+const SmsFallbackJobSchema = new Schema<ISmsFallbackJob>(
+  {
+    userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    originalSmsId: { type: String, required: true, unique: true },
+    retrySmsId: { type: String },
+    retryAttempted: { type: Boolean, default: false },
+    retryAttemptedAt: { type: Date },
+    retryProviderMessageId: { type: String },
+    retryStatus: { type: String },
+    retrySentAt: { type: Date },
+    retryDeliveredAt: { type: Date },
+    retryFailedAt: { type: Date },
+    retryFailureReason: { type: String },
+    recipientName: { type: String },
+    recipientPhone: { type: String, required: true },
+    normalizedPhone: { type: String, required: true },
+    message: { type: String, required: true },
+    originalStatus: { type: String },
+    originalProviderMessageId: { type: String },
+    originalSentAt: { type: Date },
+    originalDeliveredAt: { type: Date },
+    originalFailureReason: { type: String },
+    status: {
+      type: String,
+      enum: [
+        'waiting_retry',
+        'retrying_provider',
+        'retry_sent_waiting_delivery',
+        'pending',
+        'sending',
+        'sent',
+        'failed',
+        'cancelled',
+      ],
+      default: 'waiting_retry',
+    },
+    attempts: { type: Number, default: 0 },
+    deviceId: { type: String },
+    deviceName: { type: String },
+    simLabel: { type: String },
+    localMessageId: { type: String },
+    sendingAt: { type: Date },
+    sentAt: { type: Date },
+    failedAt: { type: Date },
+    failureReason: { type: String },
+    cancelReason: { type: String },
+    isTest: { type: Boolean, default: false },
+  },
+  { timestamps: true }
+)
+
+SmsFallbackJobSchema.index({ status: 1 })
+SmsFallbackJobSchema.index({ createdAt: -1 })
+SmsFallbackJobSchema.index({ retryStatus: 1 })
+SmsFallbackJobSchema.index({ userId: 1, status: 1 })
 
 // Export models
 export const User: Model<IUser> = mongoose.models.User || mongoose.model<IUser>('User', UserSchema)
@@ -948,4 +1101,7 @@ export const SenderIdPricing: Model<ISenderIdPricing> =
 export const SmsGatewayDevice: Model<ISmsGatewayDevice> =
   mongoose.models.SmsGatewayDevice ||
   mongoose.model<ISmsGatewayDevice>('SmsGatewayDevice', SmsGatewayDeviceSchema)
+export const SmsFallbackJob: Model<ISmsFallbackJob> =
+  mongoose.models.SmsFallbackJob ||
+  mongoose.model<ISmsFallbackJob>('SmsFallbackJob', SmsFallbackJobSchema)
 
