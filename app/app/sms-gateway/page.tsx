@@ -54,7 +54,16 @@ interface FallbackJobRow {
   retryStatus?: string
   status: string
   attempts: number
+  maxAttempts?: number
   createdAt: string
+  sendingAt?: string | null
+  sentAt?: string | null
+  failedAt?: string | null
+  deviceName?: string | null
+  simLabel?: string | null
+  failureReason?: string | null
+  failureCode?: string | null
+  resetReason?: string | null
   isTest?: boolean
 }
 
@@ -816,17 +825,22 @@ export default function SmsGatewayPage() {
                   No fallback jobs in queue.
                 </p>
               ) : (
-                <table className="w-full text-sm">
+                <div className="overflow-x-auto">
+                <table className="w-full text-sm min-w-[1100px]">
                   <thead className="border-b border-gray-200">
                     <tr className="text-left text-gray-600 font-semibold text-xs uppercase">
                       <th className="pb-3 pr-2">Created</th>
+                      <th className="pb-3 pr-2">Job ID</th>
                       <th className="pb-3 pr-2">Phone</th>
                       <th className="pb-3 pr-2">Message</th>
-                      <th className="pb-3 pr-2">Original</th>
-                      <th className="pb-3 pr-2">Retry</th>
                       <th className="pb-3 pr-2">Phone Status</th>
+                      <th className="pb-3 pr-2">Attempts</th>
+                      <th className="pb-3 pr-2">Sending At</th>
+                      <th className="pb-3 pr-2">Sent At</th>
+                      <th className="pb-3 pr-2">Failed At</th>
+                      <th className="pb-3 pr-2">Last Device</th>
+                      <th className="pb-3 pr-2">Last Error</th>
                       <th className="pb-3 pr-2">Type</th>
-                      <th className="pb-3">Attempts</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -840,12 +854,13 @@ export default function SmsGatewayPage() {
                             minute: '2-digit',
                           })}
                         </td>
+                        <td className="py-3 pr-2 font-mono text-xs max-w-[120px] truncate" title={job.id}>
+                          {job.id.slice(-8)}
+                        </td>
                         <td className="py-3 pr-2 font-mono text-xs">{job.recipientPhone}</td>
-                        <td className="py-3 pr-2 max-w-[200px] truncate text-gray-600">
+                        <td className="py-3 pr-2 max-w-[180px] truncate text-gray-600" title={job.message}>
                           {job.message}
                         </td>
-                        <td className="py-3 pr-2">{job.originalStatus || '—'}</td>
-                        <td className="py-3 pr-2">{job.retryStatus || '—'}</td>
                         <td className="py-3 pr-2">
                           <StatusBadge
                             label={job.status}
@@ -854,9 +869,57 @@ export default function SmsGatewayPage() {
                                 ? 'green'
                                 : job.status === 'failed'
                                   ? 'red'
-                                  : 'amber'
+                                  : job.status === 'sending'
+                                    ? 'purple'
+                                    : 'amber'
                             }
                           />
+                          {job.resetReason ? (
+                            <span className="block text-[10px] text-gray-400 mt-1">{job.resetReason}</span>
+                          ) : null}
+                        </td>
+                        <td className="py-3 pr-2 whitespace-nowrap">
+                          {job.attempts}
+                          {job.maxAttempts ? ` / ${job.maxAttempts}` : ''}
+                        </td>
+                        <td className="py-3 pr-2 text-xs text-gray-500 whitespace-nowrap">
+                          {job.sendingAt
+                            ? new Date(job.sendingAt).toLocaleString('en-US', {
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })
+                            : '—'}
+                        </td>
+                        <td className="py-3 pr-2 text-xs text-gray-500 whitespace-nowrap">
+                          {job.sentAt
+                            ? new Date(job.sentAt).toLocaleString('en-US', {
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })
+                            : '—'}
+                        </td>
+                        <td className="py-3 pr-2 text-xs text-gray-500 whitespace-nowrap">
+                          {job.failedAt
+                            ? new Date(job.failedAt).toLocaleString('en-US', {
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })
+                            : '—'}
+                        </td>
+                        <td className="py-3 pr-2 text-xs text-gray-600 max-w-[120px] truncate" title={job.deviceName || undefined}>
+                          {job.deviceName || '—'}
+                          {job.simLabel ? (
+                            <span className="block text-[10px] text-gray-400">{job.simLabel}</span>
+                          ) : null}
+                        </td>
+                        <td className="py-3 pr-2 text-xs text-red-600 max-w-[160px] truncate" title={job.failureReason || undefined}>
+                          {job.failureReason || job.failureCode || '—'}
                         </td>
                         <td className="py-3 pr-2">
                           {job.isTest ? (
@@ -865,11 +928,11 @@ export default function SmsGatewayPage() {
                             <span className="text-gray-400 text-xs">Live</span>
                           )}
                         </td>
-                        <td className="py-3">{job.attempts}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
+                </div>
               )}
             </Card>
           </div>

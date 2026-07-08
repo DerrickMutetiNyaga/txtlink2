@@ -26,10 +26,18 @@ export async function GET(request: NextRequest) {
         retryStatus: job.retryStatus,
         status: job.status,
         attempts: job.attempts,
+        maxAttempts: job.maxAttempts ?? 3,
         isTest: Boolean(job.isTest),
         createdAt: job.createdAt,
+        sendingAt: job.sendingAt,
         sentAt: job.sentAt,
         failedAt: job.failedAt,
+        deviceName: job.deviceName,
+        simLabel: job.simLabel,
+        failureReason: job.failureReason,
+        failureCode: job.failureCode,
+        resetReason: job.resetReason,
+        lockedBy: job.lockedBy,
       })),
     })
   } catch (error: any) {

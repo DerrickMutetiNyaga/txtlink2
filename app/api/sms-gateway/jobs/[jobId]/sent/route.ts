@@ -1,20 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server'
 import connectDB from '@/lib/db/connect'
-import { SmsFallbackJob, SmsMessage, SmsGatewayDevice } from '@/lib/db/models'
+import { SmsFallbackJob, SmsMessage } from '@/lib/db/models'
 import { authenticateGatewayDevice } from '@/lib/services/sms-gateway/auth'
 import { logAuditAction } from '@/lib/utils/audit'
+import { logGatewayJobAction } from '@/lib/services/sms-gateway/job-logger'
 
 type RouteContext = { params: Promise<{ jobId: string }> }
 
+const ROUTE = 'POST /api/sms-gateway/jobs/[jobId]/sent'
+
 export async function POST(request: NextRequest, context: RouteContext) {
+  const { jobId } = await context.params
+
   try {
-    const { jobId } = await context.params
     const body = await request.json().catch(() => ({}))
     const deviceName = body.deviceName || ''
     const simLabel = body.simLabel || ''
 
     const auth = await authenticateGatewayDevice(request, deviceName, simLabel)
     if (!auth.ok) {
+      logGatewayJobAction({
+        route: ROUTE,
+        jobId,
+        deviceName,
+        responseCode: auth.status,
+        message: auth.message,
+      })
       return NextResponse.json(
         { success: false, message: auth.message },
         { status: auth.status }
@@ -23,27 +34,49 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     await connectDB()
 
-    const job = await SmsFallbackJob.findOne({
+    const existing = await SmsFallbackJob.findOne({
       _id: jobId,
       userId: auth.device.userId,
-      status: { $in: ['pending', 'sending'] },
     })
+      .select('status')
+      .lean()
+
+    const statusBefore = existing?.status ?? null
+    const sentAt = body.sentAt ? new Date(body.sentAt) : new Date()
+
+    const job = await SmsFallbackJob.findOneAndUpdate(
+      {
+        _id: jobId,
+        userId: auth.device.userId,
+        status: 'sending',
+      },
+      {
+        $set: {
+          status: 'sent',
+          sentAt,
+          deviceName: deviceName || auth.device.boundDeviceName,
+          simLabel: simLabel || auth.device.boundSimLabel,
+          localMessageId: body.localMessageId,
+        },
+      },
+      { new: true }
+    )
 
     if (!job) {
+      logGatewayJobAction({
+        route: ROUTE,
+        jobId,
+        deviceName: deviceName || auth.device.boundDeviceName,
+        statusBefore,
+        statusAfter: statusBefore,
+        responseCode: 409,
+        message: 'Job not found or already processed',
+      })
       return NextResponse.json(
         { success: false, message: 'Job not found or already processed' },
         { status: 409 }
       )
     }
-
-    const sentAt = body.sentAt ? new Date(body.sentAt) : new Date()
-
-    job.status = 'sent'
-    job.sentAt = sentAt
-    job.deviceName = deviceName || auth.device.boundDeviceName
-    job.simLabel = simLabel || auth.device.boundSimLabel
-    job.localMessageId = body.localMessageId
-    await job.save()
 
     if (!job.isTest) {
       await SmsMessage.findByIdAndUpdate(job.originalSmsId, {
@@ -78,10 +111,20 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     auth.device.requiresTopUp = false
     auth.device.topUpAlertDismissed = false
-    auth.device.isGatewayRunning = body.isGatewayRunning !== false ? true : auth.device.isGatewayRunning
+    auth.device.isGatewayRunning =
+      body.isGatewayRunning !== false ? true : auth.device.isGatewayRunning
     auth.device.pausedAt = undefined
     auth.device.pauseReason = undefined
     await auth.device.save()
+
+    logGatewayJobAction({
+      route: ROUTE,
+      jobId,
+      deviceName: job.deviceName,
+      statusBefore: 'sending',
+      statusAfter: 'sent',
+      responseCode: 200,
+    })
 
     return NextResponse.json({
       success: true,
@@ -91,6 +134,12 @@ export async function POST(request: NextRequest, context: RouteContext) {
     })
   } catch (error: any) {
     console.error('SMS gateway job sent error:', error)
+    logGatewayJobAction({
+      route: ROUTE,
+      jobId,
+      responseCode: 500,
+      message: error?.message,
+    })
     return NextResponse.json(
       { success: false, message: 'Internal server error' },
       { status: 500 }

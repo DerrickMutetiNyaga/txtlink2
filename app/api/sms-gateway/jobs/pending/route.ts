@@ -3,14 +3,19 @@ import connectDB from '@/lib/db/connect'
 import { SmsFallbackJob, SmsMessage } from '@/lib/db/models'
 import { authenticateGatewayDevice } from '@/lib/services/sms-gateway/auth'
 import { cancelFallbackJobIfDelivered } from '@/lib/services/sms-fallback/helpers'
+import { logGatewayJobAction } from '@/lib/services/sms-gateway/job-logger'
 
-/** Jobs stuck in "sending" longer than this are returned to pending for retry. */
-const STALE_SENDING_MINUTES = 10
+const ROUTE = 'GET /api/sms-gateway/jobs/pending'
 
 export async function GET(request: NextRequest) {
   try {
     const auth = await authenticateGatewayDevice(request)
     if (!auth.ok) {
+      logGatewayJobAction({
+        route: ROUTE,
+        responseCode: auth.status,
+        message: auth.message,
+      })
       return NextResponse.json(
         { success: false, message: auth.message },
         { status: auth.status }
@@ -23,22 +28,10 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(parseInt(searchParams.get('limit') || '5', 10) || 5, 50)
     const userId = auth.device.userId
 
-    const staleCutoff = new Date(Date.now() - STALE_SENDING_MINUTES * 60 * 1000)
-
     // Legacy "notified" jobs (from removed FCM flow) → pending
     await SmsFallbackJob.updateMany(
       { userId, status: 'notified' },
       { $set: { status: 'pending' } }
-    )
-
-    // Stale sending claims → back to pending so the app can retry safely
-    await SmsFallbackJob.updateMany(
-      {
-        userId,
-        status: 'sending',
-        sendingAt: { $lte: staleCutoff },
-      },
-      { $set: { status: 'pending' }, $unset: { sendingAt: 1 } }
     )
 
     const jobs = await SmsFallbackJob.find({
@@ -83,12 +76,26 @@ export async function GET(request: NextRequest) {
     auth.device.lastSyncAt = new Date()
     await auth.device.save()
 
+    logGatewayJobAction({
+      route: ROUTE,
+      deviceName: auth.device.boundDeviceName,
+      statusBefore: null,
+      statusAfter: 'pending',
+      responseCode: 200,
+      extra: { returnedCount: activeJobs.length },
+    })
+
     return NextResponse.json({
       success: true,
       jobs: activeJobs,
     })
   } catch (error: any) {
     console.error('SMS gateway pending jobs error:', error)
+    logGatewayJobAction({
+      route: ROUTE,
+      responseCode: 500,
+      message: error?.message,
+    })
     return NextResponse.json(
       { success: false, message: 'Internal server error' },
       { status: 500 }

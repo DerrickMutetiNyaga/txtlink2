@@ -976,10 +976,13 @@ export interface ISmsFallbackJob {
     | 'failed'
     | 'cancelled'
   attempts: number
+  maxAttempts?: number
   deviceId?: string
   deviceName?: string
   simLabel?: string
   localMessageId?: string
+  lockedAt?: Date
+  lockedBy?: string
   sendingAt?: Date
   sentAt?: Date
   failedAt?: Date
@@ -987,6 +990,7 @@ export interface ISmsFallbackJob {
   failureCode?: string
   requiresTopUp?: boolean
   cancelReason?: string
+  resetReason?: string
   isTest?: boolean
   createdAt: Date
   updatedAt: Date
@@ -1029,10 +1033,13 @@ const SmsFallbackJobSchema = new Schema<ISmsFallbackJob>(
       default: 'waiting_retry',
     },
     attempts: { type: Number, default: 0 },
+    maxAttempts: { type: Number, default: 3 },
     deviceId: { type: String },
     deviceName: { type: String },
     simLabel: { type: String },
     localMessageId: { type: String },
+    lockedAt: { type: Date },
+    lockedBy: { type: String },
     sendingAt: { type: Date },
     sentAt: { type: Date },
     failedAt: { type: Date },
@@ -1040,6 +1047,7 @@ const SmsFallbackJobSchema = new Schema<ISmsFallbackJob>(
     failureCode: { type: String },
     requiresTopUp: { type: Boolean, default: false },
     cancelReason: { type: String },
+    resetReason: { type: String },
     isTest: { type: Boolean, default: false },
   },
   { timestamps: true }
