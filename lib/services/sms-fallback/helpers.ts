@@ -2,10 +2,18 @@ import mongoose from 'mongoose'
 import { ISmsMessage, SmsFallbackJob, SmsMessage } from '@/lib/db/models'
 import { FALLBACK_PHONE_STATUSES } from './config'
 import { isPhoneDeliveredFallbackStatus } from './phone-status'
+import { isSmsDelivered } from './status-normalize'
+
+export function shouldSkipProviderRetry(sms: ISmsMessage): boolean {
+  if (sms.providerRetryAttempted === true) return true
+  if (isSmsDelivered(sms)) return true
+  if (isPhoneDeliveredFallbackStatus(sms.fallbackStatus)) return true
+  if (sms.fallbackStatus === 'delivered_via_phone') return true
+  return false
+}
 
 export function shouldSkipFallbackProcessing(sms: ISmsMessage): boolean {
-  if (sms.status === 'delivered') return true
-  if (sms.deliveryStatus === 'delivered') return true
+  if (isSmsDelivered(sms)) return true
   if (sms.deliveryMethod === 'android_phone_gateway') return true
   if (isPhoneDeliveredFallbackStatus(sms.fallbackStatus)) return true
   if (sms.fallbackStatus === 'phone_requires_topup') return true
@@ -27,9 +35,7 @@ export async function cancelFallbackJobIfDelivered(
   if (!sms) return false
 
   const isDelivered =
-    sms.status === 'delivered' ||
-    sms.deliveryStatus === 'delivered' ||
-    sms.providerRetryStatus === 'delivered' ||
+    isSmsDelivered(sms) ||
     isPhoneDeliveredFallbackStatus(sms.fallbackStatus) ||
     sms.deliveryMethod === 'android_phone_gateway'
 

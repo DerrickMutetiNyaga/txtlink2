@@ -33,6 +33,7 @@ export const FAILED_ORIGINAL_STATUSES = [
   'rejected',
   'expired',
   'timeout',
+  'not_sent',
   'undeliverable',
   'provider_timeout',
 ] as const
@@ -48,4 +49,13 @@ export const DLR_RETRY_KEYWORDS = [
   'dlr failed',
 ] as const
 
-export const SMS_PENDING_FOR_FALLBACK = ['queued', 'processing', 'retrying'] as const
+export const SMS_PENDING_FOR_FALLBACK = [
+  'queued',
+  'processing',
+  'retrying',
+  'sent',
+  'provider_sent',
+  'accepted',
+  'submitted',
+  'pending',
+] as const

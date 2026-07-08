@@ -1,6 +1,6 @@
 import connectDB from '@/lib/db/connect'
 import { SmsMessage } from '@/lib/db/models'
-import { scanAndRetryUndeliveredSms } from './provider-retry'
+import { scanAndRetryUndeliveredSms, evaluateProviderRetryEligibility } from './provider-retry'
 import {
   scanRetryResultsAndQueuePhoneFallback,
   cancelDeliveredFallbackJobs,
@@ -8,11 +8,22 @@ import {
 import { resetStaleSendingJobs } from './stale-sending'
 import { getFallbackStaleMinutes } from './config'
 import { minutesAgo } from './helpers'
-import { FAILED_ORIGINAL_STATUSES, SMS_PENDING_FOR_FALLBACK } from './config'
+import {
+  createScanDebugStats,
+  type FallbackScanDebugStats,
+  type FallbackScanSampleMatch,
+} from './scan-debug'
 
 export interface FallbackScanResult {
+  success: true
+  scanned: number
+  eligibleForProviderRetry: number
   retriedProvider: number
+  eligibleForPhoneFallback: number
   queuedForPhone: number
+  skippedDelivered: number
+  skippedAlreadyRetried: number
+  sampleMatches: FallbackScanSampleMatch[]
   cancelledBecauseDelivered: number
   resetStaleSending: number
   sourcesScanned: {
@@ -21,6 +32,7 @@ export interface FallbackScanResult {
     api_key: number
     system: number
     test: number
+    unset: number
   }
 }
 
@@ -28,69 +40,100 @@ async function countEligibleBySource(): Promise<FallbackScanResult['sourcesScann
   await connectDB()
   const staleCutoff = minutesAgo(getFallbackStaleMinutes())
 
-  const baseFilter = {
+  const sources = ['dashboard', 'bulk', 'api_key', 'system', 'test'] as const
+  const counts: FallbackScanResult['sourcesScanned'] = {
+    dashboard: 0,
+    bulk: 0,
+    api_key: 0,
+    system: 0,
+    test: 0,
+    unset: 0,
+  }
+
+  const candidates = await SmsMessage.find({
     providerRetryAttempted: { $ne: true },
+    deliveredAt: null,
     status: { $ne: 'delivered' },
     deliveryStatus: { $ne: 'delivered' },
-    fallbackStatus: {
-      $nin: ['queued_for_phone', 'sending_via_phone', 'delivered_via_phone', 'sent_via_phone', 'cancelled'],
-    },
-  }
+    $or: [
+      { sentAt: { $lte: staleCutoff } },
+      { createdAt: { $lte: staleCutoff } },
+      { updatedAt: { $lte: staleCutoff } },
+    ],
+  })
+    .select('_id status deliveryStatus source sentAt createdAt updatedAt providerRetryAttempted fallbackStatus deliveredAt toNumbers')
+    .limit(500)
+    .lean()
 
-  async function countForSource(source: string | null): Promise<number> {
-    const filter: Record<string, unknown> = { ...baseFilter }
-    if (source) {
-      filter.source = source
+  for (const raw of candidates) {
+    const sms = raw as Parameters<typeof evaluateProviderRetryEligibility>[0]
+    const eligibility = evaluateProviderRetryEligibility(sms, staleCutoff)
+    if (!eligibility.eligible) continue
+
+    const source = (raw as { source?: string }).source
+    if (source && source in counts && source !== 'unset') {
+      counts[source as keyof Omit<typeof counts, 'unset'>]++
     } else {
-      filter.$or = [{ source: { $exists: false } }, { source: null }]
+      counts.unset++
     }
-    filter.$and = [
-      {
-        $or: [
-          { status: { $in: [...FAILED_ORIGINAL_STATUSES] } },
-          { status: 'sent', sentAt: { $lte: staleCutoff }, deliveredAt: null },
-          {
-            status: { $in: [...SMS_PENDING_FOR_FALLBACK] },
-            createdAt: { $lte: staleCutoff },
-            deliveredAt: null,
-          },
-        ],
-      },
-    ]
-    return SmsMessage.countDocuments(filter)
   }
 
-  const [dashboard, bulk, api_key, system, test, unset] = await Promise.all([
-    countForSource('dashboard'),
-    countForSource('bulk'),
-    countForSource('api_key'),
-    countForSource('system'),
-    countForSource('test'),
-    countForSource(null),
-  ])
+  // Ensure all source keys exist even if zero
+  for (const source of sources) {
+    if (counts[source] === undefined) counts[source] = 0
+  }
+
+  return counts
+}
+
+function mergeDebugStats(
+  providerDebug: FallbackScanDebugStats,
+  phoneDebug: FallbackScanDebugStats
+): Pick<
+  FallbackScanResult,
+  | 'scanned'
+  | 'eligibleForProviderRetry'
+  | 'retriedProvider'
+  | 'eligibleForPhoneFallback'
+  | 'queuedForPhone'
+  | 'skippedDelivered'
+  | 'skippedAlreadyRetried'
+  | 'sampleMatches'
+> {
+  const sampleMatches = [...providerDebug.sampleMatches, ...phoneDebug.sampleMatches].slice(0, 10)
 
   return {
-    dashboard: dashboard + unset,
-    bulk,
-    api_key,
-    system,
-    test,
+    scanned: providerDebug.scanned + phoneDebug.scanned,
+    eligibleForProviderRetry: providerDebug.eligibleForProviderRetry,
+    retriedProvider: providerDebug.retriedProvider,
+    eligibleForPhoneFallback: phoneDebug.eligibleForPhoneFallback,
+    queuedForPhone: phoneDebug.queuedForPhone,
+    skippedDelivered: providerDebug.skippedDelivered + phoneDebug.skippedDelivered,
+    skippedAlreadyRetried: providerDebug.skippedAlreadyRetried,
+    sampleMatches,
   }
 }
 
 export async function runSmsFallbackScan(): Promise<FallbackScanResult> {
+  const providerDebug = createScanDebugStats()
+  const phoneDebug = createScanDebugStats()
+
   const [retriedProvider, queuedForPhone, cancelledBecauseDelivered, resetStaleSending, sourcesScanned] =
     await Promise.all([
-      scanAndRetryUndeliveredSms(),
-      scanRetryResultsAndQueuePhoneFallback(),
+      scanAndRetryUndeliveredSms(providerDebug),
+      scanRetryResultsAndQueuePhoneFallback(phoneDebug),
       cancelDeliveredFallbackJobs(),
       resetStaleSendingJobs(),
       countEligibleBySource(),
     ])
 
+  const merged = mergeDebugStats(providerDebug, phoneDebug)
+
   return {
-    retriedProvider,
-    queuedForPhone,
+    success: true,
+    ...merged,
+    retriedProvider: retriedProvider || merged.retriedProvider,
+    queuedForPhone: queuedForPhone || merged.queuedForPhone,
     cancelledBecauseDelivered,
     resetStaleSending,
     sourcesScanned,

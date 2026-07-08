@@ -8,11 +8,23 @@ import { maskPhone } from '@/lib/utils/log-sanitize'
 import {
   isProviderRetryEnabled,
   getFallbackStaleMinutes,
-  FAILED_ORIGINAL_STATUSES,
   DLR_RETRY_KEYWORDS,
-  SMS_PENDING_FOR_FALLBACK,
+  FALLBACK_PHONE_STATUSES,
 } from './config'
-import { shouldSkipFallbackProcessing, minutesAgo } from './helpers'
+import { shouldSkipProviderRetry, minutesAgo } from './helpers'
+import {
+  normalizeSmsStatus,
+  isFailedState,
+  isStaleSentPending,
+  isSmsDelivered,
+  getSmsAgeDate,
+  getAgeMinutes,
+} from './status-normalize'
+import {
+  addSampleMatch,
+  createScanDebugStats,
+  type FallbackScanDebugStats,
+} from './scan-debug'
 
 function failureReasonMatchesKeywords(sms: ISmsMessage): boolean {
   const text = [
@@ -28,34 +40,61 @@ function failureReasonMatchesKeywords(sms: ISmsMessage): boolean {
   return DLR_RETRY_KEYWORDS.some((kw) => text.includes(kw))
 }
 
-function qualifiesForProviderRetry(sms: ISmsMessage, staleCutoff: Date): boolean {
-  if (shouldSkipFallbackProcessing(sms)) return false
-  if (sms.providerRetryAttempted === true) return false
+export type ProviderRetryEligibility = {
+  eligible: boolean
+  reason?: string
+  skipReason?: string
+}
 
-  const failedStatuses = FAILED_ORIGINAL_STATUSES as readonly string[]
-  if (failedStatuses.includes(sms.status)) return true
-
-  if (
-    sms.status === 'sent' &&
-    sms.sentAt &&
-    sms.sentAt <= staleCutoff &&
-    !sms.deliveredAt
-  ) {
-    return true
+export function evaluateProviderRetryEligibility(
+  sms: ISmsMessage,
+  staleCutoff: Date
+): ProviderRetryEligibility {
+  if (shouldSkipProviderRetry(sms)) {
+    if (sms.providerRetryAttempted === true) {
+      return { eligible: false, skipReason: 'already_retried' }
+    }
+    if (isSmsDelivered(sms)) {
+      return { eligible: false, skipReason: 'delivered' }
+    }
+    return { eligible: false, skipReason: 'skip_provider_retry' }
   }
 
-  const pendingStatuses = SMS_PENDING_FOR_FALLBACK as readonly string[]
-  if (
-    pendingStatuses.includes(sms.status) &&
-    sms.createdAt <= staleCutoff &&
-    !sms.deliveredAt
-  ) {
-    return true
+  const normalized = normalizeSmsStatus(sms)
+
+  if (isFailedState(normalized)) {
+    return { eligible: true, reason: 'failed_status' }
   }
 
-  if (failureReasonMatchesKeywords(sms)) return true
+  if (isStaleSentPending(sms, staleCutoff)) {
+    return { eligible: true, reason: 'sent_older_than_7_minutes' }
+  }
 
-  return false
+  if (failureReasonMatchesKeywords(sms)) {
+    return { eligible: true, reason: 'dlr_keyword_match' }
+  }
+
+  return { eligible: false, skipReason: 'not_eligible' }
+}
+
+function buildProviderRetryCandidateFilter(staleCutoff: Date): Record<string, unknown> {
+  const phoneFallbackStatuses = [...FALLBACK_PHONE_STATUSES, 'cancelled']
+
+  return {
+    providerRetryAttempted: { $ne: true },
+    deliveredAt: null,
+    providerRetryDeliveredAt: null,
+    status: { $nin: ['delivered'] },
+    deliveryStatus: { $ne: 'delivered' },
+    fallbackStatus: { $nin: phoneFallbackStatuses },
+    $or: [
+      { status: { $in: ['failed', 'undelivered', 'rejected', 'expired', 'timeout', 'not_sent', 'undeliverable', 'provider_timeout'] } },
+      { deliveryStatus: { $in: ['failed', 'undelivered', 'rejected', 'expired', 'timeout', 'not_sent'] } },
+      { sentAt: { $lte: staleCutoff } },
+      { createdAt: { $lte: staleCutoff } },
+      { updatedAt: { $lte: staleCutoff } },
+    ],
+  }
 }
 
 async function upsertFallbackJobForRetry(
@@ -82,6 +121,8 @@ async function upsertFallbackJobForRetry(
         originalFailureReason: sms.deliveryCause || sms.errorMessage,
         retryAttempted: false,
         attempts: 0,
+        source: sms.source,
+        apiKeyId: sms.apiKeyId,
       },
       $set: { status },
     },
@@ -169,6 +210,7 @@ async function retrySingleMessage(sms: ISmsMessage & { _id: unknown }): Promise<
       providerRetryStatus: 'failed',
       providerRetryFailedAt: now,
       providerRetryFailureReason: errorMsg,
+      fallbackStatus: 'retry_waiting_delivery',
     })
 
     await SmsFallbackJob.findOneAndUpdate(
@@ -190,12 +232,46 @@ async function retrySingleMessage(sms: ISmsMessage & { _id: unknown }): Promise<
       providerRetryStatus: 'failed',
       providerRetryFailedAt: now,
       providerRetryFailureReason: errorMsg,
+      fallbackStatus: 'retry_waiting_delivery',
     })
     return false
   }
 }
 
-export async function scanAndRetryUndeliveredSms(): Promise<number> {
+function recordCandidateDebug(
+  stats: FallbackScanDebugStats,
+  sms: ISmsMessage & { _id: unknown },
+  eligibility: ProviderRetryEligibility
+): void {
+  stats.scanned++
+
+  if (eligibility.skipReason === 'delivered') {
+    stats.skippedDelivered++
+    return
+  }
+  if (eligibility.skipReason === 'already_retried') {
+    stats.skippedAlreadyRetried++
+    return
+  }
+
+  if (eligibility.eligible) {
+    stats.eligibleForProviderRetry++
+    addSampleMatch(stats, {
+      id: String(sms._id),
+      phone: maskPhone(sms.toNumbers[0] || ''),
+      status: sms.status,
+      deliveryStatus: sms.deliveryStatus || null,
+      ageMinutes: getAgeMinutes(getSmsAgeDate(sms)),
+      providerRetryAttempted: Boolean(sms.providerRetryAttempted),
+      fallbackStatus: sms.fallbackStatus || null,
+      reason: eligibility.reason || 'eligible',
+    })
+  }
+}
+
+export async function scanAndRetryUndeliveredSms(
+  debug: FallbackScanDebugStats = createScanDebugStats()
+): Promise<number> {
   if (!isProviderRetryEnabled()) return 0
 
   await connectDB()
@@ -203,74 +279,34 @@ export async function scanAndRetryUndeliveredSms(): Promise<number> {
   const staleMinutes = getFallbackStaleMinutes()
   const staleCutoff = minutesAgo(staleMinutes)
 
-  const candidates = await SmsMessage.find({
-    providerRetryAttempted: { $ne: true },
-    status: { $ne: 'delivered' },
-    fallbackStatus: {
-      $nin: [
-        'queued_for_phone',
-        'sending_via_phone',
-        'delivered_via_phone',
-        'sent_via_phone',
-        'cancelled',
-      ],
-    },
-    $or: [
-      { status: { $in: [...FAILED_ORIGINAL_STATUSES] } },
-      {
-        status: 'sent',
-        sentAt: { $lte: staleCutoff },
-        deliveredAt: null,
-      },
-      {
-        status: { $in: [...SMS_PENDING_FOR_FALLBACK] },
-        createdAt: { $lte: staleCutoff },
-        deliveredAt: null,
-      },
-    ],
-  })
-    .limit(50)
+  const candidates = await SmsMessage.find(buildProviderRetryCandidateFilter(staleCutoff))
+    .sort({ createdAt: 1 })
+    .limit(200)
     .lean()
 
   let retried = 0
-  for (const sms of candidates) {
-    if (!qualifiesForProviderRetry(sms as ISmsMessage, staleCutoff)) continue
+  for (const raw of candidates) {
+    const sms = raw as ISmsMessage & { _id: unknown }
+    const eligibility = evaluateProviderRetryEligibility(sms, staleCutoff)
+    recordCandidateDebug(debug, sms, eligibility)
+
+    if (!eligibility.eligible) continue
 
     const existingJob = await SmsFallbackJob.findOne({
       originalSmsId: String(sms._id),
     }).lean()
-    if (existingJob && ['pending', 'sending', 'delivered', 'sent'].includes(existingJob.status)) {
+    if (
+      existingJob &&
+      ['pending', 'sending', 'delivered', 'sent'].includes(existingJob.status)
+    ) {
       continue
     }
 
-    const ok = await retrySingleMessage(sms as ISmsMessage & { _id: unknown })
-    if (ok) retried++
-  }
-
-  // Case 3: DLR keyword failures (may not match $or above if status is processing)
-  const dlrCandidates = await SmsMessage.find({
-    providerRetryAttempted: { $ne: true },
-    status: { $nin: ['delivered'] },
-    fallbackStatus: {
-      $nin: [
-        'queued_for_phone',
-        'sending_via_phone',
-        'delivered_via_phone',
-        'sent_via_phone',
-        'cancelled',
-      ],
-    },
-  })
-    .limit(50)
-    .lean()
-
-  for (const sms of dlrCandidates) {
-    if (!failureReasonMatchesKeywords(sms as ISmsMessage)) continue
-    if (shouldSkipFallbackProcessing(sms as ISmsMessage)) continue
-    if (sms.providerRetryAttempted) continue
-
-    const ok = await retrySingleMessage(sms as ISmsMessage & { _id: unknown })
-    if (ok) retried++
+    const ok = await retrySingleMessage(sms)
+    if (ok) {
+      retried++
+      debug.retriedProvider++
+    }
   }
 
   return retried
@@ -284,9 +320,19 @@ export async function retryProviderForMessage(
 
   const sms = await SmsMessage.findOne({ _id: messageId, userId }).lean()
   if (!sms) return { success: false, error: 'Message not found' }
-  if (sms.status === 'delivered') return { success: false, error: 'Message already delivered' }
-  if (sms.providerRetryAttempted) return { success: false, error: 'Provider retry already attempted' }
-  if (shouldSkipFallbackProcessing(sms as ISmsMessage)) {
+  if (shouldSkipProviderRetry(sms as ISmsMessage)) {
+    if (isSmsDelivered(sms as ISmsMessage)) {
+      return { success: false, error: 'Message already delivered' }
+    }
+    if (sms.providerRetryAttempted) {
+      return { success: false, error: 'Provider retry already attempted' }
+    }
+    return { success: false, error: 'Message not eligible for retry' }
+  }
+
+  const staleCutoff = minutesAgo(getFallbackStaleMinutes())
+  const eligibility = evaluateProviderRetryEligibility(sms as ISmsMessage, staleCutoff)
+  if (!eligibility.eligible) {
     return { success: false, error: 'Message not eligible for retry' }
   }
 
