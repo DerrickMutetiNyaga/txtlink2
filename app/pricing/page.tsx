@@ -204,7 +204,7 @@ export default function PricingPage() {
 
   return (
     <MarketingLayout>
-      <div className="marketing-container py-8 sm:py-12">
+      <div className="marketing-container py-8 sm:py-12 w-full max-w-full min-w-0 overflow-x-hidden">
         {/* Sender ID Ad Banner */}
         <SenderIdAdBanner currentPage="pricing" />
         
@@ -226,8 +226,8 @@ export default function PricingPage() {
             return (
               <div
               key={tier.name}
-                className={`relative group transition-all duration-300 ${
-                  isHighlighted ? 'lg:-mt-4 lg:mb-4' : ''
+                className={`relative group transition-all duration-300 min-w-0 w-full max-w-full ${
+                  isHighlighted ? 'pt-6 lg:pt-0 lg:-mt-4 lg:mb-4' : ''
                 }`}
               >
                 {/* Most Popular Ribbon */}
@@ -243,7 +243,7 @@ export default function PricingPage() {
                 )}
 
                 <Card
-                  className={`relative overflow-hidden flex flex-col h-full transition-all duration-300 ${
+                  className={`relative overflow-hidden flex flex-col h-full transition-all duration-300 w-full max-w-full min-w-0 ${
                     isHighlighted
                       ? `bg-gradient-to-b from-teal-50/50 via-white to-white border-2 ${getCardBorder(tier.accentColor, true)} shadow-xl hover:shadow-2xl lg:hover:scale-[1.02]`
                       : `bg-white border ${getCardBorder(tier.accentColor, false)} shadow-md hover:shadow-xl lg:hover:-translate-y-1`
@@ -261,15 +261,15 @@ export default function PricingPage() {
                   <div className="relative z-10 p-5 sm:p-6 lg:p-8 flex flex-col h-full">
                     {/* Plan Identity Row */}
                     <div className="mb-6">
-                      <div className="flex items-center gap-4 mb-3">
+                      <div className="flex items-center gap-4 mb-3 min-w-0">
                         <div
-                          className={`w-12 h-12 rounded-xl bg-gradient-to-br ${getIconBgGradient(tier.accentColor)} flex items-center justify-center shadow-lg`}
+                          className={`w-12 h-12 rounded-xl bg-gradient-to-br ${getIconBgGradient(tier.accentColor)} flex items-center justify-center shadow-lg flex-shrink-0`}
                         >
                           <IconComponent className="w-6 h-6 text-white" />
                         </div>
-                        <div>
-                          <h3 className="text-2xl font-bold text-gray-900">{tier.name}</h3>
-                          <p className="text-xs text-gray-500 mt-0.5 font-medium">{tier.description}</p>
+                        <div className="min-w-0">
+                          <h3 className="text-xl sm:text-2xl font-bold text-gray-900 break-words">{tier.name}</h3>
+                          <p className="text-xs text-gray-500 mt-0.5 font-medium break-words">{tier.description}</p>
                         </div>
                       </div>
                       {isHighlighted && tier.highlightReason && (
@@ -455,7 +455,7 @@ export default function PricingPage() {
             </div>
           </div>
 
-          <Card className="p-5 sm:p-6 lg:p-8 bg-gradient-to-br from-teal-600 to-emerald-600 text-white border-none shadow-xl">
+          <Card className="p-5 sm:p-6 lg:p-8 bg-gradient-to-br from-teal-600 to-emerald-600 text-white border-none shadow-xl w-full max-w-full min-w-0">
             <div className="flex items-center gap-3 mb-6">
               <div className="w-10 h-10 rounded-lg bg-white/20 backdrop-blur-sm flex items-center justify-center flex-shrink-0">
                 <FileText className="w-5 h-5 text-white" />

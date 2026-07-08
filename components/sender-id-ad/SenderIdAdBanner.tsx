@@ -121,11 +121,11 @@ export default function SenderIdAdBanner({ currentPage = 'dashboard' }: SenderId
     >
       {/* Decorative background shapes - subtle depth */}
       <div
-        className="absolute -bottom-12 -left-12 w-48 h-48 rounded-full opacity-15 blur-3xl"
+        className="hidden sm:block absolute -bottom-12 -left-12 w-48 h-48 rounded-full opacity-15 blur-3xl pointer-events-none"
         style={{ backgroundColor: '#C8F5D4' }}
       />
       <div
-        className="absolute -top-8 -right-8 w-32 h-32 rounded-full opacity-10 blur-2xl"
+        className="hidden sm:block absolute -top-8 -right-8 w-32 h-32 rounded-full opacity-10 blur-2xl pointer-events-none"
         style={{ backgroundColor: '#C8F5D4' }}
       />
 

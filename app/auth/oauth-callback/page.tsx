@@ -12,10 +12,17 @@ type UserPayload = {
   isOwner?: boolean
 }
 
+function decodeBase64Url(value: string): string {
+  const base64 = value.replace(/-/g, '+').replace(/_/g, '/')
+  const pad = base64.length % 4
+  const padded = pad ? base64 + '='.repeat(4 - pad) : base64
+  return atob(padded)
+}
+
 function decodeUser(userB64: string | null): UserPayload | null {
   if (!userB64) return null
   try {
-    const json = atob(userB64.replace(/-/g, '+').replace(/_/g, '/'))
+    const json = decodeBase64Url(userB64)
     return JSON.parse(json)
   } catch {
     return null

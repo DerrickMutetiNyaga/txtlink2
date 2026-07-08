@@ -72,11 +72,11 @@ export default function ProductsPage() {
 
   return (
     <MarketingLayout>
-      <div className="bg-slate-50">
-        <div className="px-6 py-16 max-w-7xl mx-auto">
+      <div className="bg-slate-50 overflow-x-hidden w-full max-w-full min-w-0">
+        <div className="px-4 sm:px-6 lg:px-8 py-12 sm:py-16 max-w-7xl mx-auto min-w-0">
           {/* Header */}
-          <div className="text-center mb-20">
-            <h1 className="text-5xl font-bold text-slate-900 mb-4">Our Products</h1>
+          <div className="text-center mb-12 sm:mb-20">
+            <h1 className="text-[clamp(1.75rem,5vw,3rem)] font-bold text-slate-900 mb-4">Our Products</h1>
             <p className="text-lg text-slate-600 max-w-2xl mx-auto">
               Comprehensive SMS solutions designed for enterprises, governments, and financial institutions worldwide.
             </p>

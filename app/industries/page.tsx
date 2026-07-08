@@ -203,17 +203,17 @@ export default function IndustriesPage() {
 
   return (
     <MarketingLayout>
-      <div className="bg-slate-50 overflow-x-hidden w-full">
+      <div className="bg-slate-50 overflow-x-hidden w-full max-w-full min-w-0">
         {/* Hero Section */}
-        <section className="pt-8 sm:pt-12 pb-12 sm:pb-16 px-4 sm:px-6 relative overflow-hidden">
+        <section className="pt-8 sm:pt-12 pb-12 sm:pb-16 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
           {/* Subtle background gradient */}
           <div className="absolute inset-0 bg-gradient-to-br from-slate-50 via-teal-50/30 to-emerald-50/20" />
           <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiMxNGI4YTYiIGZpbGwtb3BhY2l0eT0iMC4wMyI+PGNpcmNsZSBjeD0iMzAiIGN5PSIzMCIgcj0iMiIvPjwvZz48L2c+PC9zdmc+')] opacity-40" />
 
-          <div className="max-w-7xl mx-auto relative z-10">
-            <div className="grid md:grid-cols-2 gap-12 items-center">
+          <div className="max-w-7xl mx-auto relative z-10 min-w-0">
+            <div className="grid md:grid-cols-2 gap-8 sm:gap-12 items-center min-w-0">
               {/* Left Content */}
-              <div>
+              <div className="min-w-0">
                 <h1 className="text-[clamp(1.75rem,5vw,3rem)] font-bold text-slate-900 mb-4 leading-tight">
                   SMS Solutions for Every Industry
                 </h1>
@@ -281,8 +281,8 @@ export default function IndustriesPage() {
         </section>
 
         {/* Industry Filter Bar */}
-        <section className="px-4 sm:px-6">
-          <div className="max-w-7xl mx-auto">
+        <section className="px-4 sm:px-6 lg:px-8 overflow-x-hidden">
+          <div className="max-w-7xl mx-auto min-w-0">
             <IndustryFilterBar
               activeFilter={activeFilter}
               onFilterChange={setActiveFilter}
@@ -293,8 +293,8 @@ export default function IndustriesPage() {
         </section>
 
         {/* Industry Cards */}
-        <section className="px-4 sm:px-6 pb-12 sm:pb-16">
-          <div className="max-w-7xl mx-auto">
+        <section className="px-4 sm:px-6 lg:px-8 pb-12 sm:pb-16 overflow-x-hidden">
+          <div className="max-w-7xl mx-auto min-w-0">
             <div
               className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6"
               style={{

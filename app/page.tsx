@@ -76,20 +76,20 @@ export default function Home() {
   return (
     <MarketingLayout>
       {/* Hero Section */}
-      <section className="relative py-8 sm:py-12 md:py-16 lg:py-20 xl:py-24 border-b border-gray-200 bg-gradient-to-b from-white via-emerald-50/40 to-white">
+      <section className="relative py-8 sm:py-12 md:py-16 lg:py-20 xl:py-24 border-b border-gray-200 bg-gradient-to-b from-white via-emerald-50/40 to-white overflow-x-hidden">
         {/* Subtle Background Elements */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           {/* Soft Radial Glow */}
-          <div className="absolute top-1/2 right-1/4 -translate-y-1/2 w-[300px] h-[300px] sm:w-[400px] sm:h-[400px] md:w-[500px] md:h-[500px] bg-emerald-200/20 rounded-full blur-3xl"></div>
+          <div className="absolute top-1/2 right-0 sm:right-1/4 -translate-y-1/2 w-[200px] h-[200px] sm:w-[400px] sm:h-[400px] md:w-[500px] md:h-[500px] max-w-[80vw] bg-emerald-200/20 rounded-full blur-3xl"></div>
           {/* Floating Blur Shapes */}
-          <div className="absolute top-20 left-1/4 w-32 h-32 sm:w-48 sm:h-48 md:w-64 md:h-64 bg-teal-100/30 rounded-full blur-2xl animate-pulse"></div>
-          <div className="absolute bottom-20 right-1/4 w-24 h-24 sm:w-36 sm:h-36 md:w-48 md:h-48 bg-green-100/30 rounded-full blur-2xl animate-pulse" style={{ animationDelay: '1.5s' }}></div>
+          <div className="hidden sm:block absolute top-20 left-1/4 w-32 h-32 sm:w-48 sm:h-48 md:w-64 md:h-64 bg-teal-100/30 rounded-full blur-2xl animate-pulse"></div>
+          <div className="hidden sm:block absolute bottom-20 right-1/4 w-24 h-24 sm:w-36 sm:h-36 md:w-48 md:h-48 bg-green-100/30 rounded-full blur-2xl animate-pulse" style={{ animationDelay: '1.5s' }}></div>
         </div>
 
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 relative z-10">
-          <div className="grid lg:grid-cols-2 gap-8 sm:gap-10 lg:gap-12 items-center">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 min-w-0">
+          <div className="grid lg:grid-cols-2 gap-8 sm:gap-10 lg:gap-12 items-center min-w-0">
             {/* Left Content */}
-            <div className="space-y-4 sm:space-y-6 text-center lg:text-left">
+            <div className="space-y-4 sm:space-y-6 text-center lg:text-left min-w-0">
               {/* Main Heading - Outcome-Driven */}
               <div className="space-y-3 sm:space-y-4">
                 <h1 className="text-[clamp(1.75rem,6vw,3.75rem)] font-bold text-gray-900 leading-tight tracking-tight">
@@ -138,7 +138,7 @@ export default function Home() {
             </div>
 
             {/* Right Visual - Modern Dashboard Mockup */}
-            <div className="relative w-full max-w-full sm:max-w-lg md:max-w-xl mx-auto lg:mx-0 overflow-hidden">
+            <div className="relative w-full max-w-full sm:max-w-lg md:max-w-xl mx-auto lg:mx-0 overflow-hidden min-w-0">
               {/* Dashboard Container */}
               <div className="relative bg-white rounded-xl border border-gray-200 shadow-2xl overflow-hidden w-full">
                 {/* Dashboard Header */}
@@ -315,8 +315,8 @@ export default function Home() {
       </section>
 
       {/* Trusted By Section */}
-      <section className="py-12 sm:py-16 md:py-20 px-4 sm:px-6 border-b border-gray-200 bg-gradient-to-b from-white via-gray-50/50 to-white">
-        <div className="max-w-7xl mx-auto">
+      <section className="py-12 sm:py-16 md:py-20 px-4 sm:px-6 lg:px-8 border-b border-gray-200 bg-gradient-to-b from-white via-gray-50/50 to-white overflow-x-hidden">
+        <div className="max-w-7xl mx-auto min-w-0">
           <div className="text-center mb-10 sm:mb-12 md:mb-16">
             <p className="text-xs sm:text-sm font-semibold text-teal-600 mb-2 sm:mb-3 uppercase tracking-wider">
               Trusted by Industry Leaders
@@ -371,7 +371,7 @@ export default function Home() {
               return (
                 <Card 
                   key={org.name} 
-                  className="group relative overflow-hidden border-0 shadow-md hover:shadow-xl transition-all duration-300 hover:-translate-y-1 bg-white"
+                  className="group relative overflow-hidden border-0 shadow-md hover:shadow-xl transition-all duration-300 hover:-translate-y-1 bg-white w-full max-w-full min-w-0"
                 >
                   {/* Background gradient on hover */}
                   <div className={`absolute inset-0 bg-gradient-to-br ${org.bgGradient} opacity-0 group-hover:opacity-100 transition-opacity duration-300`} />
@@ -429,8 +429,8 @@ export default function Home() {
       </section>
 
       {/* Services Section */}
-      <section id="services" className="py-12 sm:py-16 md:py-20 px-4 sm:px-6 border-b border-gray-200 bg-white">
-        <div className="max-w-7xl mx-auto">
+      <section id="services" className="py-12 sm:py-16 md:py-20 px-4 sm:px-6 lg:px-8 border-b border-gray-200 bg-white overflow-x-hidden">
+        <div className="max-w-7xl mx-auto min-w-0">
           <div className="text-center mb-10 sm:mb-12 md:mb-16">
             <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 mb-3 sm:mb-4">Our Services</h2>
             <p className="text-sm sm:text-base md:text-lg text-gray-600 max-w-2xl mx-auto px-4">
@@ -495,8 +495,8 @@ export default function Home() {
       </section>
 
       {/* Why Choose Us Section */}
-      <section id="why" className="py-12 sm:py-16 md:py-20 px-4 sm:px-6 border-b border-gray-200 bg-gray-50">
-        <div className="max-w-7xl mx-auto">
+      <section id="why" className="py-12 sm:py-16 md:py-20 px-4 sm:px-6 lg:px-8 border-b border-gray-200 bg-gray-50 overflow-x-hidden">
+        <div className="max-w-7xl mx-auto min-w-0">
           <div className="text-center mb-10 sm:mb-12 md:mb-16">
             <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 mb-3 sm:mb-4">Why Choose TXTLINK</h2>
             <p className="text-sm sm:text-base md:text-lg text-gray-600 max-w-2xl mx-auto px-4">
@@ -558,10 +558,10 @@ export default function Home() {
       </section>
 
       {/* API & Developer Section */}
-      <section id="api" className="py-12 sm:py-16 md:py-20 px-4 sm:px-6 border-b border-gray-200 bg-teal-600 text-white">
-        <div className="max-w-7xl mx-auto">
-          <div className="grid md:grid-cols-2 gap-8 sm:gap-10 md:gap-12 items-center">
-            <div className="space-y-4 sm:space-y-6">
+      <section id="api" className="py-12 sm:py-16 md:py-20 px-4 sm:px-6 lg:px-8 border-b border-gray-200 bg-teal-600 text-white overflow-x-hidden">
+        <div className="max-w-7xl mx-auto min-w-0">
+          <div className="grid md:grid-cols-2 gap-8 sm:gap-10 md:gap-12 items-center min-w-0">
+            <div className="space-y-4 sm:space-y-6 min-w-0">
               <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold">For Developers</h2>
               <p className="text-base sm:text-lg text-white/90">
                 Powerful APIs designed for seamless integration into any application or platform.
@@ -587,7 +587,7 @@ export default function Home() {
             </div>
 
             {/* Code Snippet */}
-            <div className="bg-gray-900 border border-gray-700 rounded-xl p-4 sm:p-6 font-mono text-xs sm:text-sm overflow-x-auto">
+            <div className="bg-gray-900 border border-gray-700 rounded-xl p-4 sm:p-6 font-mono text-xs sm:text-sm overflow-x-auto w-full max-w-full min-w-0">
               <pre className="text-gray-100">
 {`// Send SMS with TXTLINK API
 const response = await fetch(
@@ -616,8 +616,8 @@ console.log(result.messageId);`}
       </section>
 
       {/* Pricing Section */}
-      <section id="pricing" className="py-12 sm:py-16 md:py-20 px-4 sm:px-6 border-b border-gray-200 bg-[#F9FAFB]">
-        <div className="max-w-7xl mx-auto">
+      <section id="pricing" className="py-12 sm:py-16 md:py-20 px-4 sm:px-6 lg:px-8 border-b border-gray-200 bg-[#F9FAFB] overflow-x-hidden">
+        <div className="max-w-7xl mx-auto min-w-0">
           <div className="text-center mb-10 sm:mb-12 md:mb-16">
             <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 mb-3 sm:mb-4">{pricingData?.pageTitle || 'Transparent Pricing'}</h2>
             <p className="text-sm sm:text-base md:text-lg text-gray-600 max-w-2xl mx-auto px-4">
@@ -770,8 +770,8 @@ console.log(result.messageId);`}
                 return (
                   <div
                     key={plan.name}
-                    className={`relative group transition-all duration-300 ${
-                      isHighlighted ? 'lg:-mt-4 lg:mb-4' : ''
+                    className={`relative group transition-all duration-300 min-w-0 w-full max-w-full ${
+                      isHighlighted ? 'pt-6 lg:pt-0 lg:-mt-4 lg:mb-4' : ''
                 }`}
               >
                     {/* Most Popular Ribbon */}
@@ -787,7 +787,7 @@ console.log(result.messageId);`}
                 )}
                 
                     <Card
-                      className={`relative overflow-hidden flex flex-col h-full transition-all duration-300 ${
+                      className={`relative overflow-hidden flex flex-col h-full transition-all duration-300 w-full max-w-full min-w-0 ${
                         isHighlighted
                           ? `bg-gradient-to-b from-teal-50/50 via-white to-white border-2 ${getCardBorder(plan.accentColor, true)} shadow-xl hover:shadow-2xl lg:hover:scale-[1.02]`
                           : `bg-white border ${getCardBorder(plan.accentColor, false)} shadow-md hover:shadow-xl lg:hover:-translate-y-1`
@@ -805,15 +805,15 @@ console.log(result.messageId);`}
                       <div className="relative z-10 p-6 sm:p-8 flex flex-col h-full">
                         {/* Plan Identity Row */}
                 <div className="mb-4 sm:mb-6">
-                          <div className="flex items-center gap-3 sm:gap-4 mb-2 sm:mb-3">
+                          <div className="flex items-center gap-3 sm:gap-4 mb-2 sm:mb-3 min-w-0">
                             <div
-                              className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br ${getIconBgGradient(plan.accentColor)} flex items-center justify-center shadow-lg`}
+                              className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br ${getIconBgGradient(plan.accentColor)} flex items-center justify-center shadow-lg flex-shrink-0`}
                             >
                               <IconComponent className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
                             </div>
-                            <div>
-                              <h3 className="text-xl sm:text-2xl font-bold text-gray-900">{plan.name}</h3>
-                              <p className="text-xs text-gray-500 mt-0.5 font-medium">{plan.description}</p>
+                            <div className="min-w-0">
+                              <h3 className="text-xl sm:text-2xl font-bold text-gray-900 break-words">{plan.name}</h3>
+                              <p className="text-xs text-gray-500 mt-0.5 font-medium break-words">{plan.description}</p>
                             </div>
                           </div>
                           {isHighlighted && plan.highlightReason && (
@@ -1121,8 +1121,8 @@ console.log(result.messageId);`}
       </section>
 
       {/* Compliance & Security Section */}
-      <section className="py-12 sm:py-14 md:py-16 px-4 sm:px-6 border-b border-gray-200 bg-gray-50">
-        <div className="max-w-7xl mx-auto">
+      <section className="py-12 sm:py-14 md:py-16 px-4 sm:px-6 lg:px-8 border-b border-gray-200 bg-gray-50 overflow-x-hidden">
+        <div className="max-w-7xl mx-auto min-w-0">
           <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 text-center mb-8 sm:mb-10 md:mb-12">
             Compliance & Security
           </h2>
@@ -1144,8 +1144,8 @@ console.log(result.messageId);`}
       </section>
 
       {/* Final CTA Section */}
-      <section className="py-12 sm:py-16 md:py-20 px-4 sm:px-6 border-b border-gray-200 bg-white">
-        <div className="max-w-4xl mx-auto text-center space-y-6 sm:space-y-8">
+      <section className="py-12 sm:py-16 md:py-20 px-4 sm:px-6 lg:px-8 border-b border-gray-200 bg-white overflow-x-hidden">
+        <div className="max-w-4xl mx-auto text-center space-y-6 sm:space-y-8 min-w-0">
           <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-gray-900">
             Start Sending SMS at Scale
           </h2>

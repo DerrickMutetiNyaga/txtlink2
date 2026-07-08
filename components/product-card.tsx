@@ -54,7 +54,7 @@ export function ProductCard({
 
   return (
     <div
-      className="group relative bg-white rounded-2xl border border-slate-200/60 shadow-sm hover:shadow-md hover:-translate-y-1 hover:ring-1 hover:ring-teal-200 transition-all duration-500 ease-out overflow-hidden flex flex-col"
+      className="group relative bg-white rounded-2xl border border-slate-200/60 shadow-sm hover:shadow-md hover:-translate-y-1 hover:ring-1 hover:ring-teal-200 transition-all duration-500 ease-out overflow-hidden flex flex-col w-full max-w-full min-w-0"
       style={{
         animation: `fadeInUp 0.6s ease-out ${index * 0.1}s both`,
       }}
@@ -135,8 +135,8 @@ export function ProductCard({
           </div>
 
           {/* CTA Area */}
-          <div className="flex items-center gap-3">
-            <Link href={href} className="flex-1">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 min-w-0">
+            <Link href={href} className="flex-1 min-w-0">
               <Button className="w-full bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white rounded-lg h-9 text-sm font-medium shadow-sm hover:shadow-md transition-all duration-300 group/btn">
                 Learn more
                 <ArrowRight className="ml-1.5 w-3.5 h-3.5 transition-transform duration-300 group-hover/btn:translate-x-0.5" />

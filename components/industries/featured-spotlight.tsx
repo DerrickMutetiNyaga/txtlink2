@@ -109,13 +109,13 @@ export function FeaturedSpotlight() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 sm:gap-2 mb-6 sm:mb-8 border-b border-slate-200 overflow-x-auto -mx-1 px-1 pb-px scrollbar-hide">
+      <div className="flex flex-wrap gap-2 mb-6 sm:mb-8 border-b border-slate-200 pb-px w-full min-w-0">
         {(['banking', 'healthcare', 'logistics'] as const).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
             className={`
-              flex-shrink-0 px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium border-b-2 transition-colors whitespace-nowrap
+              px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium border-b-2 transition-colors break-words text-left
               ${
                 activeTab === tab
                   ? 'border-teal-600 text-teal-600'

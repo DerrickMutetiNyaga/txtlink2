@@ -140,7 +140,7 @@ export default function ContactPage() {
 
   return (
     <MarketingLayout>
-      <div className="bg-gradient-to-b from-slate-50 to-white min-h-screen">
+      <div className="bg-gradient-to-b from-slate-50 to-white min-h-screen overflow-x-hidden w-full max-w-full">
         {/* Support Status Pill */}
         <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 hidden md:block">
           <div className="inline-flex items-center gap-2 bg-white/95 backdrop-blur-sm text-slate-700 px-4 py-2 rounded-full text-xs font-medium border border-slate-200 shadow-sm">
@@ -154,14 +154,14 @@ export default function ContactPage() {
           {/* Background Treatment */}
           <div className="absolute inset-0 bg-gradient-to-br from-slate-50 via-teal-50/30 to-emerald-50/20" />
           <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px]" />
-          <div className="absolute top-0 right-0 w-96 h-96 bg-teal-500/5 rounded-full blur-3xl" />
-          <div className="absolute bottom-0 left-0 w-96 h-96 bg-emerald-500/5 rounded-full blur-3xl" />
+          <div className="absolute top-0 right-0 w-48 sm:w-96 h-48 sm:h-96 bg-teal-500/5 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute bottom-0 left-0 w-48 sm:w-96 h-48 sm:h-96 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none" />
           
-          <div className="max-w-7xl mx-auto relative z-10">
-            <div className="grid lg:grid-cols-2 gap-12 items-center">
+          <div className="max-w-7xl mx-auto relative z-10 min-w-0">
+            <div className="grid lg:grid-cols-2 gap-8 sm:gap-12 items-center min-w-0">
               {/* Left: Title + Copy + CTA + Trust Badges */}
               <div
-                className="space-y-6"
+                className="space-y-6 min-w-0"
                 style={{
                   animation: 'fadeInUp 0.6s ease-out both',
                 }}

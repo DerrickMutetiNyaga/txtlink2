@@ -47,7 +47,7 @@ export function IndustryCard({
 
   return (
     <Card
-      className="group relative bg-white border border-slate-200/70 rounded-2xl shadow-sm hover:shadow-md hover:-translate-y-1 hover:ring-1 hover:ring-teal-200 transition-all duration-300 overflow-hidden"
+      className="group relative bg-white border border-slate-200/70 rounded-2xl shadow-sm hover:shadow-md hover:-translate-y-1 hover:ring-1 hover:ring-teal-200 transition-all duration-300 overflow-hidden w-full max-w-full min-w-0"
       style={{
         animation: `fadeInUp 0.6s ease-out ${index * 0.1}s both`,
       }}
@@ -65,7 +65,7 @@ export function IndustryCard({
           >
             <Icon className="w-6 h-6 text-teal-600 relative z-10" />
           </div>
-          <h3 className="text-xl font-semibold text-slate-900 mb-1">{title}</h3>
+          <h3 className="text-xl font-semibold text-slate-900 mb-1 break-words">{title}</h3>
           <p className="text-xs text-slate-500 font-medium">Best for: {bestFor}</p>
         </div>
 

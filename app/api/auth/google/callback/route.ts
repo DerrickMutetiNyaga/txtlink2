@@ -1,152 +1,114 @@
 import { NextRequest, NextResponse } from 'next/server'
 import connectDB from '@/lib/db/connect'
 import { User } from '@/lib/db/models'
-import bcrypt from 'bcryptjs'
-import jwt from 'jsonwebtoken'
-
-type GoogleUserInfo = {
-  sub?: string
-  email?: string
-  email_verified?: boolean
-  name?: string
-  given_name?: string
-  family_name?: string
-  picture?: string
-}
-
-async function exchangeCodeForTokens(params: {
-  code: string
-  redirectUri: string
-}) {
-  const clientId = process.env.GOOGLE_CLIENT_ID?.trim()
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim()
-  if (!clientId || !clientSecret) throw new Error('Missing Google OAuth env vars')
-
-  const body = new URLSearchParams()
-  body.set('code', params.code)
-  body.set('client_id', clientId)
-  body.set('client_secret', clientSecret)
-  body.set('redirect_uri', params.redirectUri)
-  body.set('grant_type', 'authorization_code')
-
-  const resp = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body,
-  })
-
-  const json = await resp.json()
-  if (!resp.ok) {
-    throw new Error(json?.error_description || json?.error || 'Failed to exchange code')
-  }
-
-  return json as { access_token: string; id_token?: string; expires_in?: number; token_type?: string }
-}
-
-async function fetchGoogleUserInfo(accessToken: string): Promise<GoogleUserInfo> {
-  const resp = await fetch('https://openidconnect.googleapis.com/v1/userinfo', {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  })
-  const json = await resp.json()
-  if (!resp.ok) throw new Error(json?.error_description || 'Failed to fetch userinfo')
-  return json as GoogleUserInfo
-}
-
-function getBaseUrl(req: NextRequest): string {
-  const host = req.headers.get('x-forwarded-host') || req.headers.get('host')
-  const proto = req.headers.get('x-forwarded-proto') || 'http'
-  if (host) return `${proto}://${host}`.replace(/\/+$/, '')
-
-  const env = process.env.NEXT_PUBLIC_BASE_URL?.trim()
-  if (env) return env.replace(/\/+$/, '')
-
-  throw new Error('Unable to determine base URL')
-}
+import {
+  buildAuthProvidersUpdate,
+  buildAuthUserPayload,
+  createSessionToken,
+  exchangeCodeForTokens,
+  fetchGoogleUserInfo,
+  getBaseUrl,
+  getGoogleRedirectUri,
+  loginRedirectUrl,
+  resolveIsOwner,
+  validateGoogleUserInfo,
+} from '@/lib/auth/google-oauth'
 
 export async function GET(req: NextRequest) {
+  let baseUrl = ''
+
   try {
+    baseUrl = getBaseUrl(req)
+
     const code = req.nextUrl.searchParams.get('code')
     const state = req.nextUrl.searchParams.get('state')
 
     if (!code || !state) {
-      return NextResponse.redirect('/auth/login?error=google_oauth_missing_code')
+      return NextResponse.redirect(loginRedirectUrl(baseUrl, 'google_oauth_missing_code'))
     }
 
     const stateCookie = req.cookies.get('google_oauth_state')?.value
     if (!stateCookie || stateCookie !== state) {
-      return NextResponse.redirect('/auth/login?error=google_oauth_invalid_state')
+      return NextResponse.redirect(loginRedirectUrl(baseUrl, 'google_oauth_invalid_state'))
     }
 
-    const baseUrl = getBaseUrl(req)
-    const redirectUri = `${baseUrl}/api/auth/google/callback`
-
+    const redirectUri = getGoogleRedirectUri(req)
     const tokens = await exchangeCodeForTokens({ code, redirectUri })
     const userInfo = await fetchGoogleUserInfo(tokens.access_token)
 
-    const email = userInfo.email?.toLowerCase().trim()
-    if (!email) {
-      return NextResponse.redirect('/auth/login?error=google_oauth_no_email')
+    const validation = validateGoogleUserInfo(userInfo)
+    if (!validation.ok) {
+      return NextResponse.redirect(loginRedirectUrl(baseUrl, validation.error))
     }
+
+    const { email, googleId } = validation
 
     await connectDB()
 
     let user = await User.findOne({ email })
 
-    if (!user) {
-      const randomPassword = `${email}:${Date.now()}:${Math.random()}`
-      const passwordHash = await bcrypt.hash(randomPassword, 10)
+    if (user) {
+      if (!user.isActive) {
+        return NextResponse.redirect(loginRedirectUrl(baseUrl, 'account_deactivated'))
+      }
 
-      user = await User.create({
-        name: userInfo.name || email.split('@')[0],
-        email,
-        passwordHash,
-        role: 'user',
-        credits: 0,
-        creditsBalance: 0,
-        isActive: true,
-      })
-    } else if (!user.isActive) {
-      return NextResponse.redirect('/auth/login?error=account_deactivated')
+      const updates: Record<string, unknown> = {
+        lastLoginAt: new Date(),
+        emailVerified: true,
+        authProviders: buildAuthProvidersUpdate(user.authProviders, !!user.passwordHash),
+      }
+
+      if (!user.googleId) {
+        updates.googleId = googleId
+      }
+
+      if (userInfo.picture && !user.avatarUrl) {
+        updates.avatarUrl = userInfo.picture
+      }
+
+      user = await User.findByIdAndUpdate(user._id, { $set: updates }, { new: true })
+      if (!user) {
+        return NextResponse.redirect(loginRedirectUrl(baseUrl, 'google_oauth_failed'))
+      }
+    } else {
+      try {
+        user = await User.create({
+          name: userInfo.name?.trim() || email.split('@')[0],
+          email,
+          role: 'user',
+          credits: 0,
+          creditsBalance: 0,
+          isActive: true,
+          googleId,
+          authProviders: ['google'],
+          emailVerified: true,
+          avatarUrl: userInfo.picture || undefined,
+          provider: 'google',
+          lastLoginAt: new Date(),
+        })
+      } catch (createErr) {
+        console.error('Google OAuth user creation error:', createErr)
+        return NextResponse.redirect(loginRedirectUrl(baseUrl, 'account_creation_failed'))
+      }
     }
 
-    const JWT_SECRET = process.env.JWT_SECRET?.trim()
-    if (!JWT_SECRET) throw new Error('Missing JWT_SECRET')
+    const isOwner = resolveIsOwner(email, user._id.toString())
+    const token = createSessionToken(user)
+    const userPayload = buildAuthUserPayload(user, isOwner)
 
-    const OWNER_EMAIL = process.env.OWNER_EMAIL?.trim()?.toLowerCase()
-    const OWNER_USER_ID = process.env.OWNER_USER_ID?.trim()
-    const isOwner =
-      (!!OWNER_EMAIL && email === OWNER_EMAIL) ||
-      (!!OWNER_USER_ID && user._id.toString() === OWNER_USER_ID)
-
-    const token = jwt.sign(
-      {
-        userId: user._id.toString(),
-        email: user.email,
-        role: user.role,
-      },
-      JWT_SECRET,
-      { expiresIn: '7d' }
-    )
-
-    const userPayload = {
-      id: user._id.toString(),
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      credits: user.credits,
-      isOwner,
-    }
-
-    const callbackUrl = new URL(`${baseUrl}/auth/oauth-callback`)
+    const callbackUrl = new URL('/auth/oauth-callback', baseUrl)
     callbackUrl.searchParams.set('token', token)
-    callbackUrl.searchParams.set('user', Buffer.from(JSON.stringify(userPayload)).toString('base64url'))
+    callbackUrl.searchParams.set(
+      'user',
+      Buffer.from(JSON.stringify(userPayload)).toString('base64url')
+    )
 
     const res = NextResponse.redirect(callbackUrl.toString())
     res.cookies.delete('google_oauth_state')
     return res
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('Google OAuth callback error:', err)
-    return NextResponse.redirect('/auth/login?error=google_oauth_failed')
+    const fallbackBase = baseUrl || process.env.NEXT_PUBLIC_BASE_URL?.trim() || 'http://localhost:3000'
+    return NextResponse.redirect(loginRedirectUrl(fallbackBase, 'google_oauth_failed'))
   }
 }
-

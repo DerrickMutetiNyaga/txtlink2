@@ -27,7 +27,7 @@ export function IndustryFilterBar({
   onSearchChange,
 }: IndustryFilterBarProps) {
   return (
-    <div className="sticky top-16 sm:top-20 z-30 bg-white/80 backdrop-blur-sm border-b border-slate-200 py-3 sm:py-4 mb-6 sm:mb-8 -mx-4 sm:-mx-0 px-4 sm:px-0">
+    <div className="sticky top-16 sm:top-20 z-30 bg-white/80 backdrop-blur-sm border-b border-slate-200 py-3 sm:py-4 mb-6 sm:mb-8 w-full min-w-0">
       <div className="flex flex-col gap-3 sm:gap-4">
         {/* Filter Chips */}
         <div className="flex flex-wrap gap-2">

@@ -10,14 +10,19 @@
   }
 
   .marketing-container {
-    @apply w-full max-w-7xl mx-auto px-4 sm:px-6;
+    @apply w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 min-w-0;
   }
 
   .marketing-section {
-    @apply py-12 sm:py-16 md:py-20;
+    @apply py-12 sm:py-16 md:py-20 w-full max-w-full min-w-0;
+  }
+
+  .marketing-section-safe {
+    @apply w-full max-w-full min-w-0 overflow-x-hidden;
   }
 
   .table-wrapper {
+    @apply w-full max-w-full min-w-0;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
   }
@@ -147,8 +152,15 @@
 @layer base {
   html,
   body {
-    overflow-x: hidden;
+    width: 100%;
     max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  main {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
   }
 
   * {

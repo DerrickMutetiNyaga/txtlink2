@@ -69,13 +69,13 @@ export default function AboutPage() {
         {/* Background Treatment */}
         <div className="absolute inset-0 bg-gradient-to-br from-slate-50 via-teal-50/30 to-emerald-50/20" />
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px]" />
-        <div className="absolute top-0 right-0 w-96 h-96 bg-teal-500/5 rounded-full blur-3xl" />
-        <div className="absolute bottom-0 left-0 w-96 h-96 bg-emerald-500/5 rounded-full blur-3xl" />
+        <div className="absolute top-0 right-0 w-48 sm:w-96 h-48 sm:h-96 bg-teal-500/5 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-0 left-0 w-48 sm:w-96 h-48 sm:h-96 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none" />
         
-        <div className="max-w-7xl mx-auto relative z-10">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
+        <div className="max-w-7xl mx-auto relative z-10 min-w-0">
+          <div className="grid lg:grid-cols-2 gap-8 sm:gap-12 items-center min-w-0">
             {/* Left: Title + Copy + Trust Row */}
-            <div className="space-y-6">
+            <div className="space-y-6 min-w-0">
               <div className="inline-flex items-center gap-2 bg-teal-50 text-[#0F766E] px-4 py-2 rounded-full text-sm font-medium border border-teal-200/50">
                 <Users className="w-4 h-4" />
                 <span>About TXTLINK</span>
@@ -296,17 +296,17 @@ export default function AboutPage() {
             </p>
           </div>
 
-          <div className="relative">
+          <div className="relative overflow-x-hidden">
             <div className="absolute left-4 md:left-1/2 md:-translate-x-1/2 top-0 bottom-0 w-px bg-gradient-to-b from-[#0F766E]/20 via-[#0F766E]/40 to-[#0F766E]/20"></div>
             <div className="space-y-8">
               {milestones.map((milestone, idx) => (
                 <div
                   key={idx}
-                  className={`relative flex flex-col md:flex-row items-start gap-4 md:gap-8 ${
+                  className={`relative flex flex-col md:flex-row items-start gap-4 md:gap-8 min-w-0 ${
                     idx % 2 === 0 ? 'md:flex-row' : 'md:flex-row-reverse'
                   }`}
                 >
-                  <div className="w-full md:flex-1 md:w-1/2 md:ml-auto md:pr-12 pl-10 md:pl-0">
+                  <div className="w-full md:flex-1 md:w-1/2 md:ml-auto md:pr-12 pl-10 md:pl-0 min-w-0">
                     <Card className="p-4 sm:p-6 bg-white border border-[#E2E8F0] rounded-2xl shadow-sm hover:shadow-md transition-all duration-200">
                       <div className="flex items-center gap-3 mb-3">
                         <div className="text-2xl font-bold text-[#0F766E]">{milestone.year}</div>

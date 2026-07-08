@@ -17,8 +17,8 @@ export function Footer() {
   const currentYear = new Date().getFullYear()
 
   return (
-    <footer className="bg-slate-50 border-t border-slate-200">
-      <div className="max-w-7xl mx-auto">
+    <footer className="bg-slate-50 border-t border-slate-200 w-full max-w-full overflow-x-hidden">
+      <div className="max-w-7xl mx-auto w-full min-w-0">
         {/* Top CTA Strip */}
         <div className="pt-8 sm:pt-12 md:pt-16 pb-8 sm:pb-10 md:pb-12 border-b border-slate-200">
           <div className="max-w-4xl mx-auto text-center px-4 sm:px-6">

@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import Link from 'next/link'
@@ -10,15 +10,25 @@ import { SocialButton } from '@/components/auth/social-button'
 import { Divider } from '@/components/auth/divider'
 import { BrandPanel } from '@/components/auth/brand-panel'
 import { MobileBrandHeader } from '@/components/auth/mobile-brand-header'
+import { GOOGLE_LOGIN_ERROR_MESSAGES } from '@/lib/auth/google-errors'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [rememberMe, setRememberMe] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [googleLoading, setGoogleLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const oauthError = new URLSearchParams(window.location.search).get('error')
+    if (oauthError) {
+      setError(GOOGLE_LOGIN_ERROR_MESSAGES[oauthError] || GOOGLE_LOGIN_ERROR_MESSAGES.google_oauth_failed)
+    }
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -73,6 +83,8 @@ export default function LoginPage() {
 
   const handleSocialLogin = (provider: 'google') => {
     if (provider === 'google') {
+      setGoogleLoading(true)
+      setError(null)
       window.location.href = '/api/auth/google/start?intent=login'
       return
     }
@@ -112,8 +124,12 @@ export default function LoginPage() {
 
               {/* Social Login */}
               <div className="mb-6">
-                <SocialButton provider="google" onClick={() => handleSocialLogin('google')}>
-                  Sign in with Google
+                <SocialButton
+                  provider="google"
+                  onClick={() => handleSocialLogin('google')}
+                  disabled={loading || googleLoading}
+                >
+                  {googleLoading ? 'Redirecting to Google…' : 'Sign in with Google'}
                 </SocialButton>
               </div>
 
@@ -249,8 +265,12 @@ export default function LoginPage() {
 
               {/* Social Login */}
               <div className="mb-4">
-                <SocialButton provider="google" onClick={() => handleSocialLogin('google')}>
-                  Sign in with Google
+                <SocialButton
+                  provider="google"
+                  onClick={() => handleSocialLogin('google')}
+                  disabled={loading || googleLoading}
+                >
+                  {googleLoading ? 'Redirecting to Google…' : 'Sign in with Google'}
                 </SocialButton>
               </div>
 

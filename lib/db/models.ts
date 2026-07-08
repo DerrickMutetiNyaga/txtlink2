@@ -10,7 +10,7 @@ export interface IUser {
   _id?: string
   name: string
   email: string
-  passwordHash: string
+  passwordHash?: string
   phone?: string
   role: 'admin' | 'user'
   credits: number // Legacy wallet balance (in KSh) - kept for backward compatibility
@@ -21,6 +21,18 @@ export interface IUser {
   smsHistoryRetentionLimit?: number | null
   /** Completed phone fallback queue jobs auto-delete after this many days (max 3) */
   smsFallbackRetentionDays?: number
+  /** Google OAuth subject ID */
+  googleId?: string
+  /** Auth methods linked to this account, e.g. ["password", "google"] */
+  authProviders?: string[]
+  /** Whether the user's email has been verified (password signup or Google) */
+  emailVerified?: boolean
+  /** Profile picture URL from OAuth provider */
+  avatarUrl?: string
+  /** Primary auth provider for accounts created via OAuth */
+  provider?: string
+  /** Last successful login timestamp */
+  lastLoginAt?: Date
   createdAt: Date
   updatedAt: Date
 }
@@ -29,8 +41,14 @@ const UserSchema = new Schema<IUser>(
   {
     name: { type: String, required: true },
     email: { type: String, required: true, unique: true },
-    passwordHash: { type: String, required: true },
+    passwordHash: { type: String },
     phone: { type: String },
+    googleId: { type: String, sparse: true, unique: true },
+    authProviders: { type: [String], default: undefined },
+    emailVerified: { type: Boolean, default: false },
+    avatarUrl: { type: String },
+    provider: { type: String },
+    lastLoginAt: { type: Date },
     role: { type: String, enum: ['admin', 'user'], default: 'user' },
     credits: { type: Number, default: 0 },
     creditsBalance: { type: Number, default: 0 },

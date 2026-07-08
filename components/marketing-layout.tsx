@@ -13,10 +13,10 @@ export function MarketingLayout({ children }: { children: React.ReactNode }) {
   const closeMobileMenu = () => setMobileMenuOpen(false)
 
   return (
-    <div className="min-h-screen bg-[#F9FAFB] text-gray-900 flex flex-col overflow-x-hidden w-full">
+    <div className="min-h-screen bg-[#F9FAFB] text-gray-900 flex flex-col overflow-x-hidden w-full max-w-full">
       {/* Navigation */}
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-sm border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-3 min-w-0">
+      <nav className="fixed top-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-sm border-b border-gray-200 w-full max-w-full">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-4 flex items-center justify-between gap-3 min-w-0 w-full">
           <Link
             href="/"
             className="text-xl sm:text-2xl font-bold text-teal-600 hover:text-teal-700 transition-colors flex-shrink-0"
@@ -69,7 +69,7 @@ export function MarketingLayout({ children }: { children: React.ReactNode }) {
 
         {/* Mobile Menu */}
         {mobileMenuOpen && (
-          <div className="md:hidden border-t border-gray-200 bg-white px-4 py-4 space-y-1 max-h-[calc(100vh-4rem)] overflow-y-auto">
+          <div className="md:hidden border-t border-gray-200 bg-white px-4 py-4 space-y-1 max-h-[calc(100vh-4rem)] overflow-y-auto w-full">
             {[
               { href: '/products', label: 'Products' },
               { href: '/pricing', label: 'Pricing' },
@@ -103,7 +103,7 @@ export function MarketingLayout({ children }: { children: React.ReactNode }) {
       </nav>
 
       {/* Main content */}
-      <main className="pt-16 sm:pt-20 pb-0 flex-grow w-full min-w-0">{children}</main>
+      <main className="pt-16 sm:pt-20 pb-0 flex-grow w-full min-w-0 max-w-full overflow-x-hidden">{children}</main>
 
       {/* Footer */}
       <Footer />

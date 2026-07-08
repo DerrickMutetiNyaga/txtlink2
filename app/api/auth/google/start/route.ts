@@ -1,16 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
-
-function getBaseUrl(req: NextRequest): string {
-  const host = req.headers.get('x-forwarded-host') || req.headers.get('host')
-  const proto = req.headers.get('x-forwarded-proto') || 'http'
-  if (host) return `${proto}://${host}`.replace(/\/+$/, '')
-
-  const env = process.env.NEXT_PUBLIC_BASE_URL?.trim()
-  if (env) return env.replace(/\/+$/, '')
-
-  throw new Error('Unable to determine base URL')
-}
+import { getBaseUrl, getGoogleRedirectUri } from '@/lib/auth/google-oauth'
 
 export async function GET(req: NextRequest) {
   const clientId = process.env.GOOGLE_CLIENT_ID?.trim()
@@ -19,7 +9,7 @@ export async function GET(req: NextRequest) {
   }
 
   const baseUrl = getBaseUrl(req)
-  const redirectUri = `${baseUrl}/api/auth/google/callback`
+  const redirectUri = getGoogleRedirectUri(req)
 
   const url = new URL('https://accounts.google.com/o/oauth2/v2/auth')
   url.searchParams.set('client_id', clientId)
@@ -43,9 +33,8 @@ export async function GET(req: NextRequest) {
     sameSite: 'lax',
     secure: baseUrl.startsWith('https://'),
     path: '/',
-    maxAge: 10 * 60, // 10 min
+    maxAge: 10 * 60,
   })
 
   return res
 }
-

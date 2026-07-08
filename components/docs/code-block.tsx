@@ -25,7 +25,7 @@ export function CodeBlock({
   }
 
   return (
-    <div className="relative group">
+    <div className="relative group max-w-full min-w-0">
       {filename && (
         <div className="px-4 py-2 bg-slate-800 text-slate-300 text-sm font-mono rounded-t-lg border-b border-slate-700">
           {filename}

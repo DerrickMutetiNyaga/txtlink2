@@ -14,7 +14,7 @@ interface ValueTileProps {
 export function ValueTile({ icon: Icon, title, description, metric, index }: ValueTileProps) {
   return (
     <div
-      className="p-6 bg-white rounded-xl border border-slate-200/60 shadow-sm hover:shadow-md transition-all duration-300"
+      className="p-6 bg-white rounded-xl border border-slate-200/60 shadow-sm hover:shadow-md transition-all duration-300 w-full max-w-full min-w-0"
       style={{
         animation: `fadeInUp 0.6s ease-out ${index * 0.1 + 0.3}s both`,
       }}
