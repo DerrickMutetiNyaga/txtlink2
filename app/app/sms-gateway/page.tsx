@@ -18,7 +18,14 @@ import {
   FlaskConical,
   XCircle,
   Trash2,
+  ChevronDown,
+  Link2,
 } from 'lucide-react'
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible'
 import { useToast } from '@/hooks/use-toast'
 import { getPhoneJobStatusLabel } from '@/lib/services/sms-fallback/phone-status'
 
@@ -121,6 +128,11 @@ export default function SmsGatewayPage() {
   const [clearingAlert, setClearingAlert] = useState(false)
   const [resumingGateway, setResumingGateway] = useState(false)
   const [retryingBlocked, setRetryingBlocked] = useState(false)
+  const [connectionCode, setConnectionCode] = useState('')
+  const [generatingConnectionCode, setGeneratingConnectionCode] = useState(false)
+  const [replaceOldToken, setReplaceOldToken] = useState(true)
+  const [showAdvancedSetup, setShowAdvancedSetup] = useState(false)
+  const [resettingAndGenerating, setResettingAndGenerating] = useState(false)
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -172,6 +184,69 @@ export default function SmsGatewayPage() {
         description: 'Could not copy to clipboard.',
         variant: 'destructive',
       })
+    }
+  }
+
+  const handleGenerateConnectionCode = async (options?: {
+    resetBinding?: boolean
+    skipReplaceConfirm?: boolean
+  }) => {
+    const resetBinding = options?.resetBinding ?? false
+
+    if (
+      !options?.skipReplaceConfirm &&
+      replaceOldToken &&
+      gateway?.hasToken &&
+      gateway?.isActive
+    ) {
+      const message = resetBinding
+        ? 'Reset device binding and generate a new connection code? This replaces the current token. The Android app must be updated with the new code.'
+        : 'Generate a new connection code? This replaces the current active token and clears device binding. The Android app must be updated with the new code.'
+      if (!confirm(message)) {
+        return
+      }
+    }
+
+    if (resetBinding) {
+      setResettingAndGenerating(true)
+    } else {
+      setGeneratingConnectionCode(true)
+    }
+
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch('/api/user/sms-gateway/connection-code', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ replaceOldToken: resetBinding ? true : replaceOldToken }),
+      })
+      const data = await response.json()
+      if (response.ok) {
+        setConnectionCode(data.connectionCode)
+        toast({
+          title: 'Connection code generated',
+          description: data.message,
+        })
+        await fetchStatus()
+      } else {
+        toast({
+          title: 'Error',
+          description: data.error || 'Failed to generate connection code.',
+          variant: 'destructive',
+        })
+      }
+    } catch {
+      toast({
+        title: 'Error',
+        description: 'Failed to generate connection code.',
+        variant: 'destructive',
+      })
+    } finally {
+      setGeneratingConnectionCode(false)
+      setResettingAndGenerating(false)
     }
   }
 
@@ -714,121 +789,114 @@ export default function SmsGatewayPage() {
             <p className="text-gray-500">Loading gateway status...</p>
           </Card>
         ) : (
-          <div className="grid gap-6 lg:grid-cols-2">
-            {/* Card 1: API Connection */}
+          <div className="space-y-6">
+            {/* Connect Android Gateway */}
             <Card className="p-6 bg-white border border-gray-100 shadow-sm">
               <div className="flex items-center gap-3 mb-4">
                 <div className="p-2.5 rounded-xl bg-teal-50 text-teal-600">
-                  <Wifi size={20} />
+                  <Link2 size={20} />
                 </div>
                 <div>
                   <h2 className="text-lg font-semibold text-gray-900">
-                    API Connection
+                    Connect Android Gateway
                   </h2>
-                  <p className="text-sm text-gray-500">Website API Base URL</p>
+                  <p className="text-sm text-gray-500">
+                    Generate one secure connection code for your Android SMS gateway.
+                  </p>
                 </div>
               </div>
 
-              <div className="space-y-4">
-                <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
-                  <code className="text-sm font-mono text-gray-900 break-all">
-                    {apiBaseUrl || 'Loading...'}
-                  </code>
-                </div>
+              <ol className="space-y-1 text-sm text-gray-700 list-decimal list-inside mb-6">
+                <li>Generate a connection code.</li>
+                <li>Copy the code.</li>
+                <li>Use it in your Android gateway app.</li>
+              </ol>
 
-                <div className="flex items-center justify-between">
-                  <StatusBadge label="Ready" variant="green" />
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="border-gray-300 text-gray-700 hover:bg-gray-100"
-                    onClick={() => handleCopy(apiBaseUrl, 'url')}
-                    disabled={!apiBaseUrl}
-                  >
-                    {copiedField === 'url' ? (
-                      <Check size={16} className="mr-2 text-emerald-600" />
-                    ) : (
-                      <Copy size={16} className="mr-2" />
-                    )}
-                    Copy URL
-                  </Button>
-                </div>
+              <label className="flex items-start gap-3 mb-4 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={replaceOldToken}
+                  onChange={(e) => setReplaceOldToken(e.target.checked)}
+                  className="mt-1 h-4 w-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+                />
+                <span className="text-sm text-gray-700">
+                  Replace old active token
+                  <span className="block text-xs text-gray-500 mt-0.5">
+                    Revokes the previous token and clears device binding when generating a new
+                    code.
+                  </span>
+                </span>
+              </label>
 
-                <p className="text-xs text-gray-500">
-                  Copy this URL and paste it into the Android SMS Gateway app.
-                </p>
-              </div>
-            </Card>
-
-            {/* Card 2: Device Token */}
-            <Card className="p-6 bg-white border border-gray-100 shadow-sm">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="p-2.5 rounded-xl bg-teal-50 text-teal-600">
-                  <Key size={20} />
-                </div>
-                <div>
-                  <h2 className="text-lg font-semibold text-gray-900">
-                    Device Token
-                  </h2>
-                  <p className="text-sm text-gray-500">Device Token / API Key</p>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                {gateway?.hasToken && gateway.isActive ? (
-                  <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
-                    <div className="flex items-center justify-between gap-2 mb-2">
-                      <p className="text-xs font-semibold text-gray-600">Token status</p>
-                      <StatusBadge label="Active" variant="green" />
-                    </div>
-                    <code className="text-sm font-mono text-gray-500">
-                      gw_live_••••••••••••••••••••••••••••••••••••••••••
-                    </code>
-                    <p className="text-xs text-amber-700 mt-2">
-                      Token is hidden for security. Generate a new token to replace it — the
-                      old token stops working immediately.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="p-4 bg-gray-50 rounded-xl border border-dashed border-gray-200 text-center">
-                    <p className="text-sm text-gray-500">
-                      No active device token. Generate one to connect your phone.
-                    </p>
-                  </div>
-                )}
-
+              {!connectionCode ? (
                 <Button
-                  className="w-full bg-teal-600 text-white hover:bg-teal-700"
-                  onClick={handleGenerateToken}
-                  disabled={generating}
+                  className="w-full sm:w-auto bg-teal-600 text-white hover:bg-teal-700"
+                  onClick={() => handleGenerateConnectionCode()}
+                  disabled={generatingConnectionCode}
                 >
-                  {generating ? (
+                  {generatingConnectionCode ? (
                     <>
                       <RefreshCw size={16} className="mr-2 animate-spin" />
                       Generating...
                     </>
                   ) : (
                     <>
-                      <Key size={16} className="mr-2" />
-                      Generate Device Token
+                      <Link2 size={16} className="mr-2" />
+                      Generate Connection Code
                     </>
                   )}
                 </Button>
+              ) : (
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900 mb-2">
+                      App Connection Code
+                    </p>
+                    <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
+                      <code className="text-xs font-mono text-gray-900 break-all">
+                        {connectionCode}
+                      </code>
+                    </div>
+                  </div>
 
-                <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg flex gap-2">
-                  <AlertTriangle
-                    size={16}
-                    className="text-amber-600 shrink-0 mt-0.5"
-                  />
-                  <p className="text-xs text-amber-800">
-                    Copy the token immediately after generation. It will not be
-                    shown again. If lost, you must generate a new token.
-                  </p>
+                  <Button
+                    variant="outline"
+                    className="w-full sm:w-auto border-gray-300 text-gray-700 hover:bg-gray-100"
+                    onClick={() => handleCopy(connectionCode, 'connectionCode')}
+                  >
+                    {copiedField === 'connectionCode' ? (
+                      <Check size={16} className="mr-2 text-emerald-600" />
+                    ) : (
+                      <Copy size={16} className="mr-2" />
+                    )}
+                    Copy Connection Code
+                  </Button>
+
+                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg flex gap-2">
+                    <AlertTriangle
+                      size={16}
+                      className="text-amber-600 shrink-0 mt-0.5"
+                    />
+                    <p className="text-xs text-amber-800">
+                      Copy this code now. It contains the device token and will not be shown
+                      again. Generate a new code if lost.
+                    </p>
+                  </div>
+
+                  <Button
+                    variant="outline"
+                    className="border-gray-300 text-gray-700 hover:bg-gray-100"
+                    onClick={() => handleGenerateConnectionCode()}
+                    disabled={generatingConnectionCode}
+                  >
+                    {generatingConnectionCode ? 'Generating...' : 'Generate New Connection Code'}
+                  </Button>
                 </div>
-              </div>
+              )}
             </Card>
 
-            {/* Card 3: Gateway Status */}
+            <div className="grid gap-6 lg:grid-cols-2">
+            {/* Card: Gateway Status */}
             <Card className="p-6 bg-white border border-gray-100 shadow-sm">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
@@ -914,94 +982,239 @@ export default function SmsGatewayPage() {
                 </div>
               </dl>
             </Card>
+            </div>
 
-            {/* Card 4: Device Lock */}
-            <Card className="p-6 bg-white border border-gray-100 shadow-sm">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2.5 rounded-xl bg-teal-50 text-teal-600">
-                    <Shield size={20} />
-                  </div>
+            {/* Advanced setup */}
+            <Collapsible open={showAdvancedSetup} onOpenChange={setShowAdvancedSetup}>
+              <Card className="bg-white border border-gray-100 shadow-sm overflow-hidden">
+                <CollapsibleTrigger className="flex w-full items-center justify-between p-6 text-left hover:bg-gray-50 transition-colors">
                   <div>
-                    <h2 className="text-lg font-semibold text-gray-900">
-                      Device Lock
-                    </h2>
+                    <h2 className="text-lg font-semibold text-gray-900">Advanced setup</h2>
                     <p className="text-sm text-gray-500">
-                      One token per device binding
+                      Manual API URL, device token, and binding controls
                     </p>
                   </div>
-                </div>
-                {tokenBadge()}
-              </div>
+                  <ChevronDown
+                    size={20}
+                    className={`text-gray-500 shrink-0 transition-transform ${
+                      showAdvancedSetup ? 'rotate-180' : ''
+                    }`}
+                  />
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <div className="px-6 pb-6 pt-0 border-t border-gray-100">
+                    <div className="grid gap-6 lg:grid-cols-2 pt-6">
+                      {/* API Connection */}
+                      <Card className="p-6 bg-white border border-gray-100 shadow-sm">
+                        <div className="flex items-center gap-3 mb-4">
+                          <div className="p-2.5 rounded-xl bg-teal-50 text-teal-600">
+                            <Wifi size={20} />
+                          </div>
+                          <div>
+                            <h3 className="text-lg font-semibold text-gray-900">
+                              API Connection
+                            </h3>
+                            <p className="text-sm text-gray-500">Website API Base URL</p>
+                          </div>
+                        </div>
 
-              <dl className="space-y-3 text-sm mb-6">
-                <div className="flex justify-between py-2 border-b border-gray-100">
-                  <dt className="text-gray-500">Bound device</dt>
-                  <dd className="font-medium text-gray-900 text-right max-w-[60%] truncate">
-                    {gateway?.boundDeviceName || 'Not bound yet'}
-                  </dd>
-                </div>
-                <div className="flex justify-between py-2 border-b border-gray-100">
-                  <dt className="text-gray-500">Bound SIM</dt>
-                  <dd className="font-medium text-gray-900">
-                    {gateway?.boundSimLabel || '—'}
-                  </dd>
-                </div>
-                <div className="flex justify-between py-2 border-b border-gray-100">
-                  <dt className="text-gray-500">Last IP</dt>
-                  <dd className="font-mono text-xs text-gray-900">
-                    {gateway?.lastIp || '—'}
-                  </dd>
-                </div>
-                <div className="flex justify-between py-2">
-                  <dt className="text-gray-500">Last user agent</dt>
-                  <dd
-                    className="font-mono text-xs text-gray-700 text-right max-w-[55%] truncate"
-                    title={gateway?.lastUserAgent || undefined}
-                  >
-                    {gateway?.lastUserAgent || '—'}
-                  </dd>
-                </div>
-              </dl>
+                        <div className="space-y-4">
+                          <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
+                            <code className="text-sm font-mono text-gray-900 break-all">
+                              {apiBaseUrl || 'Loading...'}
+                            </code>
+                          </div>
 
-              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg mb-4">
-                <p className="text-xs text-amber-800">
-                  Reset binding clears the linked phone fingerprint and any gateway pause or
-                  top-up alert. Use this if the app shows &quot;bound to another device&quot;.
-                </p>
-              </div>
+                          <div className="flex items-center justify-between">
+                            <StatusBadge label="Ready" variant="green" />
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="border-gray-300 text-gray-700 hover:bg-gray-100"
+                              onClick={() => handleCopy(apiBaseUrl, 'url')}
+                              disabled={!apiBaseUrl}
+                            >
+                              {copiedField === 'url' ? (
+                                <Check size={16} className="mr-2 text-emerald-600" />
+                              ) : (
+                                <Copy size={16} className="mr-2" />
+                              )}
+                              Copy URL
+                            </Button>
+                          </div>
 
-              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg mb-4">
-                <p className="text-xs text-blue-800">
-                  Each token binds to one phone using a stable device ID from the app. GET
-                  requests like job polling work even before the first bind.
-                </p>
-              </div>
+                          <p className="text-xs text-gray-500">
+                            Copy this URL and paste it into the Android SMS Gateway app.
+                          </p>
+                        </div>
+                      </Card>
 
-              <div className="flex flex-col sm:flex-row gap-3">
-                <Button
-                  variant="outline"
-                  className="flex-1 border-gray-300 text-gray-700 hover:bg-gray-100"
-                  onClick={handleResetBinding}
-                  disabled={
-                    resetting || !gateway?.hasToken || !gateway?.isActive
-                  }
-                >
-                  {resetting ? 'Resetting...' : 'Reset Binding & Clear Gateway Pause'}
-                </Button>
-                <Button
-                  variant="outline"
-                  className="flex-1 border-red-200 text-red-700 hover:bg-red-50"
-                  onClick={handleRevokeToken}
-                  disabled={revoking || !gateway?.hasToken || !gateway?.isActive}
-                >
-                  {revoking ? 'Revoking...' : 'Revoke Token'}
-                </Button>
-              </div>
-            </Card>
+                      {/* Device Token */}
+                      <Card className="p-6 bg-white border border-gray-100 shadow-sm">
+                        <div className="flex items-center gap-3 mb-4">
+                          <div className="p-2.5 rounded-xl bg-teal-50 text-teal-600">
+                            <Key size={20} />
+                          </div>
+                          <div>
+                            <h3 className="text-lg font-semibold text-gray-900">
+                              Device Token
+                            </h3>
+                            <p className="text-sm text-gray-500">Device Token / API Key</p>
+                          </div>
+                        </div>
 
-            {/* Card 5: Fallback Rules */}
-            <Card className="p-6 bg-white border border-gray-100 shadow-sm lg:col-span-2">
+                        <div className="space-y-4">
+                          {gateway?.hasToken && gateway.isActive ? (
+                            <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
+                              <div className="flex items-center justify-between gap-2 mb-2">
+                                <p className="text-xs font-semibold text-gray-600">Token status</p>
+                                <StatusBadge label="Active" variant="green" />
+                              </div>
+                              <code className="text-sm font-mono text-gray-500">
+                                gw_live_••••••••••••••••••••••••••••••••••••••••••
+                              </code>
+                              <p className="text-xs text-amber-700 mt-2">
+                                Token is hidden for security. Generate a new token to replace it —
+                                the old token stops working immediately.
+                              </p>
+                            </div>
+                          ) : (
+                            <div className="p-4 bg-gray-50 rounded-xl border border-dashed border-gray-200 text-center">
+                              <p className="text-sm text-gray-500">
+                                No active device token. Generate one to connect your phone.
+                              </p>
+                            </div>
+                          )}
+
+                          <Button
+                            className="w-full bg-teal-600 text-white hover:bg-teal-700"
+                            onClick={handleGenerateToken}
+                            disabled={generating}
+                          >
+                            {generating ? (
+                              <>
+                                <RefreshCw size={16} className="mr-2 animate-spin" />
+                                Generating...
+                              </>
+                            ) : (
+                              <>
+                                <Key size={16} className="mr-2" />
+                                Generate Device Token
+                              </>
+                            )}
+                          </Button>
+
+                          <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg flex gap-2">
+                            <AlertTriangle
+                              size={16}
+                              className="text-amber-600 shrink-0 mt-0.5"
+                            />
+                            <p className="text-xs text-amber-800">
+                              Copy the token immediately after generation. It will not be shown
+                              again. If lost, you must generate a new token.
+                            </p>
+                          </div>
+                        </div>
+                      </Card>
+
+                      {/* Device Lock */}
+                      <Card className="p-6 bg-white border border-gray-100 shadow-sm lg:col-span-2">
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center gap-3">
+                            <div className="p-2.5 rounded-xl bg-teal-50 text-teal-600">
+                              <Shield size={20} />
+                            </div>
+                            <div>
+                              <h3 className="text-lg font-semibold text-gray-900">
+                                Device Lock
+                              </h3>
+                              <p className="text-sm text-gray-500">
+                                One token per device binding
+                              </p>
+                            </div>
+                          </div>
+                          {tokenBadge()}
+                        </div>
+
+                        <dl className="space-y-3 text-sm mb-6">
+                          <div className="flex justify-between py-2 border-b border-gray-100">
+                            <dt className="text-gray-500">Bound device</dt>
+                            <dd className="font-medium text-gray-900 text-right max-w-[60%] truncate">
+                              {gateway?.boundDeviceName || 'Not bound yet'}
+                            </dd>
+                          </div>
+                          <div className="flex justify-between py-2 border-b border-gray-100">
+                            <dt className="text-gray-500">Bound SIM</dt>
+                            <dd className="font-medium text-gray-900">
+                              {gateway?.boundSimLabel || '—'}
+                            </dd>
+                          </div>
+                          <div className="flex justify-between py-2 border-b border-gray-100">
+                            <dt className="text-gray-500">Last IP</dt>
+                            <dd className="font-mono text-xs text-gray-900">
+                              {gateway?.lastIp || '—'}
+                            </dd>
+                          </div>
+                          <div className="flex justify-between py-2">
+                            <dt className="text-gray-500">Last user agent</dt>
+                            <dd
+                              className="font-mono text-xs text-gray-700 text-right max-w-[55%] truncate"
+                              title={gateway?.lastUserAgent || undefined}
+                            >
+                              {gateway?.lastUserAgent || '—'}
+                            </dd>
+                          </div>
+                        </dl>
+
+                        <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg mb-4">
+                          <p className="text-xs text-amber-800">
+                            Reset binding clears the linked phone fingerprint and any gateway pause
+                            or top-up alert. Use this if the app shows &quot;bound to another
+                            device&quot;.
+                          </p>
+                        </div>
+
+                        <div className="flex flex-col sm:flex-row gap-3">
+                          <Button
+                            variant="outline"
+                            className="flex-1 border-gray-300 text-gray-700 hover:bg-gray-100"
+                            onClick={handleResetBinding}
+                            disabled={
+                              resetting || !gateway?.hasToken || !gateway?.isActive
+                            }
+                          >
+                            {resetting ? 'Resetting...' : 'Reset Device Binding'}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            className="flex-1 border-teal-200 text-teal-700 hover:bg-teal-50"
+                            onClick={() => handleGenerateConnectionCode({ resetBinding: true })}
+                            disabled={
+                              resettingAndGenerating || !gateway?.hasToken || !gateway?.isActive
+                            }
+                          >
+                            {resettingAndGenerating
+                              ? 'Generating...'
+                              : 'Reset Binding & Generate New Connection Code'}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            className="flex-1 border-red-200 text-red-700 hover:bg-red-50"
+                            onClick={handleRevokeToken}
+                            disabled={revoking || !gateway?.hasToken || !gateway?.isActive}
+                          >
+                            {revoking ? 'Revoking...' : 'Revoke Token'}
+                          </Button>
+                        </div>
+                      </Card>
+                    </div>
+                  </div>
+                </CollapsibleContent>
+              </Card>
+            </Collapsible>
+
+            {/* Fallback Rules */}
+            <Card className="p-6 bg-white border border-gray-100 shadow-sm">
               <div className="flex items-center gap-3 mb-4">
                 <div className="p-2.5 rounded-xl bg-teal-50 text-teal-600">
                   <ListOrdered size={20} />
@@ -1032,7 +1245,7 @@ export default function SmsGatewayPage() {
             </Card>
 
             {/* Card 6: Phone Fallback Queue */}
-            <Card className="p-6 bg-white border border-gray-100 shadow-sm lg:col-span-2 app-table-scroll">
+            <Card className="p-6 bg-white border border-gray-100 shadow-sm app-table-scroll">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
                 <div className="flex items-center gap-3">
                   <div className="p-2.5 rounded-xl bg-teal-50 text-teal-600">
