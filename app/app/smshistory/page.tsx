@@ -90,6 +90,20 @@ interface PaginationInfo {
   hasPrev: boolean
 }
 
+const SMS_HISTORY_BTN = {
+  outline:
+    'h-9 rounded-xl border border-[#E2E8F0] bg-white px-3 sm:px-4 py-2 text-sm font-medium text-[#2F9B73] shadow-sm hover:bg-[#ECFDF5] hover:text-[#267D5E] hover:border-[#E2E8F0] disabled:bg-slate-100 disabled:text-[#64748B] disabled:border-[#E2E8F0] disabled:opacity-100',
+  primary:
+    'h-9 rounded-xl bg-[#2F9B73] px-3 sm:px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-[#267D5E] disabled:opacity-50',
+  pagination:
+    'h-8 rounded-lg border border-[#E2E8F0] bg-white text-[#0F172A] shadow-sm hover:bg-[#ECFDF5] hover:text-[#2F9B73] hover:border-[#E2E8F0] disabled:bg-slate-100 disabled:text-[#64748B] disabled:border-[#E2E8F0] disabled:opacity-100',
+  modalOutline:
+    'rounded-xl border border-[#E2E8F0] bg-white text-[#0F172A] hover:bg-[#ECFDF5] hover:text-[#2F9B73] hover:border-[#E2E8F0]',
+  modalPrimary: 'rounded-xl bg-[#2F9B73] text-white hover:bg-[#267D5E]',
+  sheetOutline:
+    'text-xs border-[#E2E8F0] bg-white text-[#2F9B73] hover:bg-[#ECFDF5] hover:text-[#267D5E] hover:border-[#E2E8F0]',
+} as const
+
 function formatDateLabel(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString(undefined, {
     month: 'short',
@@ -514,38 +528,37 @@ export default function SMSHistoryPage() {
             {/* Right: Actions */}
             <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto order-3">
               <Button
-                variant="outline"
+                variant="secondary"
                 onClick={() => fetchSMSHistory(true)}
                 disabled={isAutoRefreshing}
-                className="h-9 rounded-xl border border-slate-200 px-3 sm:px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 hover:text-slate-900 hover:border-slate-300 disabled:opacity-50"
+                className={SMS_HISTORY_BTN.outline}
                 title="Refresh now"
               >
                 <RefreshCw className={`w-4 h-4 sm:mr-2 ${isAutoRefreshing ? 'animate-spin' : ''}`} />
                 <span className="hidden sm:inline">{isAutoRefreshing ? 'Refreshing...' : 'Refresh'}</span>
               </Button>
               <Button
-                variant="outline"
+                variant="secondary"
                 onClick={() => {
                   setDraftFromDate(fromDate)
                   setDraftToDate(toDate)
                   setIsDateDialogOpen(true)
                 }}
-                className="h-9 rounded-xl border border-slate-200 px-3 sm:px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 hover:text-slate-900 hover:border-slate-300"
+                className={SMS_HISTORY_BTN.outline}
               >
                 <Calendar className="w-4 h-4 sm:mr-2" />
                 <span className="hidden sm:inline">Date Range</span>
               </Button>
               <Button
-                variant="outline"
                 onClick={handleExportCsv}
                 disabled={exportingCsv}
-                className="h-9 rounded-xl border border-slate-200 px-3 sm:px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 hover:text-slate-900 hover:border-slate-300 disabled:opacity-50"
+                className={SMS_HISTORY_BTN.primary}
               >
                 <Download className="w-4 h-4 sm:mr-2" />
                 <span className="hidden sm:inline">{exportingCsv ? 'Exporting…' : 'Export CSV'}</span>
               </Button>
               <Link href="/app/send-sms" className="w-full sm:w-auto">
-                <Button className="w-full sm:w-auto h-9 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700">
+                <Button className={`w-full sm:w-auto ${SMS_HISTORY_BTN.primary}`}>
                   <Plus className="w-4 h-4 mr-2" />
                   New SMS
                 </Button>
@@ -660,34 +673,41 @@ export default function SMSHistoryPage() {
         </Card>
 
         <Dialog open={isDateDialogOpen} onOpenChange={setIsDateDialogOpen}>
-          <DialogContent className="sm:max-w-md">
+          <DialogContent
+            overlayClassName="bg-[rgba(15,23,42,0.35)] backdrop-blur-sm"
+            className="sm:max-w-md rounded-2xl border border-[#E2E8F0] bg-white p-6 shadow-xl"
+          >
             <DialogHeader>
-              <DialogTitle>Date Range</DialogTitle>
-              <DialogDescription>Filter SMS history by created date.</DialogDescription>
+              <DialogTitle className="text-[#0F172A]">Date Range</DialogTitle>
+              <DialogDescription className="text-[#64748B]">
+                Filter SMS history by created date.
+              </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-2">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">From Date</label>
+                <label className="mb-2 block text-sm font-medium text-[#0F172A]">From Date</label>
                 <Input
                   type="date"
                   value={draftFromDate}
                   onChange={(e) => setDraftFromDate(e.target.value)}
+                  className="rounded-md border-[#CBD5E1] bg-white text-[#0F172A] focus-visible:border-[#2F9B73] focus-visible:ring-2 focus-visible:ring-[#2F9B73]/20"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">To Date</label>
+                <label className="mb-2 block text-sm font-medium text-[#0F172A]">To Date</label>
                 <Input
                   type="date"
                   value={draftToDate}
                   onChange={(e) => setDraftToDate(e.target.value)}
+                  className="rounded-md border-[#CBD5E1] bg-white text-[#0F172A] focus-visible:border-[#2F9B73] focus-visible:ring-2 focus-visible:ring-[#2F9B73]/20"
                 />
               </div>
             </div>
             <DialogFooter className="gap-2">
-              <Button variant="outline" onClick={handleClearDateRange}>
+              <Button variant="secondary" onClick={handleClearDateRange} className={SMS_HISTORY_BTN.modalOutline}>
                 Clear
               </Button>
-              <Button onClick={handleApplyDateRange} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+              <Button onClick={handleApplyDateRange} className={SMS_HISTORY_BTN.modalPrimary}>
                 Apply
               </Button>
             </DialogFooter>
@@ -727,12 +747,12 @@ export default function SMSHistoryPage() {
               <Card className="rounded-2xl bg-white border border-slate-200/70 p-4 shadow-sm">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-amber-600" />
+                    <Clock className="w-4 h-4 text-[#64748B]" />
                     <span className="text-xs font-medium text-slate-600">Pending</span>
                   </div>
                   <div className="text-right">
                     <div className="text-lg font-semibold text-slate-900">{deliveryStats.pending.count}</div>
-                    <div className="text-xs text-amber-600 font-medium">{deliveryStats.pending.percentage}%</div>
+                    <div className="text-xs font-medium text-[#64748B]">{deliveryStats.pending.percentage}%</div>
                   </div>
                 </div>
               </Card>
@@ -757,7 +777,7 @@ export default function SMSHistoryPage() {
                     <>
                       <p className="text-sm text-slate-400">Start sending SMS to see your history here</p>
                       <Link href="/app/send-sms">
-                        <Button className="mt-4 bg-emerald-600 hover:bg-emerald-700 text-white">
+                        <Button className={`mt-4 ${SMS_HISTORY_BTN.modalPrimary}`}>
                           <Plus className="w-4 h-4 mr-2" />
                           Send Your First SMS
                         </Button>
@@ -835,24 +855,24 @@ export default function SMSHistoryPage() {
                   </p>
                   <div className="flex flex-wrap items-center gap-2">
                     <Button
-                      variant="outline"
+                      variant="secondary"
                       size="sm"
                       onClick={() => setPage((p) => Math.max(p - 1, 1))}
                       disabled={!pagination.hasPrev}
-                      className="h-8 rounded-lg"
+                      className={SMS_HISTORY_BTN.pagination}
                     >
                       <ChevronLeft className="w-4 h-4 mr-1" />
                       Previous
                     </Button>
-                    <span className="text-sm text-slate-600 px-2">
+                    <span className="text-sm text-[#64748B] px-2">
                       Page {pagination.page} of {pagination.totalPages}
                     </span>
                     <Button
-                      variant="outline"
+                      variant="secondary"
                       size="sm"
                       onClick={() => setPage((p) => p + 1)}
                       disabled={!pagination.hasNext}
-                      className="h-8 rounded-lg"
+                      className={SMS_HISTORY_BTN.pagination}
                     >
                       Next
                       <ChevronRight className="w-4 h-4 ml-1" />
@@ -927,11 +947,11 @@ export default function SMSHistoryPage() {
                 <div>
                   <div className="flex justify-between mb-1.5">
                     <span className="text-xs text-slate-600">Pending</span>
-                    <span className="text-xs font-semibold text-amber-600">{deliveryStats.pending.percentage}%</span>
+                    <span className="text-xs font-semibold text-[#64748B]">{deliveryStats.pending.percentage}%</span>
                   </div>
                   <div className="h-1 rounded-full bg-slate-100 overflow-hidden">
                     <div
-                      className="h-1 rounded-full bg-amber-600"
+                      className="h-1 rounded-full bg-[#64748B]"
                       style={{ width: `${deliveryStats.pending.percentage}%` }}
                     ></div>
                   </div>
@@ -944,16 +964,16 @@ export default function SMSHistoryPage() {
               <h3 className="mb-3 font-semibold text-slate-900 text-sm">Quick Actions</h3>
               <div className="space-y-2">
                 <Link href="/app/send-sms" className="w-full">
-                  <Button className="w-full rounded-lg bg-emerald-600 py-2 text-white text-sm font-medium hover:bg-emerald-700">
+                  <Button className={`w-full py-2 text-sm ${SMS_HISTORY_BTN.primary}`}>
                     <Plus className="w-4 h-4 mr-2" />
                     Send New SMS
                   </Button>
                 </Link>
                 <Button
-                  variant="outline"
+                  variant="secondary"
                   onClick={handleRetryFailed}
                   disabled={failedMessages.length === 0 || !canRetry}
-                  className="w-full rounded-lg border border-amber-500 text-amber-700 py-2 text-sm hover:bg-amber-50 hover:border-amber-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className={`w-full py-2 text-sm ${SMS_HISTORY_BTN.outline}`}
                 >
                   <AlertTriangle className="w-4 h-4 mr-2" />
                   Retry Failed {failedMessages.length > 0 && `(${failedMessages.length})`}
@@ -1124,8 +1144,8 @@ export default function SMSHistoryPage() {
                         {!selectedSms.providerRetryAttempted && (
                           <Button
                             size="sm"
-                            variant="outline"
-                            className="text-xs"
+                            variant="secondary"
+                            className={SMS_HISTORY_BTN.sheetOutline}
                             onClick={() =>
                               handleFallbackAction(selectedSms.id, 'retry-provider')
                             }
@@ -1138,8 +1158,8 @@ export default function SMSHistoryPage() {
                         ) && (
                           <Button
                             size="sm"
-                            variant="outline"
-                            className="text-xs"
+                            variant="secondary"
+                            className={SMS_HISTORY_BTN.sheetOutline}
                             onClick={() =>
                               handleFallbackAction(selectedSms.id, 'queue-phone')
                             }
@@ -1152,8 +1172,8 @@ export default function SMSHistoryPage() {
                         ) && (
                           <Button
                             size="sm"
-                            variant="outline"
-                            className="text-xs border-red-200 text-red-700"
+                            variant="secondary"
+                            className="text-xs border-red-200 bg-white text-red-700 hover:bg-red-50 hover:text-red-800 hover:border-red-300"
                             onClick={() =>
                               handleFallbackAction(selectedSms.id, 'cancel')
                             }
@@ -1164,8 +1184,8 @@ export default function SMSHistoryPage() {
                         {selectedSms.fallbackStatus === 'phone_failed' && (
                           <Button
                             size="sm"
-                            variant="outline"
-                            className="text-xs"
+                            variant="secondary"
+                            className={SMS_HISTORY_BTN.sheetOutline}
                             onClick={() =>
                               handleFallbackAction(selectedSms.id, 'retry-phone')
                             }
@@ -1221,19 +1241,21 @@ export default function SMSHistoryPage() {
                 </div>
               </div>
               {!canRetry && (
-                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl">
-                  <p className="text-sm text-amber-800">
+                <div className="rounded-xl border border-[#E2E8F0] bg-[#ECFDF5] p-3">
+                  <p className="text-sm text-[#0F172A]">
                     Some messages cannot be retried yet. Please wait 3 minutes between retry attempts.
                   </p>
                 </div>
               )}
             </div>
             <AlertDialogFooter>
-              <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
+              <AlertDialogCancel className="rounded-xl border-[#E2E8F0] bg-white text-[#0F172A] hover:bg-[#ECFDF5]">
+                Cancel
+              </AlertDialogCancel>
               <AlertDialogAction
                 onClick={confirmRetry}
                 disabled={!canRetry}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl disabled:opacity-50"
+                className={`${SMS_HISTORY_BTN.modalPrimary} disabled:opacity-50`}
               >
                 Confirm Retry
               </AlertDialogAction>
