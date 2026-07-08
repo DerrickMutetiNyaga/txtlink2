@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import connectDB from '@/lib/db/connect'
-import { SmsFallbackJob, SmsMessage } from '@/lib/db/models'
+import { SmsFallbackJob, SmsMessage, ISmsMessage } from '@/lib/db/models'
 import {
   validateGatewayDevice,
   gatewayAuthErrorResponse,
@@ -8,6 +8,11 @@ import {
 import { cancelFallbackJobIfDelivered } from '@/lib/services/sms-fallback/helpers'
 import { logGatewayJobAction } from '@/lib/services/sms-gateway/job-logger'
 import { isPhoneDeliveredFallbackStatus } from '@/lib/services/sms-fallback/phone-status'
+import {
+  resolveFallbackMessageForSms,
+  buildMetadataFromSms,
+  isMetadataUsedAsMessageBody,
+} from '@/lib/services/sms/message-body'
 
 const ROUTE = 'GET /api/sms-gateway/jobs/pending'
 
@@ -75,6 +80,9 @@ export async function GET(request: NextRequest) {
         continue
       }
 
+      let jobMessage = job.message
+      let smsForBody: ISmsMessage | null = null
+
       if (!job.isTest) {
         const cancelled = await cancelFallbackJobIfDelivered(
           job.originalSmsId,
@@ -91,6 +99,7 @@ export async function GET(request: NextRequest) {
           })
           continue
         }
+        smsForBody = sms as ISmsMessage
 
         if (
           sms.status === 'delivered' ||
@@ -107,11 +116,28 @@ export async function GET(request: NextRequest) {
         }
       }
 
+      if (smsForBody) {
+        const resolved = resolveFallbackMessageForSms(smsForBody)
+        if (resolved) {
+          jobMessage = resolved.body
+          if (job.message !== resolved.body) {
+            await SmsFallbackJob.findByIdAndUpdate(job._id, { message: resolved.body })
+          }
+        } else if (isMetadataUsedAsMessageBody(job.message, buildMetadataFromSms(smsForBody))) {
+          console.error('Pending job has invalid message body — skipping', {
+            jobId: String(job._id),
+            originalSmsId: job.originalSmsId,
+          })
+          continue
+        }
+      }
+
+      if (!jobMessage?.trim()) continue
+
       activeJobs.push({
         id: String(job._id),
-        recipientName: job.recipientName || null,
         recipientPhone: job.normalizedPhone || job.recipientPhone,
-        message: job.message,
+        message: jobMessage,
         status: 'pending',
         isTest: Boolean(job.isTest),
         createdAt: job.createdAt,

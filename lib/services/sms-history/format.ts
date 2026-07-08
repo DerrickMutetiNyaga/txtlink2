@@ -1,5 +1,11 @@
 import { ISmsMessage } from '@/lib/db/models'
 import { deriveCampaignLabel } from './constants'
+import {
+  getDisplayMessageText,
+  REDACTED_MESSAGE_LABEL,
+  getSourceDisplayLabel,
+  getAuthMethodDisplayLabel,
+} from '@/lib/services/sms/message-body'
 
 function normalizeFailureReason(baseReason?: string | null): string | undefined {
   if (!baseReason) return undefined
@@ -80,21 +86,29 @@ export interface FormattedSmsHistoryRow {
   retryCount: number
   lastAttemptAt: string | null
   source: string | null
+  sourceLabel: string
+  authMethod: string | null
+  authMethodLabel: string
   apiKeyName: string | null
+  clientUsername: string | null
+  clientName: string | null
   toNumbers: string[]
   segments: number
+  messageRedacted?: boolean
+  campaignName?: string | null
 }
 
 export function formatSmsHistoryRow(msg: ISmsMessage & { _id?: unknown }): FormattedSmsHistoryRow {
   const createdAt = new Date(msg.createdAt)
+  const displayMessage = getDisplayMessageText(msg)
   return {
     id: String(msg._id),
     time: formatTimeAgo(createdAt),
     createdAt: createdAt.toISOString(),
     recipient: msg.toNumbers.join(', '),
     senderId: msg.senderName,
-    campaign: deriveCampaignLabel(msg.source),
-    message: msg.message,
+    campaign: msg.campaignName || deriveCampaignLabel(msg.source),
+    message: displayMessage,
     status: msg.status,
     displayStatus: getDisplayStatus(msg),
     deliveryMethod: msg.deliveryMethod || 'provider',
@@ -119,9 +133,15 @@ export function formatSmsHistoryRow(msg: ISmsMessage & { _id?: unknown }): Forma
         ? new Date(msg.sentAt).toISOString()
         : null,
     source: msg.source || null,
+    sourceLabel: getSourceDisplayLabel(msg.source, msg.authMethod),
+    authMethod: msg.authMethod || null,
+    authMethodLabel: getAuthMethodDisplayLabel(msg.authMethod),
     apiKeyName: msg.apiKeyName || null,
+    clientUsername: msg.clientUsername || null,
+    clientName: msg.clientName || null,
     toNumbers: msg.toNumbers,
     segments: msg.segments || 1,
+    messageRedacted: Boolean(msg.messageRedacted),
   }
 }
 
@@ -135,6 +155,7 @@ export function escapeCsvValue(value: unknown): string {
 
 export function formatSmsHistoryCsvRow(msg: ISmsMessage & { _id?: unknown }): string {
   const row = formatSmsHistoryRow(msg)
+  const messageCol = row.messageRedacted ? REDACTED_MESSAGE_LABEL : row.message
   return [
     row.createdAt,
     row.sentAt || '',
@@ -142,7 +163,7 @@ export function formatSmsHistoryCsvRow(msg: ISmsMessage & { _id?: unknown }): st
     row.recipient,
     row.senderId,
     row.campaign,
-    row.message,
+    messageCol,
     row.displayStatus,
     row.deliveryMethod,
     row.providerMessageId || '',
@@ -151,8 +172,11 @@ export function formatSmsHistoryCsvRow(msg: ISmsMessage & { _id?: unknown }): st
     row.fallbackStatus || '',
     row.fallbackProvider || '',
     row.fallbackJobId || '',
-    row.source || '',
+    row.sourceLabel || row.source || '',
+    row.authMethodLabel || row.authMethod || '',
     row.apiKeyName || '',
+    row.clientUsername || '',
+    row.clientName || '',
     row.cost,
   ]
     .map(escapeCsvValue)
@@ -176,6 +200,9 @@ export const SMS_HISTORY_CSV_HEADERS = [
   'Fallback Provider',
   'Fallback Job ID',
   'Source',
+  'Auth Method',
   'API Key Name',
+  'Client Username',
+  'Client Name',
   'Credits Used',
 ]

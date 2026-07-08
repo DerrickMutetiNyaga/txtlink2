@@ -8,6 +8,7 @@ import {
 import { logAuditAction } from '@/lib/utils/audit'
 import { logGatewayJobAction } from '@/lib/services/sms-gateway/job-logger'
 import { parseGatewayJobId } from '@/lib/services/sms-gateway/job-lifecycle'
+import { buildRedactedMessageUpdate } from '@/lib/services/sms/message-body'
 
 type RouteContext = { params: Promise<{ jobId: string }> }
 
@@ -117,6 +118,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
         requiresPhoneTopUp: false,
         finalizedAt: deliveredAt,
         nextCheckAt: null,
+        ...buildRedactedMessageUpdate(deliveredAt),
       })
 
       await logAuditAction(

@@ -11,6 +11,7 @@ import { hostPinnacleClient } from '@/lib/services/hostpinnacle/client'
 import { requireAuth } from '@/lib/auth/middleware'
 import { calculateSegments153, getEffectivePricePerCreditKes } from '@/lib/utils/credits'
 import { initialNextCheckAt } from '@/lib/services/sms-status/build-synchronizer'
+import { buildMessageBodyFields, logSmsMessageCreateDebug } from '@/lib/services/sms/message-body'
 import { maskPhone } from '@/lib/utils/log-sanitize'
 
 // Format phone number to E.164
@@ -177,13 +178,24 @@ export async function POST(request: NextRequest) {
 
       const newBalance = updatedUser.creditsBalance || 0
 
+      const messageFields = buildMessageBodyFields(message)
+
+      logSmsMessageCreateDebug({
+        source: 'dashboard',
+        authMethod: 'session',
+        clientUsername: dbUser.email,
+        clientName: dbUser.name,
+        message,
+        usedMessageField: 'message',
+      })
+
       // Create SMS log entry (parallel with credit deduction)
       const [smsMessage] = await SmsMessage.create([{
         userId: userObjectId,
         senderName: senderId.senderName,
         toNumbers: [formattedPhone],
         normalizedPhone: formattedPhone.replace(/^\+/, ''),
-        message,
+        ...messageFields,
         segments, // Total segments for this message
         costPerSegment: pricePerCreditKes,
         totalCost: totalCostKes,
@@ -195,6 +207,10 @@ export async function POST(request: NextRequest) {
         deliveryStatus: 'queued',
         deliveryMethod: 'provider',
         source: 'dashboard',
+        authMethod: 'session',
+        clientId: userObjectId,
+        clientUsername: dbUser.email,
+        clientName: dbUser.name,
         // Delivery-status worker scheduling: even if the async send below dies,
         // the background worker will pick this message up at nextCheckAt.
         nextCheckAt: initialNextCheckAt(),

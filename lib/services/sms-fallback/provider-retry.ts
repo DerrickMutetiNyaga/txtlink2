@@ -12,6 +12,7 @@ import {
   FALLBACK_PHONE_STATUSES,
 } from './config'
 import { shouldSkipProviderRetry, minutesAgo } from './helpers'
+import { resolveSmsMessageBody } from '@/lib/services/sms/message-body'
 import {
   normalizeSmsStatus,
   isFailedState,
@@ -106,6 +107,9 @@ async function upsertFallbackJobForRetry(
   const normalized = normalizeKenyanPhone(phone)
   if (!normalized) return
 
+  const resolved = resolveSmsMessageBody(sms)
+  const fallbackMessage = resolved?.body || sms.message
+
   await SmsFallbackJob.findOneAndUpdate(
     { originalSmsId },
     {
@@ -114,7 +118,7 @@ async function upsertFallbackJobForRetry(
         originalSmsId,
         recipientPhone: phone,
         normalizedPhone: normalized,
-        message: sms.message,
+        message: fallbackMessage,
         originalStatus: sms.status,
         originalProviderMessageId: sms.hpTransactionId,
         originalSentAt: sms.sentAt,
@@ -123,6 +127,11 @@ async function upsertFallbackJobForRetry(
         attempts: 0,
         source: sms.source,
         apiKeyId: sms.apiKeyId,
+        apiKeyName: sms.apiKeyName,
+        clientId: sms.clientId,
+        clientUsername: sms.clientUsername,
+        clientName: sms.clientName,
+        authMethod: sms.authMethod,
       },
       $set: { status },
     },
@@ -133,6 +142,17 @@ async function upsertFallbackJobForRetry(
 async function retrySingleMessage(sms: ISmsMessage & { _id: unknown }): Promise<boolean> {
   const phone = sms.toNumbers[0]
   if (!phone) return false
+
+  const resolved = resolveSmsMessageBody(sms)
+  if (!resolved) {
+    console.warn('SMS fallback retry skipped: no message body', { smsId: String(sms._id) })
+    await SmsMessage.findByIdAndUpdate(sms._id, {
+      fallbackStatus: 'fallback_error_missing_message_body',
+      fallbackFailureReason: 'Missing real SMS message body',
+    })
+    return false
+  }
+  const smsText = resolved.body
 
   const normalized = normalizeKenyanPhone(phone)
   if (!normalized) {
@@ -165,7 +185,7 @@ async function retrySingleMessage(sms: ISmsMessage & { _id: unknown }): Promise<
   try {
     const hpResult = await hostPinnacleClient.sendSms({
       mobile: normalized,
-      msg: sms.message,
+      msg: smsText,
       senderid: sms.senderName,
       options: { apiKey, userId: hpUserId, password },
       retries: 1,

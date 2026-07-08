@@ -128,6 +128,12 @@ export interface ISmsMessage {
   senderName: string
   toNumbers: string[] // Array of phone numbers
   message: string
+  /** Canonical SMS body — actual text sent to recipient */
+  messageBody?: string
+  originalMessageBody?: string
+  renderedMessageBody?: string
+  messageRedacted?: boolean
+  messageRedactedAt?: Date
   segments: number
   costPerSegment: number
   totalCost: number
@@ -139,9 +145,14 @@ export interface ISmsMessage {
   creditDeducted?: boolean // Guard flag to prevent double credit deduction
   channel?: string // e.g. 'sms'
   email?: string // User email snapshot (for admin notifications)
-  source?: 'dashboard' | 'bulk' | 'api_key' | 'system' | 'test'
+  source?: 'dashboard' | 'bulk' | 'api_key' | 'username_password' | 'external_client' | 'system' | 'test'
+  authMethod?: 'api_key' | 'username_password' | 'session' | 'system'
   apiKeyId?: mongoose.Types.ObjectId
   apiKeyName?: string
+  clientId?: mongoose.Types.ObjectId
+  clientUsername?: string
+  clientName?: string
+  campaignName?: string
   normalizedPhone?: string
   deliveryStatus?: string
   status: SmsStatus
@@ -177,6 +188,7 @@ export interface ISmsMessage {
     | 'sent_via_phone'
     | 'phone_failed'
     | 'phone_requires_topup'
+    | 'fallback_error_missing_message_body'
     | 'cancelled'
   fallbackJobId?: string
   fallbackQueuedAt?: Date
@@ -206,6 +218,11 @@ const SmsMessageSchema = new Schema<ISmsMessage>(
     senderName: { type: String, required: true },
     toNumbers: { type: [String], required: true },
     message: { type: String, required: true },
+    messageBody: { type: String },
+    originalMessageBody: { type: String },
+    renderedMessageBody: { type: String },
+    messageRedacted: { type: Boolean, default: false },
+    messageRedactedAt: { type: Date },
     segments: { type: Number, required: true },
     costPerSegment: { type: Number, required: true },
     totalCost: { type: Number, required: true },
@@ -219,10 +236,18 @@ const SmsMessageSchema = new Schema<ISmsMessage>(
     email: { type: String },
     source: {
       type: String,
-      enum: ['dashboard', 'bulk', 'api_key', 'system', 'test'],
+      enum: ['dashboard', 'bulk', 'api_key', 'username_password', 'external_client', 'system', 'test'],
+    },
+    authMethod: {
+      type: String,
+      enum: ['api_key', 'username_password', 'session', 'system'],
     },
     apiKeyId: { type: Schema.Types.ObjectId, ref: 'ApiKey' },
     apiKeyName: { type: String },
+    clientId: { type: Schema.Types.ObjectId, ref: 'User' },
+    clientUsername: { type: String },
+    clientName: { type: String },
+    campaignName: { type: String },
     normalizedPhone: { type: String },
     deliveryStatus: { type: String },
     status: {
@@ -1004,8 +1029,13 @@ export interface ISmsFallbackJob {
     | 'failed'
     | 'requires_topup'
     | 'cancelled'
-  source?: 'dashboard' | 'bulk' | 'api_key' | 'system' | 'test'
+  source?: 'dashboard' | 'bulk' | 'api_key' | 'username_password' | 'external_client' | 'system' | 'test'
+  authMethod?: 'api_key' | 'username_password' | 'session' | 'system'
   apiKeyId?: mongoose.Types.ObjectId
+  apiKeyName?: string
+  clientId?: mongoose.Types.ObjectId
+  clientUsername?: string
+  clientName?: string
   attempts: number
   maxAttempts?: number
   deviceId?: string
@@ -1072,9 +1102,17 @@ const SmsFallbackJobSchema = new Schema<ISmsFallbackJob>(
     },
     source: {
       type: String,
-      enum: ['dashboard', 'bulk', 'api_key', 'system', 'test'],
+      enum: ['dashboard', 'bulk', 'api_key', 'username_password', 'external_client', 'system', 'test'],
+    },
+    authMethod: {
+      type: String,
+      enum: ['api_key', 'username_password', 'session', 'system'],
     },
     apiKeyId: { type: Schema.Types.ObjectId, ref: 'ApiKey' },
+    apiKeyName: { type: String },
+    clientId: { type: Schema.Types.ObjectId, ref: 'User' },
+    clientUsername: { type: String },
+    clientName: { type: String },
     attempts: { type: Number, default: 0 },
     maxAttempts: { type: Number, default: 3 },
     deviceId: { type: String },

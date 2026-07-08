@@ -14,11 +14,8 @@ import {
   isSmsDelivered,
   getAgeMinutes,
 } from './status-normalize'
-import {
-  addSampleMatch,
-  createScanDebugStats,
-  type FallbackScanDebugStats,
-} from './scan-debug'
+import { createOrUpdatePhoneFallbackJob } from './create-fallback-job'
+import { buildRedactedMessageUpdate } from '@/lib/services/sms/message-body'
 
 async function checkRetryDeliveryStatus(sms: ISmsMessage & { _id: unknown }): Promise<void> {
   if (!sms.providerRetrySmsId || !isRetrySentPending(sms.providerRetryStatus)) return
@@ -36,9 +33,11 @@ async function checkRetryDeliveryStatus(sms: ISmsMessage & { _id: unknown }): Pr
       status: 'delivered',
       deliveryStatus: 'delivered',
       deliveredAt: new Date(),
+      deliveryMethod: 'provider',
       providerRetryStatus: 'delivered',
       providerRetryDeliveredAt: new Date(),
       fallbackStatus: 'not_needed',
+      ...buildRedactedMessageUpdate(),
     })
     await cancelFallbackJobIfDelivered(String(sms._id), 'Provider retry delivered')
   } else if (['failed', 'expired', 'rejected', 'undeliverable', 'provider_timeout'].includes(mapped)) {
@@ -51,67 +50,8 @@ async function checkRetryDeliveryStatus(sms: ISmsMessage & { _id: unknown }): Pr
 }
 
 async function queuePhoneFallback(sms: ISmsMessage & { _id: unknown }): Promise<boolean> {
-  const phone = sms.toNumbers[0] || ''
-  const normalized = sms.normalizedPhone || normalizeKenyanPhone(phone)
-  if (!normalized) return false
-
-  const originalSmsId = String(sms._id)
-
-  if (isSmsDelivered(sms)) return false
-  if (isPhoneDeliveredFallbackStatus(sms.fallbackStatus)) return false
-  if (
-    sms.fallbackStatus &&
-    (FALLBACK_PHONE_STATUSES as readonly string[]).includes(sms.fallbackStatus)
-  ) {
-    return false
-  }
-
-  const existing = await SmsFallbackJob.findOne({ originalSmsId }).lean()
-  if (existing && ['pending', 'sending', 'delivered', 'sent'].includes(existing.status)) {
-    return false
-  }
-
-  const now = new Date()
-  const jobPayload = {
-    status: 'pending' as const,
-    phoneStatus: 'pending' as const,
-    recipientPhone: phone,
-    normalizedPhone: normalized,
-    message: sms.message,
-    originalStatus: sms.status,
-    originalProviderMessageId: sms.hpTransactionId,
-    originalSentAt: sms.sentAt,
-    originalFailureReason: sms.deliveryCause || sms.errorMessage,
-    source: sms.source,
-    apiKeyId: sms.apiKeyId,
-  }
-
-  const job = existing
-    ? await SmsFallbackJob.findOneAndUpdate({ originalSmsId }, { $set: jobPayload }, { new: true })
-    : await SmsFallbackJob.create({
-        userId: sms.userId,
-        originalSmsId,
-        ...jobPayload,
-        retryAttempted: sms.providerRetryAttempted || false,
-        retryAttemptedAt: sms.providerRetryAttemptedAt,
-        retryProviderMessageId: sms.providerRetrySmsId,
-        retryStatus: sms.providerRetryStatus as ISmsFallbackJob['retryStatus'],
-        retrySentAt: sms.providerRetrySentAt,
-        retryFailedAt: sms.providerRetryFailedAt,
-        retryFailureReason: sms.providerRetryFailureReason,
-        attempts: 0,
-      })
-
-  if (!job) return false
-
-  await SmsMessage.findByIdAndUpdate(sms._id, {
-    fallbackQueued: true,
-    fallbackStatus: 'queued_for_phone',
-    fallbackQueuedAt: now,
-    fallbackJobId: String(job._id),
-  })
-
-  return true
+  const result = await createOrUpdatePhoneFallbackJob(sms)
+  return result.ok
 }
 
 function buildPhoneFallbackCandidateFilter(): Record<string, unknown> {

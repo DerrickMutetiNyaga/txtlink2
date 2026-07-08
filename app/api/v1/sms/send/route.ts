@@ -15,6 +15,12 @@ import { hostPinnacleClient } from '@/lib/services/hostpinnacle/client'
 import { calculateSegments153, getEffectivePricePerCreditKes } from '@/lib/utils/credits'
 import { initialNextCheckAt } from '@/lib/services/sms-status/build-synchronizer'
 import { maskPhone } from '@/lib/utils/log-sanitize'
+import {
+  normalizeOutgoingSmsPayload,
+  buildMessageBodyFields,
+  buildMetadataFromSms,
+  logSmsMessageCreateDebug,
+} from '@/lib/services/sms/message-body'
 import bcrypt from 'bcryptjs'
 import mongoose from 'mongoose'
 
@@ -196,15 +202,52 @@ export async function POST(request: NextRequest) {
     delete body.email
     delete body.password
     
-    const { to, message, senderId, senderIdName } = body
-    
-    // Validate inputs
-    if (!to || !message) {
+    const { to, senderId, senderIdName } = body
+
+    const isApiKeyAuth = Boolean(auth.apiKeyId)
+    const isUsernamePasswordAuth = auth.authMethod === 'credentials' || (!isApiKeyAuth && auth.user)
+
+    const normalizedPayload = normalizeOutgoingSmsPayload(body, {
+      apiKeyName: auth.apiKeyName,
+      clientUsername: user.email,
+      clientName: user.name,
+      username: user.email,
+      senderId: typeof senderIdName === 'string' ? senderIdName : undefined,
+    })
+
+    if (!to) {
       return NextResponse.json(
-        { error: 'to and message are required' },
+        { success: false, message: 'Recipient phone (to) is required' },
         { status: 400 }
       )
     }
+
+    if (!normalizedPayload.ok) {
+      return NextResponse.json(
+        { success: false, message: normalizedPayload.error },
+        { status: normalizedPayload.status }
+      )
+    }
+
+    const actualMessage = normalizedPayload.message
+    const messageFields = buildMessageBodyFields(actualMessage)
+
+    const smsSource = isApiKeyAuth
+      ? 'api_key'
+      : isUsernamePasswordAuth
+        ? 'username_password'
+        : 'external_client'
+    const smsAuthMethod = isApiKeyAuth ? 'api_key' : isUsernamePasswordAuth ? 'username_password' : 'system'
+
+    logSmsMessageCreateDebug({
+      source: smsSource,
+      authMethod: smsAuthMethod,
+      apiKeyName: auth.apiKeyName,
+      clientUsername: isUsernamePasswordAuth ? user.email : undefined,
+      clientName: isUsernamePasswordAuth ? user.name : undefined,
+      message: actualMessage,
+      usedMessageField: normalizedPayload.usedField,
+    })
     
     // Determine sender ID - support both ID and name
     let senderIdObj: any = null
@@ -260,7 +303,7 @@ export async function POST(request: NextRequest) {
     }
     
     // CREDIT-BASED PRICING
-    const segments = calculateSegments153(message)
+    const segments = calculateSegments153(actualMessage)
     const recipientsCount = 1
     const requiredCredits = segments * recipientsCount
     
@@ -357,7 +400,7 @@ export async function POST(request: NextRequest) {
         senderName: senderIdObj.senderName,
         toNumbers: [formattedPhone],
         normalizedPhone: formattedPhone.replace(/^\+/, ''),
-        message,
+        ...messageFields,
         segments,
         costPerSegment: pricePerCreditKes,
         totalCost: totalCostKes,
@@ -367,9 +410,13 @@ export async function POST(request: NextRequest) {
         status: 'queued',
         deliveryStatus: 'queued',
         deliveryMethod: 'provider',
-        source: auth.apiKeyId ? 'api_key' : 'system',
+        source: smsSource,
+        authMethod: smsAuthMethod,
         apiKeyId: auth.apiKeyId ? new mongoose.Types.ObjectId(auth.apiKeyId) : undefined,
         apiKeyName: auth.apiKeyName,
+        clientId: isUsernamePasswordAuth ? userObjectId : undefined,
+        clientUsername: isUsernamePasswordAuth ? user.email : undefined,
+        clientName: isUsernamePasswordAuth ? user.name : undefined,
         nextCheckAt: initialNextCheckAt(),
         lastCheckedAt: null,
         statusCheckAttempts: 0,
@@ -399,12 +446,12 @@ export async function POST(request: NextRequest) {
           console.log('Sending SMS via HostPinnacle:', {
             mobile: maskPhone(formattedPhone),
             senderid: senderIdObj.senderName,
-            messageLength: message.length,
+            messageLength: actualMessage.length,
           })
           
           const hpResult = await hostPinnacleClient.sendSms({
             mobile: formattedPhone.replace('+', ''),
-            msg: message,
+            msg: actualMessage,
             senderid: senderIdObj.senderName,
             options: {
               apiKey: hpApiKey,

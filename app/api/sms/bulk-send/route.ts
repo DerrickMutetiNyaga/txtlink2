@@ -12,6 +12,7 @@ import { requireAuth } from '@/lib/auth/middleware'
 import { calculateSegments153, getEffectivePricePerCreditKes } from '@/lib/utils/credits'
 import { advancedSmsQueue } from '@/lib/services/sms/advanced-queue'
 import { initialNextCheckAt } from '@/lib/services/sms-status/build-synchronizer'
+import { buildMessageBodyFields, renderBulkTemplate, logSmsMessageCreateDebug } from '@/lib/services/sms/message-body'
 import mongoose from 'mongoose'
 
 // Format phone number to E.164
@@ -48,7 +49,7 @@ export async function POST(request: NextRequest) {
     const user = requireAuth(request)
     const userObjectId = new mongoose.Types.ObjectId(user.userId)
 
-    const { recipients, message, senderIdId } = await request.json()
+    const { recipients, message, senderIdId, templateVars, campaignName } = await request.json()
 
     // Validate inputs
     if (!recipients || !Array.isArray(recipients) || recipients.length === 0) {
@@ -133,33 +134,61 @@ export async function POST(request: NextRequest) {
 
       const newBalance = updatedUser.creditsBalance || 0
 
+      logSmsMessageCreateDebug({
+        source: 'bulk',
+        authMethod: 'session',
+        clientUsername: dbUser.email,
+        clientName: dbUser.name,
+        message,
+        usedMessageField: 'message',
+      })
+
       // Create SMS message records (one per recipient for tracking)
       const smsMessages = await SmsMessage.create(
-        formattedPhones.map((phone) => ({
-          userId: userObjectId,
-          senderName: senderId.senderName,
-          toNumbers: [phone],
-          normalizedPhone: phone.replace(/^\+/, ''),
-          message,
-          segments,
-          costPerSegment: pricePerCreditKes,
-          totalCost: pricePerCreditKes * segments,
-          encoding: 'gsm7',
-          parts: segments,
-          chargedKes: pricePerCreditKes * segments,
-          status: 'queued',
-          providerStatus: 'PROCESSING',
-          deliveryStatus: 'queued',
-          deliveryMethod: 'provider',
-          source: 'bulk',
-          nextCheckAt: initialNextCheckAt(),
-          lastCheckedAt: null,
-          statusCheckAttempts: 0,
-          finalizedAt: null,
-          creditDeducted: true,
-          channel: 'sms',
-          email: dbUser.email,
-        })),
+        formattedPhones.map((phone, index) => {
+          const recipient = recipients[index]
+          const recipientVars =
+            typeof recipient === 'object' && recipient !== null
+              ? (recipient as Record<string, string>)
+              : {}
+          const renderedMessage = renderBulkTemplate(message, {
+            name: recipientVars.name || recipientVars.Name,
+            phone: phone,
+            support_email: recipientVars.support_email || recipientVars.supportEmail,
+            ...recipientVars,
+          })
+          const messageFields = buildMessageBodyFields(renderedMessage, message)
+          return {
+            userId: userObjectId,
+            senderName: senderId.senderName,
+            toNumbers: [phone],
+            normalizedPhone: phone.replace(/^\+/, ''),
+            ...messageFields,
+            segments: calculateSegments153(renderedMessage),
+            costPerSegment: pricePerCreditKes,
+            totalCost: pricePerCreditKes * calculateSegments153(renderedMessage),
+            encoding: 'gsm7' as const,
+            parts: calculateSegments153(renderedMessage),
+            chargedKes: pricePerCreditKes * calculateSegments153(renderedMessage),
+            status: 'queued' as const,
+            providerStatus: 'PROCESSING',
+            deliveryStatus: 'queued',
+            deliveryMethod: 'provider' as const,
+            source: 'bulk' as const,
+            authMethod: 'session' as const,
+            clientId: userObjectId,
+            clientUsername: dbUser.email,
+            clientName: dbUser.name,
+            campaignName: campaignName || undefined,
+            nextCheckAt: initialNextCheckAt(),
+            lastCheckedAt: null,
+            statusCheckAttempts: 0,
+            finalizedAt: null,
+            creditDeducted: true,
+            channel: 'sms',
+            email: dbUser.email,
+          }
+        }),
         { session, ordered: true }
       )
 
@@ -184,7 +213,7 @@ export async function POST(request: NextRequest) {
           const queueItems = smsMessages.map((smsMsg, index) => ({
             messageId: smsMsg._id!.toString(),
             phoneNumber: formattedPhones[index],
-            message,
+            message: smsMsg.messageBody || smsMsg.renderedMessageBody || smsMsg.message,
             senderId: senderId.senderName,
             userId: userObjectId,
             segments,

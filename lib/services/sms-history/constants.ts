@@ -27,7 +27,11 @@ export function deriveCampaignLabel(source?: string | null): string {
     case 'bulk':
       return 'Bulk SMS'
     case 'api_key':
-      return 'API'
+      return 'API Key'
+    case 'username_password':
+      return 'Username/Password Client'
+    case 'external_client':
+      return 'External Client'
     case 'system':
       return 'System'
     case 'test':
