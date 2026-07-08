@@ -125,6 +125,65 @@ UserSenderIdSchema.index({ userId: 1, isDefault: 1 }, { unique: true, partialFil
 // Ensure senderId can only be assigned to ONE user at a time (global uniqueness)
 UserSenderIdSchema.index({ senderId: 1 }, { unique: true })
 
+export type SenderIdRequestStatus =
+  | 'draft'
+  | 'submitted'
+  | 'under_review'
+  | 'approved'
+  | 'rejected'
+
+export interface ISenderIdRequest {
+  _id?: string
+  userId: mongoose.Types.ObjectId
+  workspaceId?: mongoose.Types.ObjectId
+  desiredSenderId: string
+  businessName: string
+  businessRegistrationNumber?: string
+  kraPin?: string
+  contactPerson: string
+  phoneNumber: string
+  email: string
+  smsUseCase: string
+  sampleSmsMessage: string
+  industry: string
+  status: SenderIdRequestStatus
+  reviewNotes?: string
+  rejectionReason?: string
+  approvedSenderId?: string
+  createdAt: Date
+  updatedAt: Date
+}
+
+const SenderIdRequestSchema = new Schema<ISenderIdRequest>(
+  {
+    userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+    workspaceId: { type: Schema.Types.ObjectId, ref: 'User' },
+    desiredSenderId: { type: String, uppercase: true, trim: true, default: '' },
+    businessName: { type: String, trim: true, default: '' },
+    businessRegistrationNumber: { type: String, trim: true, default: '' },
+    kraPin: { type: String, trim: true, default: '' },
+    contactPerson: { type: String, trim: true, default: '' },
+    phoneNumber: { type: String, trim: true, default: '' },
+    email: { type: String, trim: true, lowercase: true, default: '' },
+    smsUseCase: { type: String, trim: true, default: '' },
+    sampleSmsMessage: { type: String, trim: true, default: '' },
+    industry: { type: String, trim: true, default: '' },
+    status: {
+      type: String,
+      enum: ['draft', 'submitted', 'under_review', 'approved', 'rejected'],
+      default: 'draft',
+      index: true,
+    },
+    reviewNotes: { type: String },
+    rejectionReason: { type: String },
+    approvedSenderId: { type: String, uppercase: true, trim: true },
+  },
+  { timestamps: true }
+)
+
+SenderIdRequestSchema.index({ userId: 1, status: 1, createdAt: -1 })
+SenderIdRequestSchema.index({ desiredSenderId: 1 })
+
 // SMS Message Model
 
 /** Statuses that mean the message is still in-flight and must be checked by the status worker */
@@ -1168,6 +1227,9 @@ export const HostPinnacleAccount: Model<IHostPinnacleAccount> =
 export const SenderId: Model<ISenderId> = mongoose.models.SenderId || mongoose.model<ISenderId>('SenderId', SenderIdSchema)
 export const UserSenderId: Model<IUserSenderId> =
   mongoose.models.UserSenderId || mongoose.model<IUserSenderId>('UserSenderId', UserSenderIdSchema)
+export const SenderIdRequest: Model<ISenderIdRequest> =
+  mongoose.models.SenderIdRequest ||
+  mongoose.model<ISenderIdRequest>('SenderIdRequest', SenderIdRequestSchema)
 export const SmsMessage: Model<ISmsMessage> =
   mongoose.models.SmsMessage || mongoose.model<ISmsMessage>('SmsMessage', SmsMessageSchema)
 export const PricingRule: Model<IPricingRule> =
