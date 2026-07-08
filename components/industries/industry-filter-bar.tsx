@@ -27,8 +27,8 @@ export function IndustryFilterBar({
   onSearchChange,
 }: IndustryFilterBarProps) {
   return (
-    <div className="sticky top-20 z-30 bg-white/80 backdrop-blur-sm border-b border-slate-200 py-4 mb-8">
-      <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
+    <div className="sticky top-16 sm:top-20 z-30 bg-white/80 backdrop-blur-sm border-b border-slate-200 py-3 sm:py-4 mb-6 sm:mb-8 -mx-4 sm:-mx-0 px-4 sm:px-0">
+      <div className="flex flex-col gap-3 sm:gap-4">
         {/* Filter Chips */}
         <div className="flex flex-wrap gap-2">
           {filters.map((filter) => (
@@ -50,7 +50,7 @@ export function IndustryFilterBar({
         </div>
 
         {/* Search Input */}
-        <div className="relative w-full sm:w-64">
+        <div className="relative w-full sm:max-w-xs sm:ml-auto">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input
             type="text"

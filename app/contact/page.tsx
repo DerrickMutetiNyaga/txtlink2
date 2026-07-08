@@ -150,7 +150,7 @@ export default function ContactPage() {
         </div>
 
         {/* Hero Section */}
-        <section className="pt-24 pb-20 px-6 relative overflow-hidden">
+        <section className="pt-8 sm:pt-12 pb-12 sm:pb-20 px-4 sm:px-6 relative overflow-hidden">
           {/* Background Treatment */}
           <div className="absolute inset-0 bg-gradient-to-br from-slate-50 via-teal-50/30 to-emerald-50/20" />
           <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px]" />
@@ -172,10 +172,10 @@ export default function ContactPage() {
                   <span>Get in touch</span>
                 </div>
 
-                <h1 className="text-5xl md:text-6xl font-bold text-[#0B1220] mb-4 leading-tight tracking-tight">
+                <h1 className="text-[clamp(1.75rem,5vw,3.75rem)] font-bold text-[#0B1220] mb-4 leading-tight tracking-tight">
                   Contact TXTLINK
                 </h1>
-                <p className="text-xl text-[#334155] mb-8 leading-relaxed">
+                <p className="text-base sm:text-lg md:text-xl text-[#334155] mb-6 sm:mb-8 leading-relaxed">
                   Enterprise SMS solutions with carrier-grade delivery. We respond fast—usually within 2 hours.
                 </p>
 
@@ -196,9 +196,9 @@ export default function ContactPage() {
                 </div>
 
                 {/* CTAs */}
-                <div className="flex flex-col sm:flex-row gap-4">
-                  <Link href="#contact-form">
-                    <Button className="bg-[#0F766E] text-white hover:bg-[#115E59] px-8 h-12 text-base font-semibold shadow-sm hover:shadow-md transition-all duration-200">
+                <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+                  <Link href="#contact-form" className="w-full sm:w-auto">
+                    <Button className="w-full sm:w-auto bg-[#0F766E] text-white hover:bg-[#115E59] px-6 sm:px-8 h-12 text-base font-semibold shadow-sm hover:shadow-md transition-all duration-200">
                       Contact Sales
                       <ArrowRight className="ml-2 w-4 h-4" />
                     </Button>
@@ -256,21 +256,21 @@ export default function ContactPage() {
         </section>
 
         {/* Contact Options Cards */}
-        <section className="px-6 py-20">
+        <section className="px-4 sm:px-6 py-12 sm:py-16 md:py-20">
           <div className="max-w-7xl mx-auto">
-            <div className="text-center mb-12">
-              <h2 className="text-3xl md:text-4xl font-bold text-[#0B1220] mb-4">How can we help?</h2>
+            <div className="text-center mb-8 sm:mb-12">
+              <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-[#0B1220] mb-4">How can we help?</h2>
               <p className="text-lg text-[#64748B] max-w-2xl mx-auto">
                 Choose the right channel for your inquiry
               </p>
             </div>
-            <div className="grid md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
               {contactOptions.map((option, index) => {
                 const IconComponent = option.icon
                 return (
                   <Card
                     key={index}
-                    className="group p-8 bg-white border border-[#E2E8F0] rounded-2xl shadow-sm hover:shadow-md hover:border-[#0F766E]/20 hover:bg-slate-50 transition-all duration-200"
+                    className="group p-5 sm:p-6 lg:p-8 bg-white border border-[#E2E8F0] rounded-2xl shadow-sm hover:shadow-md hover:border-[#0F766E]/20 hover:bg-slate-50 transition-all duration-200"
                     style={{
                       animation: `fadeInUp 0.6s ease-out ${index * 0.1 + 0.2}s both`,
                     }}
@@ -280,8 +280,8 @@ export default function ContactPage() {
                     </div>
                     <h3 className="text-xl font-semibold text-[#0B1220] mb-3">{option.title}</h3>
                     <p className="text-sm text-[#64748B] mb-5 leading-relaxed">{option.description}</p>
-                    <div className="flex items-center justify-between pt-5 border-t border-slate-100">
-                      <span className="text-xs font-semibold text-[#0F766E] bg-[#ECFDF5] px-3 py-1.5 rounded-md">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-5 border-t border-slate-100">
+                      <span className="text-xs font-semibold text-[#0F766E] bg-[#ECFDF5] px-3 py-1.5 rounded-md w-fit">
                         {option.responseTime}
                       </span>
                       <a
@@ -300,13 +300,13 @@ export default function ContactPage() {
         </section>
 
         {/* Main Section - Split Layout */}
-        <section className="px-6 py-20 bg-white border-y border-[#E2E8F0]">
+        <section className="px-4 sm:px-6 py-12 sm:py-16 md:py-20 bg-white border-y border-[#E2E8F0]">
           <div className="max-w-7xl mx-auto">
-            <div className="grid lg:grid-cols-3 gap-8">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
               {/* Left: Contact Form */}
-              <div className="lg:col-span-2" id="contact-form">
-                <Card className="p-8 md:p-10 bg-white border border-[#E2E8F0] rounded-2xl shadow-sm">
-                  <h2 className="text-3xl font-bold text-[#0B1220] mb-2">Send us a message</h2>
+              <div className="lg:col-span-2 min-w-0" id="contact-form">
+                <Card className="p-5 sm:p-6 md:p-8 lg:p-10 bg-white border border-[#E2E8F0] rounded-2xl shadow-sm">
+                  <h2 className="text-2xl sm:text-3xl font-bold text-[#0B1220] mb-2">Send us a message</h2>
                   <p className="text-[#64748B] mb-8">Fill out the form below and we'll get back to you soon.</p>
 
                   {submitted ? (
@@ -596,14 +596,14 @@ export default function ContactPage() {
         </section>
 
         {/* Office & Hours */}
-        <section className="px-6 py-20 bg-slate-50">
+        <section className="px-4 sm:px-6 py-12 sm:py-16 md:py-20 bg-slate-50">
           <div className="max-w-7xl mx-auto">
-            <div className="text-center mb-12">
-              <h2 className="text-3xl md:text-4xl font-bold text-[#0B1220] mb-4">Visit our office</h2>
+            <div className="text-center mb-8 sm:mb-12">
+              <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-[#0B1220] mb-4">Visit our office</h2>
               <p className="text-lg text-[#64748B]">We're based in Nairobi, Kenya</p>
             </div>
-            <div className="grid md:grid-cols-2 gap-8">
-              <Card className="p-8 bg-white border border-[#E2E8F0] rounded-2xl shadow-sm">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8">
+              <Card className="p-5 sm:p-6 lg:p-8 bg-white border border-[#E2E8F0] rounded-2xl shadow-sm">
                 <div className="flex items-start gap-4 mb-6">
                   <div className="w-14 h-14 rounded-xl bg-[#ECFDF5] flex items-center justify-center flex-shrink-0">
                     <MapPin className="w-7 h-7 text-[#0F766E]" />
@@ -625,15 +625,15 @@ export default function ContactPage() {
                 </div>
 
                 <div className="space-y-3 pt-6 border-t border-slate-100">
-                  <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-3 p-3 bg-slate-50 rounded-lg">
                     <span className="text-sm font-semibold text-[#0B1220]">Monday - Friday</span>
                     <span className="text-sm font-medium text-[#0F766E]">8:00 - 18:00 EAT</span>
                   </div>
-                  <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-3 p-3 bg-slate-50 rounded-lg">
                     <span className="text-sm font-semibold text-[#0B1220]">Saturday</span>
                     <span className="text-sm font-medium text-[#0F766E]">9:00 - 13:00 EAT</span>
                   </div>
-                  <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-3 p-3 bg-slate-50 rounded-lg">
                     <span className="text-sm font-semibold text-[#0B1220]">Sunday</span>
                     <span className="text-sm text-[#64748B]">Closed</span>
                   </div>
@@ -658,10 +658,10 @@ export default function ContactPage() {
         </section>
 
         {/* FAQ Section */}
-        <section className="px-6 py-20 bg-white border-y border-[#E2E8F0]">
+        <section className="px-4 sm:px-6 py-12 sm:py-16 md:py-20 bg-white border-y border-[#E2E8F0]">
           <div className="max-w-4xl mx-auto">
-            <div className="text-center mb-12">
-              <h2 className="text-3xl md:text-4xl font-bold text-[#0B1220] mb-4">Frequently Asked Questions</h2>
+            <div className="text-center mb-8 sm:mb-12">
+              <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-[#0B1220] mb-4">Frequently Asked Questions</h2>
               <p className="text-lg text-[#64748B]">Common questions about TXTLINK</p>
             </div>
 
@@ -670,7 +670,7 @@ export default function ContactPage() {
                 <AccordionItem
                   key={index}
                   value={`item-${index}`}
-                  className="border border-[#E2E8F0] rounded-xl px-6 data-[state=open]:bg-slate-50/50 hover:bg-slate-50/30 transition-all duration-200"
+                  className="border border-[#E2E8F0] rounded-xl px-4 sm:px-6 data-[state=open]:bg-slate-50/50 hover:bg-slate-50/30 transition-all duration-200"
                 >
                   <AccordionTrigger className="text-left font-semibold text-[#0B1220] hover:no-underline py-5 text-base">
                     {faq.question}

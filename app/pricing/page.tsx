@@ -204,20 +204,20 @@ export default function PricingPage() {
 
   return (
     <MarketingLayout>
-      <div className="px-6 py-12 max-w-7xl mx-auto">
+      <div className="marketing-container py-8 sm:py-12">
         {/* Sender ID Ad Banner */}
         <SenderIdAdBanner currentPage="pricing" />
         
         {/* Header */}
-        <div className="text-center mb-16">
-          <h1 className="text-5xl font-bold text-gray-900 mb-4">{pageTitle}</h1>
-          <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+        <div className="text-center mb-10 sm:mb-16">
+          <h1 className="text-[clamp(1.75rem,5vw,3rem)] font-bold text-gray-900 mb-4">{pageTitle}</h1>
+          <p className="text-base sm:text-lg text-gray-600 max-w-2xl mx-auto px-2">
             {pageSubtitle}
           </p>
         </div>
 
         {/* Pricing Tiers */}
-        <div className="grid md:grid-cols-3 gap-8 mb-16">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8 mb-12 sm:mb-16">
           {tiers.map((tier: any) => {
             const IconComponent = iconMap[tier.icon] || Rocket
             const featureGroups = groupedFeatures(tier.features)
@@ -227,7 +227,7 @@ export default function PricingPage() {
               <div
               key={tier.name}
                 className={`relative group transition-all duration-300 ${
-                  isHighlighted ? 'md:-mt-4 md:mb-4' : ''
+                  isHighlighted ? 'lg:-mt-4 lg:mb-4' : ''
                 }`}
               >
                 {/* Most Popular Ribbon */}
@@ -245,8 +245,8 @@ export default function PricingPage() {
                 <Card
                   className={`relative overflow-hidden flex flex-col h-full transition-all duration-300 ${
                     isHighlighted
-                      ? `bg-gradient-to-b from-teal-50/50 via-white to-white border-2 ${getCardBorder(tier.accentColor, true)} shadow-xl hover:shadow-2xl hover:scale-[1.02]`
-                      : `bg-white border ${getCardBorder(tier.accentColor, false)} shadow-md hover:shadow-xl hover:-translate-y-1`
+                      ? `bg-gradient-to-b from-teal-50/50 via-white to-white border-2 ${getCardBorder(tier.accentColor, true)} shadow-xl hover:shadow-2xl lg:hover:scale-[1.02]`
+                      : `bg-white border ${getCardBorder(tier.accentColor, false)} shadow-md hover:shadow-xl lg:hover:-translate-y-1`
                   }`}
                 >
                   {/* Decorative Background Blob */}
@@ -258,7 +258,7 @@ export default function PricingPage() {
                   ></div>
 
                   {/* Card Content */}
-                  <div className="relative z-10 p-8 flex flex-col h-full">
+                  <div className="relative z-10 p-5 sm:p-6 lg:p-8 flex flex-col h-full">
                     {/* Plan Identity Row */}
                     <div className="mb-6">
                       <div className="flex items-center gap-4 mb-3">
@@ -281,9 +281,9 @@ export default function PricingPage() {
                     </div>
 
                     {/* Price Section */}
-              <div className="mb-8">
-                      <div className="flex items-baseline gap-2 mb-2">
-                        <span className="text-5xl font-bold text-gray-900">{tier.price}</span>
+              <div className="mb-6 sm:mb-8">
+                      <div className="flex items-baseline gap-2 mb-2 flex-wrap">
+                        <span className="text-3xl sm:text-4xl lg:text-5xl font-bold text-gray-900">{tier.price}</span>
                         {tier.priceDecimal && (
                           <span className="text-2xl font-semibold text-gray-500">{tier.priceDecimal}</span>
                         )}
@@ -392,10 +392,10 @@ export default function PricingPage() {
         </div>
 
         {/* Volume Discounts */}
-        <div className="mb-16">
-          <h2 className="text-3xl font-bold text-gray-900 mb-8 text-center">Volume Discounts</h2>
-          <div className="overflow-x-auto border border-gray-200 rounded-xl shadow-sm bg-white">
-            <table className="w-full">
+        <div id="compare" className="mb-12 sm:mb-16 scroll-mt-24">
+          <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-6 sm:mb-8 text-center">Volume Discounts</h2>
+          <div className="table-wrapper border border-gray-200 rounded-xl shadow-sm bg-white">
+            <table className="w-full min-w-[480px]">
               <thead className="bg-gradient-to-r from-teal-50 to-emerald-50 border-b border-gray-200">
                 <tr>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">SMS Volume</th>
@@ -420,9 +420,9 @@ export default function PricingPage() {
         </div>
 
         {/* FAQ / CTA */}
-        <div className="grid md:grid-cols-2 gap-12 items-start">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 sm:gap-12 items-start">
           <div>
-            <h2 className="text-3xl font-bold text-gray-900 mb-6">Common Questions</h2>
+            <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-6">Common Questions</h2>
             <div className="space-y-6">
               <div className="border-l-4 border-teal-500 pl-4">
                 <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
@@ -455,12 +455,12 @@ export default function PricingPage() {
             </div>
           </div>
 
-          <Card className="p-8 bg-gradient-to-br from-teal-600 to-emerald-600 text-white border-none shadow-xl">
+          <Card className="p-5 sm:p-6 lg:p-8 bg-gradient-to-br from-teal-600 to-emerald-600 text-white border-none shadow-xl">
             <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 rounded-lg bg-white/20 backdrop-blur-sm flex items-center justify-center">
+              <div className="w-10 h-10 rounded-lg bg-white/20 backdrop-blur-sm flex items-center justify-center flex-shrink-0">
                 <FileText className="w-5 h-5 text-white" />
               </div>
-              <h3 className="text-2xl font-bold">Request Enterprise Pricing</h3>
+              <h3 className="text-xl sm:text-2xl font-bold">Request Enterprise Pricing</h3>
             </div>
             <form className="space-y-4">
               <div>

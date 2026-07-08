@@ -57,7 +57,7 @@ export function IndustryCard({
         <div className={stripeVariants['gradient-stripe']} />
       )}
 
-      <div className="p-6">
+      <div className="p-4 sm:p-6">
         {/* Icon Badge */}
         <div className="mb-5">
           <div

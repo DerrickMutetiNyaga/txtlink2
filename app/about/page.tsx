@@ -65,7 +65,7 @@ export default function AboutPage() {
   return (
     <MarketingLayout>
       {/* Hero Section */}
-      <section className="pt-24 pb-20 px-6 relative overflow-hidden bg-gradient-to-b from-slate-50 to-white">
+      <section className="pt-8 sm:pt-12 pb-12 sm:pb-20 px-4 sm:px-6 relative overflow-hidden bg-gradient-to-b from-slate-50 to-white">
         {/* Background Treatment */}
         <div className="absolute inset-0 bg-gradient-to-br from-slate-50 via-teal-50/30 to-emerald-50/20" />
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px]" />
@@ -80,10 +80,10 @@ export default function AboutPage() {
                 <Users className="w-4 h-4" />
                 <span>About TXTLINK</span>
               </div>
-              <h1 className="text-5xl md:text-6xl font-bold text-[#0B1220] leading-tight tracking-tight">
+              <h1 className="text-[clamp(1.75rem,5vw,3.75rem)] font-bold text-[#0B1220] leading-tight tracking-tight">
                 Building the Future of Enterprise Messaging
               </h1>
-              <p className="text-xl text-[#334155] leading-relaxed">
+              <p className="text-base sm:text-lg md:text-xl text-[#334155] leading-relaxed">
                 TXTLINK is a leading provider of enterprise SMS infrastructure, helping businesses 
                 across Africa and beyond deliver reliable, secure, and scalable messaging solutions.
               </p>
@@ -111,10 +111,10 @@ export default function AboutPage() {
               {/* Logo Strip Placeholder */}
               <div className="pt-6 border-t border-slate-200">
                 <p className="text-xs font-semibold text-[#64748B] uppercase tracking-wider mb-3">Trusted by</p>
-                <div className="flex items-center gap-6 opacity-60">
-                  <div className="h-8 w-24 bg-slate-200 rounded"></div>
-                  <div className="h-8 w-24 bg-slate-200 rounded"></div>
-                  <div className="h-8 w-24 bg-slate-200 rounded"></div>
+                <div className="flex flex-wrap items-center gap-3 sm:gap-6 opacity-60">
+                  <div className="h-8 w-20 sm:w-24 bg-slate-200 rounded flex-shrink-0"></div>
+                  <div className="h-8 w-20 sm:w-24 bg-slate-200 rounded flex-shrink-0"></div>
+                  <div className="h-8 w-20 sm:w-24 bg-slate-200 rounded flex-shrink-0"></div>
                 </div>
               </div>
             </div>
@@ -162,11 +162,11 @@ export default function AboutPage() {
       </section>
 
       {/* Mission & Vision */}
-      <section className="py-20 px-6 bg-white border-y border-[#E2E8F0]">
+      <section className="py-12 sm:py-16 md:py-20 px-4 sm:px-6 bg-white border-y border-[#E2E8F0]">
         <div className="max-w-7xl mx-auto">
-          <div className="grid md:grid-cols-2 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8">
             {/* Mission Card */}
-            <Card className="p-8 bg-white border border-[#E2E8F0] rounded-2xl shadow-sm hover:shadow-md transition-all duration-200">
+            <Card className="p-5 sm:p-6 lg:p-8 bg-white border border-[#E2E8F0] rounded-2xl shadow-sm hover:shadow-md transition-all duration-200">
               <div className="flex items-center gap-3 mb-6">
                 <div className="w-12 h-12 rounded-xl bg-[#ECFDF5] flex items-center justify-center">
                   <Target className="w-6 h-6 text-[#0F766E]" />
@@ -175,7 +175,7 @@ export default function AboutPage() {
                   Mission
                 </span>
               </div>
-              <h2 className="text-3xl font-bold text-[#0B1220] mb-4">Our Mission</h2>
+              <h2 className="text-2xl sm:text-3xl font-bold text-[#0B1220] mb-4">Our Mission</h2>
               <p className="text-[#334155] mb-6 leading-relaxed">
                 To empower businesses with reliable, secure, and scalable messaging infrastructure 
                 that enables seamless communication with their customers, employees, and partners.
@@ -197,7 +197,7 @@ export default function AboutPage() {
             </Card>
 
             {/* Vision Card */}
-            <Card className="p-8 bg-white border border-[#E2E8F0] rounded-2xl shadow-sm hover:shadow-md transition-all duration-200">
+            <Card className="p-5 sm:p-6 lg:p-8 bg-white border border-[#E2E8F0] rounded-2xl shadow-sm hover:shadow-md transition-all duration-200">
               <div className="flex items-center gap-3 mb-6">
                 <div className="w-12 h-12 rounded-xl bg-[#ECFDF5] flex items-center justify-center">
                   <Award className="w-6 h-6 text-[#0F766E]" />
@@ -206,7 +206,7 @@ export default function AboutPage() {
                   Vision
                 </span>
               </div>
-              <h2 className="text-3xl font-bold text-[#0B1220] mb-4">Our Vision</h2>
+              <h2 className="text-2xl sm:text-3xl font-bold text-[#0B1220] mb-4">Our Vision</h2>
               <p className="text-[#334155] mb-6 leading-relaxed">
                 To become the most trusted and reliable messaging infrastructure provider in Africa, 
                 recognized for our commitment to security, compliance, and customer success.
@@ -231,21 +231,21 @@ export default function AboutPage() {
       </section>
 
       {/* Stats */}
-      <section className="py-20 px-6 bg-slate-50/60">
+      <section className="py-12 sm:py-16 md:py-20 px-4 sm:px-6 bg-slate-50/60">
         <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold text-[#0B1220] mb-4">By The Numbers</h2>
+          <div className="text-center mb-8 sm:mb-12">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-[#0B1220] mb-4">By The Numbers</h2>
             <p className="text-lg text-[#64748B] max-w-2xl mx-auto">
               Trusted by hundreds of enterprises across multiple industries
             </p>
           </div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
             {stats.map((stat, idx) => {
               const IconComponent = stat.icon
               return (
-                <Card key={idx} className="p-6 bg-white border border-[#E2E8F0] rounded-2xl shadow-sm hover:shadow-md transition-all duration-200 text-center h-full flex flex-col justify-center">
-                  <div className="text-5xl md:text-6xl font-bold text-[#0B1220] mb-2 leading-none">{stat.number}</div>
+                <Card key={idx} className="p-4 sm:p-6 bg-white border border-[#E2E8F0] rounded-2xl shadow-sm hover:shadow-md transition-all duration-200 text-center h-full flex flex-col justify-center">
+                  <div className="text-3xl sm:text-4xl md:text-5xl font-bold text-[#0B1220] mb-2 leading-none">{stat.number}</div>
                   <div className="text-sm font-semibold text-[#0B1220] mb-1">{stat.label}</div>
                   <div className="text-xs text-[#64748B]">Measured monthly</div>
                 </Card>
@@ -256,7 +256,7 @@ export default function AboutPage() {
       </section>
 
       {/* Values */}
-      <section className="py-20 px-6 bg-white border-y border-[#E2E8F0]">
+      <section className="py-12 sm:py-16 md:py-20 px-4 sm:px-6 bg-white border-y border-[#E2E8F0]">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-12">
             <h2 className="text-3xl md:text-4xl font-bold text-[#0B1220] mb-4">Our Values</h2>
@@ -287,7 +287,7 @@ export default function AboutPage() {
       </section>
 
       {/* Timeline */}
-      <section className="py-20 px-6 bg-slate-50/30 border-y border-[#E2E8F0]">
+      <section className="py-12 sm:py-16 md:py-20 px-4 sm:px-6 bg-slate-50/30 border-y border-[#E2E8F0]">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-12">
             <h2 className="text-3xl md:text-4xl font-bold text-[#0B1220] mb-4">Our Journey</h2>
@@ -297,17 +297,17 @@ export default function AboutPage() {
           </div>
 
           <div className="relative">
-            <div className="absolute left-8 md:left-1/2 md:-translate-x-1/2 top-0 bottom-0 w-px bg-gradient-to-b from-[#0F766E]/20 via-[#0F766E]/40 to-[#0F766E]/20"></div>
+            <div className="absolute left-4 md:left-1/2 md:-translate-x-1/2 top-0 bottom-0 w-px bg-gradient-to-b from-[#0F766E]/20 via-[#0F766E]/40 to-[#0F766E]/20"></div>
             <div className="space-y-8">
               {milestones.map((milestone, idx) => (
                 <div
                   key={idx}
-                  className={`relative flex items-start gap-8 ${
+                  className={`relative flex flex-col md:flex-row items-start gap-4 md:gap-8 ${
                     idx % 2 === 0 ? 'md:flex-row' : 'md:flex-row-reverse'
                   }`}
                 >
-                  <div className="flex-1 md:w-1/2 md:ml-auto md:pr-12">
-                    <Card className="p-6 bg-white border border-[#E2E8F0] rounded-2xl shadow-sm hover:shadow-md transition-all duration-200">
+                  <div className="w-full md:flex-1 md:w-1/2 md:ml-auto md:pr-12 pl-10 md:pl-0">
+                    <Card className="p-4 sm:p-6 bg-white border border-[#E2E8F0] rounded-2xl shadow-sm hover:shadow-md transition-all duration-200">
                       <div className="flex items-center gap-3 mb-3">
                         <div className="text-2xl font-bold text-[#0F766E]">{milestone.year}</div>
                         <span className="text-xs font-semibold text-[#0F766E] uppercase tracking-wider bg-[#ECFDF5] px-2.5 py-1 rounded-full">
@@ -318,7 +318,7 @@ export default function AboutPage() {
                       <p className="text-[#64748B] text-sm leading-relaxed">{milestone.description}</p>
                     </Card>
                   </div>
-                  <div className="absolute left-8 md:left-1/2 md:-translate-x-1/2 w-3 h-3 bg-[#0F766E] rounded-full border-2 border-white shadow-md flex-shrink-0 z-10"></div>
+                  <div className="absolute left-4 md:left-1/2 md:-translate-x-1/2 w-3 h-3 bg-[#0F766E] rounded-full border-2 border-white shadow-md flex-shrink-0 z-10 top-6 md:top-auto"></div>
                   <div className="flex-1 md:w-1/2 md:mr-auto md:pl-12 hidden md:block"></div>
                 </div>
               ))}
@@ -328,7 +328,7 @@ export default function AboutPage() {
       </section>
 
       {/* CTA Section - Compact Enterprise SaaS */}
-      <section className="relative py-12 md:py-16 px-6">
+      <section className="relative py-10 sm:py-12 md:py-16 px-4 sm:px-6">
         <div className="max-w-6xl mx-auto">
           {/* Rounded CTA Card */}
           <div className="relative rounded-3xl overflow-hidden bg-gradient-to-br from-[#0F766E] via-[#115E59] to-slate-900">
@@ -365,15 +365,15 @@ export default function AboutPage() {
               </p>
               
               {/* CTA Buttons */}
-              <div className="flex flex-col sm:flex-row gap-3 justify-center items-center mb-6">
-                <Link href="/contact">
-                  <Button className="bg-white text-[#0F766E] hover:bg-slate-50 hover:shadow-lg hover:-translate-y-0.5 px-6 h-11 text-sm font-semibold rounded-xl shadow-md transition-all duration-200">
+              <div className="flex flex-col sm:flex-row gap-3 justify-center items-stretch sm:items-center mb-6">
+                <Link href="/contact" className="w-full sm:w-auto">
+                  <Button className="w-full sm:w-auto bg-white text-[#0F766E] hover:bg-slate-50 hover:shadow-lg hover:-translate-y-0.5 px-6 h-11 text-sm font-semibold rounded-xl shadow-md transition-all duration-200">
                     Get in Touch
                     <ArrowRight className="ml-2 w-4 h-4" />
                   </Button>
                 </Link>
-                <Link href="/pricing">
-                  <Button className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#0F766E] px-6 h-11 text-sm font-semibold text-white shadow-sm ring-1 ring-[#0F766E]/20 hover:bg-[#115E59] hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-4 focus:ring-[#0F766E]/20 transition-all duration-200">
+                <Link href="/pricing" className="w-full sm:w-auto">
+                  <Button className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-[#0F766E] px-6 h-11 text-sm font-semibold text-white shadow-sm ring-1 ring-[#0F766E]/20 hover:bg-[#115E59] hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-4 focus:ring-[#0F766E]/20 transition-all duration-200">
                     View Pricing
                     <ArrowRight className="w-4 h-4" />
                   </Button>

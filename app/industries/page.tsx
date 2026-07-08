@@ -203,9 +203,9 @@ export default function IndustriesPage() {
 
   return (
     <MarketingLayout>
-      <div className="bg-slate-50">
+      <div className="bg-slate-50 overflow-x-hidden w-full">
         {/* Hero Section */}
-        <section className="pt-20 pb-16 px-6 relative overflow-hidden">
+        <section className="pt-8 sm:pt-12 pb-12 sm:pb-16 px-4 sm:px-6 relative overflow-hidden">
           {/* Subtle background gradient */}
           <div className="absolute inset-0 bg-gradient-to-br from-slate-50 via-teal-50/30 to-emerald-50/20" />
           <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiMxNGI4YTYiIGZpbGwtb3BhY2l0eT0iMC4wMyI+PGNpcmNsZSBjeD0iMzAiIGN5PSIzMCIgcj0iMiIvPjwvZz48L2c+PC9zdmc+')] opacity-40" />
@@ -214,23 +214,23 @@ export default function IndustriesPage() {
             <div className="grid md:grid-cols-2 gap-12 items-center">
               {/* Left Content */}
               <div>
-                <h1 className="text-4xl md:text-5xl font-bold text-slate-900 mb-4 leading-tight">
+                <h1 className="text-[clamp(1.75rem,5vw,3rem)] font-bold text-slate-900 mb-4 leading-tight">
                   SMS Solutions for Every Industry
                 </h1>
-                <p className="text-xl text-slate-600 mb-8 leading-relaxed">
+                <p className="text-base sm:text-lg md:text-xl text-slate-600 mb-6 sm:mb-8 leading-relaxed">
                   Enterprise-grade messaging infrastructure tailored to your industry's unique 
                   requirements. From banking to healthcare, we deliver compliance-ready solutions 
                   that scale.
                 </p>
-                <div className="mt-8 flex items-center gap-4 mb-8">
-                  <Link href="/contact">
-                    <button className="inline-flex items-center gap-2 rounded-xl bg-teal-600 px-6 py-3 text-sm font-medium text-white shadow hover:bg-teal-700 transition-all">
+                <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3 sm:gap-4 mb-6 sm:mb-8">
+                  <Link href="/contact" className="w-full sm:w-auto">
+                    <button className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-teal-600 px-6 py-3 text-sm font-medium text-white shadow hover:bg-teal-700 transition-all">
                       Talk to an Expert
                       <ArrowRight className="w-4 h-4" />
                     </button>
                   </Link>
-                  <Link href="/products">
-                    <button className="inline-flex items-center gap-2 rounded-xl border border-slate-300 px-6 py-3 text-sm font-medium text-slate-700 hover:bg-slate-100 transition-all">
+                  <Link href="/products" className="w-full sm:w-auto">
+                    <button className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 px-6 py-3 text-sm font-medium text-slate-700 hover:bg-slate-100 transition-all">
                       View Use Cases
                     </button>
                   </Link>
@@ -281,7 +281,7 @@ export default function IndustriesPage() {
         </section>
 
         {/* Industry Filter Bar */}
-        <section className="px-6">
+        <section className="px-4 sm:px-6">
           <div className="max-w-7xl mx-auto">
             <IndustryFilterBar
               activeFilter={activeFilter}
@@ -293,10 +293,10 @@ export default function IndustriesPage() {
         </section>
 
         {/* Industry Cards */}
-        <section className="px-6 pb-16">
+        <section className="px-4 sm:px-6 pb-12 sm:pb-16">
           <div className="max-w-7xl mx-auto">
             <div
-              className="grid md:grid-cols-2 lg:grid-cols-3 gap-6"
+              className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6"
               style={{
                 transition: 'all 0.3s ease',
               }}
@@ -324,15 +324,15 @@ export default function IndustriesPage() {
         </section>
 
         {/* Why TXTLINK Section */}
-        <section className="px-6 py-16 bg-white border-y border-slate-200">
+        <section className="px-4 sm:px-6 py-12 sm:py-16 bg-white border-y border-slate-200">
           <div className="max-w-7xl mx-auto">
-            <div className="text-center mb-12">
-              <h2 className="text-3xl font-bold text-slate-900 mb-4">Why TXTLINK</h2>
+            <div className="text-center mb-8 sm:mb-12">
+              <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 mb-4">Why TXTLINK</h2>
               <p className="text-lg text-slate-600 max-w-2xl mx-auto">
                 Enterprise-grade infrastructure built for reliability, compliance, and scale
               </p>
             </div>
-            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
               {valueTiles.map((tile, index) => (
                 <ValueTile
                   key={index}
@@ -348,14 +348,14 @@ export default function IndustriesPage() {
         </section>
 
         {/* Featured Industry Spotlight */}
-        <section className="px-6 py-16">
+        <section className="px-4 sm:px-6 py-12 sm:py-16">
           <div className="max-w-7xl mx-auto">
             <FeaturedSpotlight />
           </div>
         </section>
 
         {/* CTA Section */}
-        <section className="px-6 py-16">
+        <section className="px-4 sm:px-6 py-12 sm:py-16">
           <div className="max-w-7xl mx-auto">
             <CTASection />
           </div>

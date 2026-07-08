@@ -110,14 +110,13 @@ export default function SenderIdAdBanner({ currentPage = 'dashboard' }: SenderId
 
   return (
     <div
-      className="relative overflow-hidden rounded-3xl transition-all duration-500 ease-out mb-6"
+      className="relative overflow-hidden rounded-2xl sm:rounded-3xl transition-all duration-500 ease-out mb-6 p-4 sm:p-6 lg:p-8"
       style={{
         backgroundColor: bgColor,
         opacity: isVisible ? 1 : 0,
         transform: isVisible ? 'translateY(0)' : 'translateY(-10px)',
         pointerEvents: isVisible ? 'auto' : 'none',
         boxShadow: '0 12px 30px rgba(2, 44, 34, 0.08)',
-        padding: '32px 36px',
       }}
     >
       {/* Decorative background shapes - subtle depth */}
@@ -143,10 +142,10 @@ export default function SenderIdAdBanner({ currentPage = 'dashboard' }: SenderId
         <X className="w-3.5 h-3.5" />
       </button>
 
-      <div className="relative flex items-start gap-6">
+      <div className="relative flex flex-col sm:flex-row items-start gap-4 sm:gap-6 min-w-0">
         {/* Icon */}
         <div
-          className="flex-shrink-0 w-14 h-14 rounded-[14px] flex items-center justify-center"
+          className="flex-shrink-0 w-12 h-12 sm:w-14 sm:h-14 rounded-[14px] flex items-center justify-center"
           style={{ 
             backgroundColor: `${ctaColor}15`,
           }}
@@ -162,7 +161,7 @@ export default function SenderIdAdBanner({ currentPage = 'dashboard' }: SenderId
         <div className="flex-1 min-w-0">
           {/* Heading */}
           <h3 
-            className="text-[40px] font-bold mb-3 leading-tight"
+            className="text-xl sm:text-2xl lg:text-[2rem] font-bold mb-2 sm:mb-3 leading-tight break-words"
             style={{ 
               color: headingColor,
               fontFamily: 'system-ui, -apple-system, "Segoe UI", sans-serif',
@@ -175,7 +174,7 @@ export default function SenderIdAdBanner({ currentPage = 'dashboard' }: SenderId
           
           {/* Description */}
           <p 
-            className="text-base mb-6 leading-relaxed"
+            className="text-sm sm:text-base mb-4 sm:mb-6 leading-relaxed break-words"
             style={{ 
               color: bodyColor,
               fontFamily: 'system-ui, -apple-system, "Segoe UI", sans-serif',
@@ -187,10 +186,10 @@ export default function SenderIdAdBanner({ currentPage = 'dashboard' }: SenderId
           </p>
           
           {/* Price and CTA row */}
-          <div className="flex items-center gap-6 flex-wrap">
-            <div className="flex items-baseline gap-2">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6">
+            <div className="flex items-baseline gap-2 flex-wrap">
               <span 
-                className="text-[28px] font-extrabold"
+                className="text-xl sm:text-2xl lg:text-[28px] font-extrabold"
                 style={{ 
                   color: priceColor,
                   fontFamily: 'system-ui, -apple-system, "Segoe UI", sans-serif',
@@ -216,7 +215,7 @@ export default function SenderIdAdBanner({ currentPage = 'dashboard' }: SenderId
             <Link
               href={ad.ctaLink}
               onClick={handleClick}
-              className="inline-flex items-center gap-2 px-[22px] py-3 rounded-[14px] font-semibold transition-all hover:scale-105 hover:shadow-lg"
+              className="inline-flex items-center justify-center gap-2 px-5 sm:px-[22px] py-3 rounded-[14px] font-semibold transition-all hover:scale-105 hover:shadow-lg w-full sm:w-auto"
               style={{
                 backgroundColor: ctaColor,
                 color: '#FFFFFF',

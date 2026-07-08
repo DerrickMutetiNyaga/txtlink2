@@ -92,7 +92,7 @@ export default function Home() {
             <div className="space-y-4 sm:space-y-6 text-center lg:text-left">
               {/* Main Heading - Outcome-Driven */}
               <div className="space-y-3 sm:space-y-4">
-                <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-gray-900 leading-tight tracking-tight">
+                <h1 className="text-[clamp(1.75rem,6vw,3.75rem)] font-bold text-gray-900 leading-tight tracking-tight">
                   Reliable SMS Infrastructure Built for Scale
                 </h1>
                 <p className="text-base sm:text-lg text-gray-600 leading-relaxed max-w-xl mx-auto lg:mx-0">
@@ -123,24 +123,24 @@ export default function Home() {
                 <div className="flex flex-wrap items-center justify-center lg:justify-start gap-x-4 sm:gap-x-6 md:gap-x-8 gap-y-3 sm:gap-y-4">
                   <div className="flex items-center gap-2 sm:gap-2.5">
                     <Check className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600 flex-shrink-0" />
-                    <span className="text-xs sm:text-sm text-gray-600 font-medium whitespace-nowrap">No setup fees</span>
+                    <span className="text-xs sm:text-sm text-gray-600 font-medium">No setup fees</span>
                   </div>
                   <div className="flex items-center gap-2 sm:gap-2.5">
                     <Check className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600 flex-shrink-0" />
-                    <span className="text-xs sm:text-sm text-gray-600 font-medium whitespace-nowrap">Fast Sender ID approval</span>
+                    <span className="text-xs sm:text-sm text-gray-600 font-medium">Fast Sender ID approval</span>
                   </div>
                   <div className="flex items-center gap-2 sm:gap-2.5">
                     <Check className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600 flex-shrink-0" />
-                    <span className="text-xs sm:text-sm text-gray-600 font-medium whitespace-nowrap">API ready in minutes</span>
+                    <span className="text-xs sm:text-sm text-gray-600 font-medium">API ready in minutes</span>
                   </div>
                 </div>
               </div>
             </div>
 
             {/* Right Visual - Modern Dashboard Mockup */}
-            <div className="relative max-w-full sm:max-w-lg md:max-w-xl mx-auto lg:mx-0 order-first lg:order-last">
+            <div className="relative w-full max-w-full sm:max-w-lg md:max-w-xl mx-auto lg:mx-0 overflow-hidden">
               {/* Dashboard Container */}
-              <div className="relative bg-white rounded-xl border border-gray-200 shadow-2xl overflow-hidden scale-75 sm:scale-90 md:scale-95 lg:scale-100">
+              <div className="relative bg-white rounded-xl border border-gray-200 shadow-2xl overflow-hidden w-full">
                 {/* Dashboard Header */}
                 <div className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200 px-4 py-3 flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -625,7 +625,7 @@ console.log(result.messageId);`}
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 lg:gap-8 mb-8 sm:mb-10 md:mb-12">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8 mb-8 sm:mb-10 md:mb-12">
             {(() => {
               // Default plans (fallback)
               const defaultPlans = [
@@ -771,7 +771,7 @@ console.log(result.messageId);`}
                   <div
                     key={plan.name}
                     className={`relative group transition-all duration-300 ${
-                      isHighlighted ? 'md:-mt-4 md:mb-4' : ''
+                      isHighlighted ? 'lg:-mt-4 lg:mb-4' : ''
                 }`}
               >
                     {/* Most Popular Ribbon */}
@@ -789,8 +789,8 @@ console.log(result.messageId);`}
                     <Card
                       className={`relative overflow-hidden flex flex-col h-full transition-all duration-300 ${
                         isHighlighted
-                          ? `bg-gradient-to-b from-teal-50/50 via-white to-white border-2 ${getCardBorder(plan.accentColor, true)} shadow-xl hover:shadow-2xl hover:scale-[1.02]`
-                          : `bg-white border ${getCardBorder(plan.accentColor, false)} shadow-md hover:shadow-xl hover:-translate-y-1`
+                          ? `bg-gradient-to-b from-teal-50/50 via-white to-white border-2 ${getCardBorder(plan.accentColor, true)} shadow-xl hover:shadow-2xl lg:hover:scale-[1.02]`
+                          : `bg-white border ${getCardBorder(plan.accentColor, false)} shadow-md hover:shadow-xl lg:hover:-translate-y-1`
                       }`}
                     >
                       {/* Decorative Background Blob */}

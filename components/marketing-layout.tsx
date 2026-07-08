@@ -10,32 +10,40 @@ import { Footer } from '@/components/footer'
 export function MarketingLayout({ children }: { children: React.ReactNode }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
+  const closeMobileMenu = () => setMobileMenuOpen(false)
+
   return (
-    <div className="min-h-screen bg-[#F9FAFB] text-gray-900 flex flex-col">
+    <div className="min-h-screen bg-[#F9FAFB] text-gray-900 flex flex-col overflow-x-hidden w-full">
       {/* Navigation */}
       <nav className="fixed top-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-sm border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <Link href="/" className="text-2xl font-bold text-teal-600 hover:text-teal-700 transition-colors">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-3 min-w-0">
+          <Link
+            href="/"
+            className="text-xl sm:text-2xl font-bold text-teal-600 hover:text-teal-700 transition-colors flex-shrink-0"
+            onClick={closeMobileMenu}
+          >
             TXTLINK
           </Link>
-          <div className="hidden md:flex items-center gap-8">
-            <Link href="/products" className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors">
+
+          <div className="hidden md:flex items-center gap-6 lg:gap-8 flex-shrink-0">
+            <Link href="/products" className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors whitespace-nowrap">
               Products
             </Link>
-            <Link href="/pricing" className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors">
+            <Link href="/pricing" className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors whitespace-nowrap">
               Pricing
             </Link>
-            <Link href="/industries" className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors">
+            <Link href="/industries" className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors whitespace-nowrap">
               Industries
             </Link>
-            <Link href="/about" className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors">
+            <Link href="/about" className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors whitespace-nowrap">
               About
             </Link>
-            <Link href="/contact" className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors">
+            <Link href="/contact" className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors whitespace-nowrap">
               Contact
             </Link>
           </div>
-          <div className="hidden md:flex gap-4">
+
+          <div className="hidden md:flex gap-3 lg:gap-4 flex-shrink-0">
             <Link href="/auth/login">
               <Button className="bg-teal-600 text-white hover:bg-teal-700">
                 Sign In
@@ -47,9 +55,13 @@ export function MarketingLayout({ children }: { children: React.ReactNode }) {
               </Button>
             </Link>
           </div>
+
           <button
-            className="md:hidden"
+            type="button"
+            className="md:hidden flex-shrink-0 p-2 -mr-2 rounded-lg hover:bg-gray-100 transition-colors"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
+            aria-expanded={mobileMenuOpen}
           >
             {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
           </button>
@@ -57,38 +69,41 @@ export function MarketingLayout({ children }: { children: React.ReactNode }) {
 
         {/* Mobile Menu */}
         {mobileMenuOpen && (
-          <div className="md:hidden border-t border-gray-200 bg-white p-4 space-y-4">
-            <Link href="/products" className="block text-sm font-medium text-gray-600 hover:text-gray-900">
-              Products
-            </Link>
-            <Link href="/pricing" className="block text-sm font-medium text-gray-600 hover:text-gray-900">
-              Pricing
-            </Link>
-            <Link href="/industries" className="block text-sm font-medium text-gray-600 hover:text-gray-900">
-              Industries
-            </Link>
-            <Link href="/about" className="block text-sm font-medium text-gray-600 hover:text-gray-900">
-              About
-            </Link>
-            <Link href="/contact" className="block text-sm font-medium text-gray-600 hover:text-gray-900">
-              Contact
-            </Link>
-            <Link href="/auth/login" className="block">
-              <Button className="w-full bg-teal-600 text-white hover:bg-teal-700">
-                Sign In
-              </Button>
-            </Link>
-            <Link href="/auth/register" className="block">
-              <Button className="w-full bg-teal-600 text-white hover:bg-teal-700">
-                Get Started
-              </Button>
-            </Link>
+          <div className="md:hidden border-t border-gray-200 bg-white px-4 py-4 space-y-1 max-h-[calc(100vh-4rem)] overflow-y-auto">
+            {[
+              { href: '/products', label: 'Products' },
+              { href: '/pricing', label: 'Pricing' },
+              { href: '/industries', label: 'Industries' },
+              { href: '/about', label: 'About' },
+              { href: '/contact', label: 'Contact' },
+            ].map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="block py-3 px-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg"
+                onClick={closeMobileMenu}
+              >
+                {item.label}
+              </Link>
+            ))}
+            <div className="pt-3 space-y-2 border-t border-gray-100">
+              <Link href="/auth/login" className="block" onClick={closeMobileMenu}>
+                <Button className="w-full bg-teal-600 text-white hover:bg-teal-700">
+                  Sign In
+                </Button>
+              </Link>
+              <Link href="/auth/register" className="block" onClick={closeMobileMenu}>
+                <Button className="w-full bg-teal-600 text-white hover:bg-teal-700">
+                  Get Started
+                </Button>
+              </Link>
+            </div>
           </div>
         )}
       </nav>
 
       {/* Main content */}
-      <main className="pt-20 pb-0 flex-grow">{children}</main>
+      <main className="pt-16 sm:pt-20 pb-0 flex-grow w-full min-w-0">{children}</main>
 
       {/* Footer */}
       <Footer />

@@ -102,20 +102,20 @@ export function FeaturedSpotlight() {
   const data = spotlightData[activeTab]
 
   return (
-    <Card className="p-8 bg-white border border-slate-200/60 rounded-2xl shadow-sm">
+    <Card className="p-4 sm:p-6 lg:p-8 bg-white border border-slate-200/60 rounded-2xl shadow-sm overflow-hidden">
       <div className="mb-6">
-        <h2 className="text-2xl font-bold text-slate-900 mb-2">Featured Industry Spotlight</h2>
-        <p className="text-slate-600">See how TXTLINK powers industry-specific messaging workflows</p>
+        <h2 className="text-xl sm:text-2xl font-bold text-slate-900 mb-2">Featured Industry Spotlight</h2>
+        <p className="text-sm sm:text-base text-slate-600">See how TXTLINK powers industry-specific messaging workflows</p>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 mb-8 border-b border-slate-200">
+      <div className="flex gap-1 sm:gap-2 mb-6 sm:mb-8 border-b border-slate-200 overflow-x-auto -mx-1 px-1 pb-px scrollbar-hide">
         {(['banking', 'healthcare', 'logistics'] as const).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
             className={`
-              px-4 py-2 text-sm font-medium border-b-2 transition-colors
+              flex-shrink-0 px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium border-b-2 transition-colors whitespace-nowrap
               ${
                 activeTab === tab
                   ? 'border-teal-600 text-teal-600'
@@ -137,7 +137,7 @@ export function FeaturedSpotlight() {
           <h3 className="text-sm font-semibold text-slate-900 mb-4 uppercase tracking-wider">
             Recommended Flows
           </h3>
-          <div className="grid md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
             {data.flows.map((flow, i) => (
               <div key={i} className="p-4 bg-slate-50 rounded-lg border border-slate-200/60">
                 <h4 className="font-semibold text-slate-900 mb-1">{flow.name}</h4>

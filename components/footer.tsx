@@ -271,7 +271,7 @@ export function Footer() {
                   className="flex items-center gap-2 text-xs sm:text-sm text-slate-600 hover:text-teal-600 transition-colors"
                 >
                   <Phone className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                  <span className="whitespace-nowrap">Call: +254 794 269 051</span>
+                  <span className="break-all sm:break-normal">Call: +254 794 269 051</span>
                 </a>
                 <div className="flex items-center gap-3 sm:gap-4 text-xs text-slate-500">
                   <Link 
