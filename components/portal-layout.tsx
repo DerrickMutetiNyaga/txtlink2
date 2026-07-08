@@ -31,6 +31,7 @@ import {
   TrendingUp,
   History,
   FileBarChart,
+  Smartphone,
 } from 'lucide-react'
 import { SmsCreditsWidget } from '@/components/app/SmsCreditsWidget'
 import { setupFetchInterceptor } from '@/lib/utils/fetch-interceptor'
@@ -142,6 +143,7 @@ export function PortalLayout({ children, activeSection }: PortalLayoutProps) {
       title: 'Integrations',
       items: [
         { label: 'Sender IDs', icon: Radio, href: '/app/sender-ids' },
+        { label: 'Phone Gateway', icon: Smartphone, href: '/app/sms-gateway' },
         { label: 'API Keys', icon: Key, href: '/app/api-keys' },
         { label: 'Webhooks', icon: Webhook, href: '/app/webhooks' },
       ],

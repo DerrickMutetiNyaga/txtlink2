@@ -827,6 +827,51 @@ const SenderIdAdSchema = new Schema<ISenderIdAd>(
 // Ensure only one active ad at a time
 SenderIdAdSchema.index({ isActive: 1 }, { partialFilterExpression: { isActive: true } })
 
+// SMS Gateway Device Model (Android phone gateway)
+export interface ISmsGatewayDevice {
+  _id?: string
+  userId: mongoose.Types.ObjectId
+  tokenHash: string
+  label: string
+  simLabel: string
+  isActive: boolean
+  boundDeviceFingerprint?: string
+  boundDeviceName?: string
+  boundSimLabel?: string
+  lastHeartbeatAt?: Date
+  lastSyncAt?: Date
+  lastIp?: string
+  lastUserAgent?: string
+  appVersion?: string
+  batteryLevel?: number
+  isSmsPermissionGranted?: boolean
+  isGatewayRunning?: boolean
+  createdAt: Date
+  updatedAt: Date
+}
+
+const SmsGatewayDeviceSchema = new Schema<ISmsGatewayDevice>(
+  {
+    userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, unique: true },
+    tokenHash: { type: String, required: true, unique: true },
+    label: { type: String, default: 'Phone Gateway' },
+    simLabel: { type: String, default: '' },
+    isActive: { type: Boolean, default: true },
+    boundDeviceFingerprint: { type: String },
+    boundDeviceName: { type: String },
+    boundSimLabel: { type: String },
+    lastHeartbeatAt: { type: Date },
+    lastSyncAt: { type: Date },
+    lastIp: { type: String },
+    lastUserAgent: { type: String },
+    appVersion: { type: String },
+    batteryLevel: { type: Number },
+    isSmsPermissionGranted: { type: Boolean },
+    isGatewayRunning: { type: Boolean },
+  },
+  { timestamps: true }
+)
+
 // Export models
 export const User: Model<IUser> = mongoose.models.User || mongoose.model<IUser>('User', UserSchema)
 export const HostPinnacleAccount: Model<IHostPinnacleAccount> =
@@ -900,4 +945,7 @@ export const SenderIdAd: Model<ISenderIdAd> =
   mongoose.models.SenderIdAd || mongoose.model<ISenderIdAd>('SenderIdAd', SenderIdAdSchema)
 export const SenderIdPricing: Model<ISenderIdPricing> =
   mongoose.models.SenderIdPricing || mongoose.model<ISenderIdPricing>('SenderIdPricing', SenderIdPricingSchema)
+export const SmsGatewayDevice: Model<ISmsGatewayDevice> =
+  mongoose.models.SmsGatewayDevice ||
+  mongoose.model<ISmsGatewayDevice>('SmsGatewayDevice', SmsGatewayDeviceSchema)
 
