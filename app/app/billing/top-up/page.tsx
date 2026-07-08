@@ -3,15 +3,31 @@
 import { PortalLayout } from '@/components/portal-layout'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { useState, useEffect, useRef } from 'react'
-import { ArrowLeft, Phone, CreditCard, Wallet, CheckCircle2, XCircle, Clock, RefreshCw } from 'lucide-react'
+import { useState, useEffect, useRef, Suspense } from 'react'
+import { ArrowLeft, Phone, CreditCard, Wallet, CheckCircle2, XCircle, Clock, RefreshCw, FileText, Loader2 } from 'lucide-react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 
 type PaymentStatus = 'idle' | 'pending' | 'success' | 'failed' | 'cancelled' | 'timeout'
 
-export default function TopUpPage() {
+interface InvoiceDetails {
+  id: string
+  description: string
+  amount: number
+  currency: string
+  status: string
+  desiredSenderId: string
+}
+
+function TopUpPageContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const invoiceId = searchParams.get('invoiceId')
+  const isInvoiceMode = Boolean(invoiceId)
+
+  const [invoice, setInvoice] = useState<InvoiceDetails | null>(null)
+  const [invoiceLoading, setInvoiceLoading] = useState(Boolean(invoiceId))
+  const [invoiceError, setInvoiceError] = useState<string | null>(null)
   const [paymentMethod, setPaymentMethod] = useState<'mpesa' | 'card'>('mpesa')
   const [amount, setAmount] = useState<number | ''>('')
   const [phoneNumber, setPhoneNumber] = useState<string>('')
@@ -28,6 +44,35 @@ export default function TopUpPage() {
   const presets = [1000, 2500, 5000, 10000]
   const MAX_POLL_ATTEMPTS = 60 // Poll for up to 5 minutes (60 * 5 seconds)
   const POLL_INTERVAL = 5000 // 5 seconds
+
+  useEffect(() => {
+    if (!invoiceId) return
+
+    const loadInvoice = async () => {
+      try {
+        setInvoiceLoading(true)
+        setInvoiceError(null)
+        const token = localStorage.getItem('token')
+        const response = await fetch(`/api/user/billing/invoices/${invoiceId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        const data = await response.json()
+        if (!response.ok) {
+          throw new Error(data.error || 'Failed to load invoice')
+        }
+        if (data.invoice?.status === 'paid') {
+          setInvoiceError('This invoice has already been paid.')
+        }
+        setInvoice(data.invoice)
+      } catch (err: any) {
+        setInvoiceError(err.message || 'Failed to load invoice')
+      } finally {
+        setInvoiceLoading(false)
+      }
+    }
+
+    loadInvoice()
+  }, [invoiceId])
 
   // Cleanup polling on unmount
   useEffect(() => {
@@ -60,15 +105,18 @@ export default function TopUpPage() {
       
       if (data.status === 'success') {
         setPaymentStatus('success')
-        setStatusMessage(data.message || 'Payment successful! Your account has been credited.')
-        setSuccess(data.message || 'Payment successful! Your account has been credited.')
+        const successMessage =
+          data.paymentType === 'sender_id_application'
+            ? data.message || 'Payment successful! Your Sender ID application will now enter review.'
+            : data.message || 'Payment successful! Your account has been credited.'
+        setStatusMessage(successMessage)
+        setSuccess(successMessage)
         if (pollingIntervalRef.current) {
           clearInterval(pollingIntervalRef.current)
           pollingIntervalRef.current = null
         }
-        // Redirect to billing page after 3 seconds
         setTimeout(() => {
-          router.push('/app/billing')
+          router.push(isInvoiceMode ? '/app/sender-ids' : '/app/billing')
         }, 3000)
       } else if (data.status === 'failed' || data.status === 'cancelled' || data.status === 'timeout') {
         setPaymentStatus(data.status)
@@ -101,6 +149,64 @@ export default function TopUpPage() {
   }
 
   const handleTopUp = async () => {
+    if (isInvoiceMode) {
+      if (!phoneNumber) {
+        setError('Please enter your phone number')
+        return
+      }
+      if (!invoiceId) return
+
+      setProcessing(true)
+      setError(null)
+      setSuccess(null)
+      setPaymentStatus('idle')
+      setStatusMessage('')
+      setCheckoutRequestId(null)
+      setTransactionId(null)
+      pollCountRef.current = 0
+
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current)
+        pollingIntervalRef.current = null
+      }
+
+      try {
+        const token = localStorage.getItem('token')
+        const response = await fetch(`/api/user/billing/invoices/${invoiceId}/pay`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ phoneNumber }),
+        })
+
+        const data = await response.json()
+        if (!response.ok) {
+          throw new Error(data.error || 'Failed to initiate payment')
+        }
+
+        setPaymentStatus('pending')
+        setStatusMessage(data.message || 'STK Push request sent. Please check your phone.')
+        setSuccess(data.message)
+        setCheckoutRequestId(data.checkoutRequestId)
+        setTransactionId(data.transactionId)
+
+        if (data.checkoutRequestId || data.transactionId) {
+          checkPaymentStatus(data.checkoutRequestId, data.transactionId)
+          pollingIntervalRef.current = setInterval(() => {
+            checkPaymentStatus(data.checkoutRequestId, data.transactionId)
+          }, POLL_INTERVAL)
+        }
+      } catch (err: any) {
+        setPaymentStatus('failed')
+        setError(err.message || 'Failed to process payment. Please try again.')
+      } finally {
+        setProcessing(false)
+      }
+      return
+    }
+
     if (!amount || amount <= 0) {
       setError('Please enter a valid amount')
       return
@@ -171,19 +277,116 @@ export default function TopUpPage() {
     }
   }
 
+  if (invoiceLoading) {
+    return (
+      <PortalLayout activeSection="Billing">
+        <div className="flex items-center justify-center py-20 text-slate-500">
+          <Loader2 className="w-6 h-6 animate-spin mr-2 text-[#2F9B73]" />
+          Loading payment details...
+        </div>
+      </PortalLayout>
+    )
+  }
+
+  if (isInvoiceMode && invoiceError && !invoice) {
+    return (
+      <PortalLayout activeSection="Billing">
+        <div className="max-w-2xl mx-auto">
+          <Link href="/app/billing" className="flex items-center gap-2 text-[#2F9B73] hover:text-[#267D5E] mb-6 text-sm font-semibold">
+            <ArrowLeft size={16} /> Back to Billing
+          </Link>
+          <Card className="p-6 border border-red-200 bg-red-50 text-red-800">{invoiceError}</Card>
+        </div>
+      </PortalLayout>
+    )
+  }
+
   return (
     <PortalLayout activeSection="Billing">
       <div className="max-w-2xl mx-auto">
-        {/* Header */}
-        <Link href="/app/billing" className="flex items-center gap-2 text-[#059669] hover:text-[#064E3B] mb-6 text-sm font-semibold transition-colors">
+        <Link href="/app/billing" className="flex items-center gap-2 text-[#2F9B73] hover:text-[#267D5E] mb-6 text-sm font-semibold transition-colors">
           <ArrowLeft size={16} /> Back to Billing
         </Link>
 
         <div className="mb-6">
-          <h1 className="text-2xl sm:text-3xl font-semibold text-[#1F2937] mb-2">Top Up Account</h1>
-          <p className="text-slate-600">Add funds to your account balance</p>
+          <h1 className="text-2xl sm:text-3xl font-semibold text-[#0F172A] mb-2">
+            {isInvoiceMode ? 'Pay Sender ID Application Invoice' : 'Top Up Account'}
+          </h1>
+          <p className="text-[#64748B]">
+            {isInvoiceMode
+              ? 'Complete payment to start review of your Sender ID application'
+              : 'Add funds to your account balance'}
+          </p>
         </div>
 
+        {isInvoiceMode && invoice ? (
+          <Card className="p-6 sm:p-8 bg-white border border-[#E2E8F0] shadow-sm mb-8">
+            <div className="flex items-start gap-4 mb-6">
+              <div className="p-3 rounded-xl bg-[#ECFDF5] text-[#2F9B73]">
+                <FileText size={24} />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-[#64748B]">{invoice.description}</p>
+                {invoice.desiredSenderId && (
+                  <p className="text-sm text-[#64748B] mt-1">
+                    Sender ID: <span className="font-semibold text-[#0F172A]">{invoice.desiredSenderId}</span>
+                  </p>
+                )}
+                <p className="text-3xl font-semibold text-[#0F172A] mt-2">
+                  KSh {invoice.amount.toLocaleString()}
+                </p>
+              </div>
+            </div>
+
+            <form className="space-y-6">
+              <div>
+                <label className="block text-sm font-semibold text-[#0F172A] mb-2">Phone Number</label>
+                <input
+                  type="tel"
+                  value={phoneNumber}
+                  onChange={(e) => setPhoneNumber(e.target.value)}
+                  placeholder="254712345678 or 0712345678"
+                  className="w-full px-4 py-3 border border-[#E2E8F0] rounded-xl bg-white text-[#0F172A] placeholder:text-[#94A3B8] focus:outline-none focus:ring-2 focus:ring-[#2F9B73]/15 focus:border-[#2F9B73]"
+                  required
+                />
+                <p className="text-xs text-[#64748B] mt-1">Enter your M-Pesa registered phone number</p>
+              </div>
+
+              <div className="p-4 bg-[#ECFDF5] border border-[#2F9B73]/20 rounded-xl text-sm text-[#0F172A]">
+                <p>An M-Pesa STK prompt will be sent to your phone. Enter your M-Pesa PIN to complete the payment.</p>
+              </div>
+
+              {error && paymentStatus !== 'pending' && (
+                <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-sm text-red-800">{error}</div>
+              )}
+
+              {paymentStatus === 'pending' && (
+                <div className="p-4 rounded-xl bg-blue-50 border border-blue-200 text-sm text-blue-900">
+                  <div className="flex items-center gap-2">
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>{statusMessage || 'Waiting for payment confirmation...'}</span>
+                  </div>
+                </div>
+              )}
+
+              {paymentStatus === 'success' && (
+                <div className="p-4 rounded-xl bg-[#ECFDF5] border border-[#2F9B73]/20 text-sm text-[#0F172A]">
+                  <CheckCircle2 className="w-5 h-5 text-[#2F9B73] inline mr-2" />
+                  {statusMessage || success}
+                </div>
+              )}
+
+              <Button
+                onClick={handleTopUp}
+                disabled={!phoneNumber || processing || paymentStatus === 'pending' || paymentStatus === 'success' || invoice.status === 'paid'}
+                className="w-full min-h-[46px] bg-[#2F9B73] hover:bg-[#267D5E] text-white disabled:opacity-50"
+              >
+                {processing ? 'Sending STK Push...' : paymentStatus === 'pending' ? 'Payment Pending...' : 'Pay with M-Pesa'}
+              </Button>
+            </form>
+          </Card>
+        ) : (
+          <>
         {/* Payment Method Selection */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
           <Card
@@ -431,7 +634,26 @@ export default function TopUpPage() {
             </form>
           </Card>
         )}
+          </>
+        )}
       </div>
     </PortalLayout>
+  )
+}
+
+export default function TopUpPage() {
+  return (
+    <Suspense
+      fallback={
+        <PortalLayout activeSection="Billing">
+          <div className="flex items-center justify-center py-20 text-slate-500">
+            <Loader2 className="w-6 h-6 animate-spin mr-2 text-[#2F9B73]" />
+            Loading...
+          </div>
+        </PortalLayout>
+      }
+    >
+      <TopUpPageContent />
+    </Suspense>
   )
 }

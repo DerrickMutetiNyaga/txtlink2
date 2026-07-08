@@ -5,8 +5,9 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import connectDB from '@/lib/db/connect'
-import { Transaction, PaymentMethod, SmsMessage, User } from '@/lib/db/models'
+import { Transaction, PaymentMethod, SmsMessage, User, Invoice, SenderIdRequest } from '@/lib/db/models'
 import { requireAuth } from '@/lib/auth/middleware'
+import { formatInvoice } from '@/lib/validation/sender-id-request'
 import mongoose from 'mongoose'
 
 export async function GET(request: NextRequest) {
@@ -109,6 +110,32 @@ export async function GET(request: NextRequest) {
       .sort((a, b) => b.id.localeCompare(a.id))
       .slice(0, 12) // Last 12 months
 
+    const pendingInvoiceDocs = await Invoice.find({
+      userId,
+      type: 'sender_id_application',
+      status: { $in: ['unpaid', 'failed', 'pending_payment'] },
+    })
+      .sort({ createdAt: -1 })
+      .lean()
+
+    const senderRequestIds = pendingInvoiceDocs
+      .map((inv) => inv.senderIdRequestId)
+      .filter(Boolean)
+
+    const senderRequests = senderRequestIds.length
+      ? await SenderIdRequest.find({ _id: { $in: senderRequestIds } })
+          .select('_id desiredSenderId')
+          .lean()
+      : []
+
+    const senderIdByRequest = new Map(
+      senderRequests.map((req) => [req._id?.toString(), req.desiredSenderId])
+    )
+
+    const pendingInvoices = pendingInvoiceDocs.map((inv) =>
+      formatInvoice(inv, senderIdByRequest.get(inv.senderIdRequestId?.toString() || '') || '')
+    )
+
     // Format transactions for response
     const formattedTransactions = transactions.map((tx) => ({
       id: tx._id?.toString(),
@@ -131,6 +158,7 @@ export async function GET(request: NextRequest) {
       },
       transactions: formattedTransactions,
       invoices,
+      pendingInvoices,
       paymentMethods: paymentMethods.map((pm) => ({
         id: pm._id?.toString(),
         type: pm.type,

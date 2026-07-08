@@ -22,11 +22,17 @@ export const INDUSTRIES = [
 export type SmsUseCase = (typeof SMS_USE_CASES)[number]
 export type Industry = (typeof INDUSTRIES)[number]
 
-export interface SenderIdRequestPayload {
+export interface BusinessCertificatePayload {
+  businessCertificateUrl?: string
+  businessCertificateSecureUrl?: string
+  businessCertificatePublicId?: string
+  businessCertificateFileName?: string
+  businessCertificateMimeType?: string
+  businessCertificateSize?: number
+}
+
+export interface SenderIdRequestPayload extends BusinessCertificatePayload {
   desiredSenderId?: string
-  businessName?: string
-  businessRegistrationNumber?: string
-  kraPin?: string
   contactPerson?: string
   phoneNumber?: string
   email?: string
@@ -72,16 +78,42 @@ export function validatePhone(value: string): string | null {
   return 'Enter a valid Kenyan phone number (07..., 254..., or +254...)'
 }
 
+function validateCertificate(body: BusinessCertificatePayload, mode: 'draft' | 'submit'): string | null {
+  if (mode !== 'submit') return null
+
+  if (!body.businessCertificateSecureUrl && !body.businessCertificateUrl) {
+    return 'Business certificate is required'
+  }
+  if (!body.businessCertificatePublicId) {
+    return 'Business certificate upload is incomplete. Please upload again.'
+  }
+  if (!body.businessCertificateFileName) {
+    return 'Business certificate file name is missing'
+  }
+
+  const mimeType = (body.businessCertificateMimeType || '').toLowerCase()
+  const allowedMimeTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png']
+  const extension = body.businessCertificateFileName.split('.').pop()?.toLowerCase() || ''
+  const allowedExtensions = ['pdf', 'jpg', 'jpeg', 'png']
+
+  if (!allowedMimeTypes.includes(mimeType) && !allowedExtensions.includes(extension)) {
+    return 'Only PDF, JPG, JPEG, and PNG files are allowed'
+  }
+
+  if (body.businessCertificateSize && body.businessCertificateSize > 5 * 1024 * 1024) {
+    return 'Business certificate must be 5MB or smaller'
+  }
+
+  return null
+}
+
 export function validateSenderIdRequest(
   body: SenderIdRequestPayload,
   mode: 'draft' | 'submit'
-): { errors: Record<string, string>; data: Record<string, string> | null } {
+): { errors: Record<string, string>; data: Record<string, unknown> | null } {
   const errors: Record<string, string> = {}
 
   const desiredSenderId = body.desiredSenderId ? normalizeDesiredSenderId(body.desiredSenderId) : ''
-  const businessName = body.businessName?.trim() || ''
-  const businessRegistrationNumber = body.businessRegistrationNumber?.trim() || ''
-  const kraPin = body.kraPin?.trim() || ''
   const contactPerson = body.contactPerson?.trim() || ''
   const phoneNumber = body.phoneNumber?.trim() || ''
   const email = body.email?.trim() || ''
@@ -94,8 +126,10 @@ export function validateSenderIdRequest(
     if (senderError) errors.desiredSenderId = senderError
   }
 
+  const certificateError = validateCertificate(body, mode)
+  if (certificateError) errors.businessCertificate = certificateError
+
   if (mode === 'submit') {
-    if (!businessName) errors.businessName = 'Business / brand name is required'
     if (!contactPerson) errors.contactPerson = 'Contact person is required'
 
     const phoneError = validatePhone(phoneNumber)
@@ -138,9 +172,12 @@ export function validateSenderIdRequest(
     errors,
     data: {
       desiredSenderId,
-      businessName,
-      businessRegistrationNumber,
-      kraPin,
+      businessCertificateUrl: body.businessCertificateUrl || '',
+      businessCertificateSecureUrl: body.businessCertificateSecureUrl || '',
+      businessCertificatePublicId: body.businessCertificatePublicId || '',
+      businessCertificateFileName: body.businessCertificateFileName || '',
+      businessCertificateMimeType: body.businessCertificateMimeType || '',
+      businessCertificateSize: body.businessCertificateSize || 0,
       contactPerson,
       phoneNumber,
       email: email.toLowerCase(),
@@ -157,9 +194,12 @@ export function formatSenderIdRequest(doc: any) {
     userId: doc.userId?.toString(),
     workspaceId: doc.workspaceId?.toString(),
     desiredSenderId: doc.desiredSenderId,
-    businessName: doc.businessName,
-    businessRegistrationNumber: doc.businessRegistrationNumber || '',
-    kraPin: doc.kraPin || '',
+    businessCertificateUrl: doc.businessCertificateUrl || '',
+    businessCertificateSecureUrl: doc.businessCertificateSecureUrl || '',
+    businessCertificatePublicId: doc.businessCertificatePublicId || '',
+    businessCertificateFileName: doc.businessCertificateFileName || '',
+    businessCertificateMimeType: doc.businessCertificateMimeType || '',
+    businessCertificateSize: doc.businessCertificateSize || 0,
     contactPerson: doc.contactPerson,
     phoneNumber: doc.phoneNumber,
     email: doc.email,
@@ -167,10 +207,36 @@ export function formatSenderIdRequest(doc: any) {
     sampleSmsMessage: doc.sampleSmsMessage,
     industry: doc.industry,
     status: doc.status,
+    invoiceId: doc.invoiceId?.toString() || '',
     reviewNotes: doc.reviewNotes || '',
     rejectionReason: doc.rejectionReason || '',
     approvedSenderId: doc.approvedSenderId || '',
     createdAt: doc.createdAt,
     updatedAt: doc.updatedAt,
+  }
+}
+
+export function formatInvoice(doc: any, desiredSenderId?: string) {
+  return {
+    id: doc._id?.toString(),
+    userId: doc.userId?.toString(),
+    workspaceId: doc.workspaceId?.toString(),
+    type: doc.type,
+    description: doc.description,
+    amount: doc.amount,
+    currency: doc.currency,
+    status: doc.status,
+    senderIdRequestId: doc.senderIdRequestId?.toString(),
+    desiredSenderId: desiredSenderId || '',
+    mpesaCheckoutRequestId: doc.mpesaCheckoutRequestId || '',
+    mpesaMerchantRequestId: doc.mpesaMerchantRequestId || '',
+    mpesaReceiptNumber: doc.mpesaReceiptNumber || '',
+    paymentReference: doc.paymentReference || '',
+    phoneNumber: doc.phoneNumber || '',
+    createdAt: doc.createdAt,
+    updatedAt: doc.updatedAt,
+    paidAt: doc.paidAt,
+    failedAt: doc.failedAt,
+    failureReason: doc.failureReason || '',
   }
 }

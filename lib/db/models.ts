@@ -127,6 +127,7 @@ UserSenderIdSchema.index({ senderId: 1 }, { unique: true })
 
 export type SenderIdRequestStatus =
   | 'draft'
+  | 'payment_pending'
   | 'submitted'
   | 'under_review'
   | 'approved'
@@ -137,9 +138,12 @@ export interface ISenderIdRequest {
   userId: mongoose.Types.ObjectId
   workspaceId?: mongoose.Types.ObjectId
   desiredSenderId: string
-  businessName: string
-  businessRegistrationNumber?: string
-  kraPin?: string
+  businessCertificateUrl?: string
+  businessCertificateSecureUrl?: string
+  businessCertificatePublicId?: string
+  businessCertificateFileName?: string
+  businessCertificateMimeType?: string
+  businessCertificateSize?: number
   contactPerson: string
   phoneNumber: string
   email: string
@@ -147,6 +151,7 @@ export interface ISenderIdRequest {
   sampleSmsMessage: string
   industry: string
   status: SenderIdRequestStatus
+  invoiceId?: mongoose.Types.ObjectId
   reviewNotes?: string
   rejectionReason?: string
   approvedSenderId?: string
@@ -159,9 +164,12 @@ const SenderIdRequestSchema = new Schema<ISenderIdRequest>(
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     workspaceId: { type: Schema.Types.ObjectId, ref: 'User' },
     desiredSenderId: { type: String, uppercase: true, trim: true, default: '' },
-    businessName: { type: String, trim: true, default: '' },
-    businessRegistrationNumber: { type: String, trim: true, default: '' },
-    kraPin: { type: String, trim: true, default: '' },
+    businessCertificateUrl: { type: String },
+    businessCertificateSecureUrl: { type: String },
+    businessCertificatePublicId: { type: String },
+    businessCertificateFileName: { type: String },
+    businessCertificateMimeType: { type: String },
+    businessCertificateSize: { type: Number },
     contactPerson: { type: String, trim: true, default: '' },
     phoneNumber: { type: String, trim: true, default: '' },
     email: { type: String, trim: true, lowercase: true, default: '' },
@@ -170,10 +178,11 @@ const SenderIdRequestSchema = new Schema<ISenderIdRequest>(
     industry: { type: String, trim: true, default: '' },
     status: {
       type: String,
-      enum: ['draft', 'submitted', 'under_review', 'approved', 'rejected'],
+      enum: ['draft', 'payment_pending', 'submitted', 'under_review', 'approved', 'rejected'],
       default: 'draft',
       index: true,
     },
+    invoiceId: { type: Schema.Types.ObjectId, ref: 'Invoice' },
     reviewNotes: { type: String },
     rejectionReason: { type: String },
     approvedSenderId: { type: String, uppercase: true, trim: true },
@@ -799,10 +808,69 @@ const PaymentMethodSchema = new Schema<IPaymentMethod>(
 // Ensure only one default payment method per user
 PaymentMethodSchema.index({ userId: 1, isDefault: 1 }, { unique: true, partialFilterExpression: { isDefault: true } })
 
+// Billing Invoice Model
+export type InvoiceType = 'sms_topup' | 'sender_id_application'
+export type InvoiceStatus = 'unpaid' | 'pending_payment' | 'paid' | 'failed' | 'cancelled'
+
+export interface IInvoice {
+  _id?: string
+  userId: mongoose.Types.ObjectId
+  workspaceId?: mongoose.Types.ObjectId
+  type: InvoiceType
+  description: string
+  amount: number
+  currency: string
+  status: InvoiceStatus
+  senderIdRequestId?: mongoose.Types.ObjectId
+  mpesaCheckoutRequestId?: string
+  mpesaMerchantRequestId?: string
+  mpesaReceiptNumber?: string
+  paymentReference?: string
+  phoneNumber?: string
+  createdAt: Date
+  updatedAt: Date
+  paidAt?: Date
+  failedAt?: Date
+  failureReason?: string
+}
+
+const InvoiceSchema = new Schema<IInvoice>(
+  {
+    userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+    workspaceId: { type: Schema.Types.ObjectId, ref: 'User' },
+    type: { type: String, enum: ['sms_topup', 'sender_id_application'], required: true },
+    description: { type: String, required: true },
+    amount: { type: Number, required: true },
+    currency: { type: String, default: 'KES' },
+    status: {
+      type: String,
+      enum: ['unpaid', 'pending_payment', 'paid', 'failed', 'cancelled'],
+      default: 'unpaid',
+      index: true,
+    },
+    senderIdRequestId: { type: Schema.Types.ObjectId, ref: 'SenderIdRequest' },
+    mpesaCheckoutRequestId: { type: String },
+    mpesaMerchantRequestId: { type: String },
+    mpesaReceiptNumber: { type: String },
+    paymentReference: { type: String },
+    phoneNumber: { type: String },
+    paidAt: { type: Date },
+    failedAt: { type: Date },
+    failureReason: { type: String },
+  },
+  { timestamps: true }
+)
+
+InvoiceSchema.index({ userId: 1, status: 1, createdAt: -1 })
+InvoiceSchema.index({ senderIdRequestId: 1 })
+
 // M-Pesa Transaction Model
+export type MpesaPaymentType = 'sms_topup' | 'sender_id_application'
+
 export interface IMpesaTransaction {
   _id?: string
   transactionType: 'STK' | 'C2B'
+  paymentType?: MpesaPaymentType
   transactionId?: string // M-Pesa transaction ID
   checkoutRequestId?: string // For STK Push
   merchantRequestId?: string // For STK Push
@@ -815,7 +883,9 @@ export interface IMpesaTransaction {
   mpesaReceiptNumber?: string
   rawResponse?: Record<string, any> // JSON response from M-Pesa
   userId?: mongoose.Types.ObjectId // Link to user if available
-  invoiceId?: string // Link to invoice/transaction if available
+  invoiceId?: string // M-Pesa receipt reference (legacy top-up field)
+  billingInvoiceId?: mongoose.Types.ObjectId // Link to billing Invoice document
+  senderIdRequestId?: mongoose.Types.ObjectId
   createdAt: Date
   updatedAt: Date
 }
@@ -823,6 +893,7 @@ export interface IMpesaTransaction {
 const MpesaTransactionSchema = new Schema<IMpesaTransaction>(
   {
     transactionType: { type: String, enum: ['STK', 'C2B'], required: true },
+    paymentType: { type: String, enum: ['sms_topup', 'sender_id_application'], default: 'sms_topup' },
     transactionId: { type: String },
     checkoutRequestId: { type: String },
     merchantRequestId: { type: String },
@@ -836,6 +907,8 @@ const MpesaTransactionSchema = new Schema<IMpesaTransaction>(
     rawResponse: { type: Schema.Types.Mixed },
     userId: { type: Schema.Types.ObjectId, ref: 'User' },
     invoiceId: { type: String },
+    billingInvoiceId: { type: Schema.Types.ObjectId, ref: 'Invoice' },
+    senderIdRequestId: { type: Schema.Types.ObjectId, ref: 'SenderIdRequest' },
   },
   { timestamps: true }
 )
@@ -1248,6 +1321,8 @@ export const Transaction: Model<ITransaction> =
   mongoose.models.Transaction || mongoose.model<ITransaction>('Transaction', TransactionSchema)
 export const PaymentMethod: Model<IPaymentMethod> =
   mongoose.models.PaymentMethod || mongoose.model<IPaymentMethod>('PaymentMethod', PaymentMethodSchema)
+export const Invoice: Model<IInvoice> =
+  mongoose.models.Invoice || mongoose.model<IInvoice>('Invoice', InvoiceSchema)
 export const MpesaTransaction: Model<IMpesaTransaction> =
   mongoose.models.MpesaTransaction || mongoose.model<IMpesaTransaction>('MpesaTransaction', MpesaTransactionSchema)
 export const PaymentGateway: Model<IPaymentGateway> =

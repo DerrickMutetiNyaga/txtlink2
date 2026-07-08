@@ -74,10 +74,37 @@ export async function GET(request: NextRequest) {
       },
     }
 
-    const statusInfo = statusMessages[transaction.status] || {
-      message: transaction.resultDesc || 'Unknown status',
-      userFriendly: transaction.status || 'Unknown',
-    }
+    const statusInfo =
+      transaction.paymentType === 'sender_id_application'
+        ? {
+            pending: {
+              message: 'Payment is pending. Please complete the payment on your phone.',
+              userFriendly: 'Waiting for invoice payment confirmation...',
+            },
+            success: {
+              message: 'Payment successful! Your Sender ID application will now enter review.',
+              userFriendly: 'Invoice paid successfully',
+            },
+            failed: {
+              message: transaction.resultDesc || 'Payment failed. Please try again.',
+              userFriendly: 'Invoice payment failed',
+            },
+            cancelled: {
+              message: 'Payment was cancelled. You can try again from Billing.',
+              userFriendly: 'Payment cancelled',
+            },
+            timeout: {
+              message: 'Payment request timed out. Please try again.',
+              userFriendly: 'Payment timeout',
+            },
+          }[transaction.status] || {
+            message: transaction.resultDesc || 'Unknown status',
+            userFriendly: transaction.status || 'Unknown',
+          }
+        : statusMessages[transaction.status] || {
+            message: transaction.resultDesc || 'Unknown status',
+            userFriendly: transaction.status || 'Unknown',
+          }
 
     return NextResponse.json({
       success: true,
@@ -88,6 +115,8 @@ export async function GET(request: NextRequest) {
       mpesaReceiptNumber: transaction.mpesaReceiptNumber,
       resultDesc: transaction.resultDesc,
       responseCode: transaction.responseCode,
+      paymentType: transaction.paymentType || 'sms_topup',
+      billingInvoiceId: transaction.billingInvoiceId?.toString(),
       createdAt: transaction.createdAt,
       updatedAt: transaction.updatedAt,
     })

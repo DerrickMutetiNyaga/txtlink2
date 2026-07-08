@@ -40,6 +40,16 @@ interface Invoice {
   reference: string
 }
 
+interface PendingInvoice {
+  id: string
+  description: string
+  amount: number
+  currency: string
+  status: string
+  desiredSenderId: string
+  createdAt: string
+}
+
 interface PaymentMethod {
   id: string
   type: 'mpesa' | 'card' | 'bank'
@@ -56,6 +66,7 @@ export default function BillingPage() {
   const [loading, setLoading] = useState(true)
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [invoices, setInvoices] = useState<Invoice[]>([])
+  const [pendingInvoices, setPendingInvoices] = useState<PendingInvoice[]>([])
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([])
   const [summary, setSummary] = useState({
     usedThisMonth: 0,
@@ -86,6 +97,7 @@ export default function BillingPage() {
           setBalance(data.balance || 0)
           setTransactions(data.transactions || [])
           setInvoices(data.invoices || [])
+          setPendingInvoices(data.pendingInvoices || [])
           setPaymentMethods(data.paymentMethods || [])
           setSummary(data.summary || {
             usedThisMonth: 0,
@@ -205,6 +217,66 @@ export default function BillingPage() {
             </p>
           </Card>
         </div>
+
+        {/* Pending Invoices */}
+        {(loading || pendingInvoices.length > 0) && (
+          <Card className="p-4 sm:p-6 bg-white border border-slate-200/70 shadow-sm rounded-2xl">
+            <h3 className="text-lg font-semibold text-slate-900 mb-4">Pending Invoices</h3>
+            {loading ? (
+              <div className="p-6 text-center text-slate-500 text-sm">Loading invoices...</div>
+            ) : (
+              <div className="space-y-3">
+                {pendingInvoices.map((invoice) => (
+                  <div
+                    key={invoice.id}
+                    className="flex flex-col gap-4 p-4 rounded-xl border border-[#E2E8F0] bg-[#F8FAFC]"
+                  >
+                    <div className="flex items-start gap-3 min-w-0">
+                      <div className="p-2 rounded-lg bg-[#ECFDF5] shrink-0">
+                        <FileText size={18} className="text-[#2F9B73]" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold text-[#0F172A]">{invoice.description}</p>
+                        {invoice.desiredSenderId && (
+                          <p className="text-sm text-[#64748B] mt-0.5">
+                            Sender ID: <span className="font-medium">{invoice.desiredSenderId}</span>
+                          </p>
+                        )}
+                        <p className="text-xs text-[#64748B] mt-1">
+                          Created {formatDate(invoice.createdAt)}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <p className="text-lg font-semibold text-[#0F172A]">
+                          KSh {invoice.amount.toLocaleString()}
+                        </p>
+                        <Badge
+                          variant="outline"
+                          className={
+                            invoice.status === 'pending_payment'
+                              ? 'bg-blue-50 text-blue-700 border-blue-200'
+                              : invoice.status === 'failed'
+                              ? 'bg-red-50 text-red-700 border-red-200'
+                              : 'bg-slate-100 text-slate-700 border-slate-200'
+                          }
+                        >
+                          {invoice.status.replace('_', ' ')}
+                        </Badge>
+                      </div>
+                      <Link href={`/app/billing/top-up?invoiceId=${invoice.id}`} className="w-full sm:w-auto">
+                        <Button className="w-full sm:w-auto bg-[#2F9B73] hover:bg-[#267D5E] text-white">
+                          Pay Now
+                        </Button>
+                      </Link>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+        )}
 
         {/* Recent Transactions */}
         <Card className="p-6 bg-white border border-slate-200/70 shadow-sm rounded-2xl">

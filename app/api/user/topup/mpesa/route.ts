@@ -73,6 +73,7 @@ export async function POST(request: NextRequest) {
     // Create pending M-Pesa transaction record
     const mpesaTransaction = await MpesaTransaction.create({
       transactionType: 'STK',
+      paymentType: 'sms_topup',
       checkoutRequestId: stkResponse.checkoutRequestId,
       merchantRequestId: stkResponse.merchantRequestId,
       amount: amountKes,

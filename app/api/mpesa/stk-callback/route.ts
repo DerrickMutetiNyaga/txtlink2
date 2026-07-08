@@ -9,6 +9,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import connectDB from '@/lib/db/connect'
 import { MpesaTransaction, Transaction, User } from '@/lib/db/models'
 import { convertKesToCredits, getEffectivePricePerCreditKes } from '@/lib/utils/credits'
+import {
+  completeSenderIdInvoicePayment,
+  markInvoicePaymentFailed,
+} from '@/lib/services/billing/invoice-payment'
 import mongoose from 'mongoose'
 
 export async function POST(request: NextRequest) {
@@ -109,74 +113,103 @@ export async function POST(request: NextRequest) {
       amount,
     })
 
-    // If payment was successful, process the top-up
+    // If payment was successful, process based on payment type
     if (status === 'success' && mpesaTransaction.userId) {
-      try {
-        const userId = new mongoose.Types.ObjectId(mpesaTransaction.userId)
-        const userDoc = await User.findById(userId)
+      const paymentType = mpesaTransaction.paymentType || 'sms_topup'
 
-        if (userDoc) {
-          const amountKes = mpesaTransaction.amount
-          const pricePerCreditKes = getEffectivePricePerCreditKes()
-
-          const { creditsToAdd } = convertKesToCredits({
-            paidKes: amountKes,
-            pricePerCreditKes,
+      if (paymentType === 'sender_id_application') {
+        try {
+          await completeSenderIdInvoicePayment({
+            mpesaTransaction,
+            mpesaReceiptNumber,
+            checkoutRequestId: CheckoutRequestID,
           })
 
-          if (creditsToAdd > 0) {
-            // Update user balance
-            const currentBalanceRaw =
-              typeof userDoc.creditsBalance === 'number' ? userDoc.creditsBalance : 0
-            const safeStartingBalance = Math.max(0, currentBalanceRaw)
-            const finalBalance = safeStartingBalance + creditsToAdd
+          console.log('Sender ID invoice payment successful:', {
+            userId: mpesaTransaction.userId,
+            billingInvoiceId: mpesaTransaction.billingInvoiceId,
+            mpesaReceiptNumber,
+            amount,
+          })
+        } catch (error: any) {
+          console.error('Error processing sender ID invoice payment:', error)
+        }
+      } else {
+        try {
+          const userId = new mongoose.Types.ObjectId(mpesaTransaction.userId)
+          const userDoc = await User.findById(userId)
 
-            await User.findByIdAndUpdate(
-              userId,
-              { creditsBalance: finalBalance },
-              { new: false }
-            )
+          if (userDoc) {
+            const amountKes = mpesaTransaction.amount
+            const pricePerCreditKes = getEffectivePricePerCreditKes()
 
-            // Create transaction record
-            const reference = mpesaReceiptNumber || `MPESA-${Date.now()}`
-            
-            // Check if transaction already exists
-            const existingTransaction = await Transaction.findOne({ reference })
-            if (!existingTransaction) {
-              await Transaction.create({
+            const { creditsToAdd } = convertKesToCredits({
+              paidKes: amountKes,
+              pricePerCreditKes,
+            })
+
+            if (creditsToAdd > 0) {
+              const currentBalanceRaw =
+                typeof userDoc.creditsBalance === 'number' ? userDoc.creditsBalance : 0
+              const safeStartingBalance = Math.max(0, currentBalanceRaw)
+              const finalBalance = safeStartingBalance + creditsToAdd
+
+              await User.findByIdAndUpdate(
                 userId,
-                type: 'top-up',
-                amount: amountKes,
-                description: `M-Pesa top-up: ${creditsToAdd} SMS credits @ KSh ${pricePerCreditKes.toFixed(2)} per credit`,
-                reference,
-                status: 'completed',
-                metadata: {
-                  currency: 'KES',
-                  amountKes,
-                  creditsAdded: creditsToAdd,
-                  pricePerCreditKes,
-                  mpesaReceiptNumber,
-                  checkoutRequestId: CheckoutRequestID,
-                },
+                { creditsBalance: finalBalance },
+                { new: false }
+              )
+
+              const reference = mpesaReceiptNumber || `MPESA-${Date.now()}`
+
+              const existingTransaction = await Transaction.findOne({ reference })
+              if (!existingTransaction) {
+                await Transaction.create({
+                  userId,
+                  type: 'top-up',
+                  amount: amountKes,
+                  description: `M-Pesa top-up: ${creditsToAdd} SMS credits @ KSh ${pricePerCreditKes.toFixed(2)} per credit`,
+                  reference,
+                  status: 'completed',
+                  metadata: {
+                    currency: 'KES',
+                    amountKes,
+                    creditsAdded: creditsToAdd,
+                    pricePerCreditKes,
+                    mpesaReceiptNumber,
+                    checkoutRequestId: CheckoutRequestID,
+                    paymentType: 'sms_topup',
+                  },
+                })
+              }
+
+              mpesaTransaction.invoiceId = reference
+              await mpesaTransaction.save()
+
+              console.log(`Top-up successful for user ${userDoc.email}:`, {
+                userId: userDoc._id,
+                amountKes,
+                creditsToAdd,
+                newBalance: finalBalance,
+                mpesaReceiptNumber,
               })
             }
-
-            // Update M-Pesa transaction with invoice ID
-            mpesaTransaction.invoiceId = reference
-            await mpesaTransaction.save()
-
-            console.log(`Top-up successful for user ${userDoc.email}:`, {
-              userId: userDoc._id,
-              amountKes,
-              creditsToAdd,
-              newBalance: finalBalance,
-              mpesaReceiptNumber,
-            })
           }
+        } catch (error: any) {
+          console.error('Error processing successful payment:', error)
         }
+      }
+    } else if (
+      status !== 'success' &&
+      mpesaTransaction.paymentType === 'sender_id_application'
+    ) {
+      try {
+        await markInvoicePaymentFailed(
+          mpesaTransaction.billingInvoiceId,
+          errorMessage || ResultDesc
+        )
       } catch (error: any) {
-        console.error('Error processing successful payment:', error)
-        // Don't fail the callback, just log the error
+        console.error('Error updating failed invoice payment:', error)
       }
     }
 

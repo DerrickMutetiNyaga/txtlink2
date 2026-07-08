@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import connectDB from '@/lib/db/connect'
 import { SenderIdRequest } from '@/lib/db/models'
 import { requireAuth } from '@/lib/auth/middleware'
+import { submitSenderIdApplication } from '@/lib/services/sender-id/submit-application'
 import mongoose from 'mongoose'
 import {
   formatSenderIdRequest,
@@ -47,37 +48,57 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Invalid status update' }, { status: 400 })
     }
 
-    existing.desiredSenderId = data.desiredSenderId
-    existing.businessName = data.businessName
-    existing.businessRegistrationNumber = data.businessRegistrationNumber
-    existing.kraPin = data.kraPin
-    existing.contactPerson = data.contactPerson
-    existing.phoneNumber = data.phoneNumber
-    existing.email = data.email
-    existing.smsUseCase = data.smsUseCase
-    existing.sampleSmsMessage = data.sampleSmsMessage
-    existing.industry = data.industry
-
     if (intent === 'submit') {
-      existing.status = 'submitted'
-      existing.rejectionReason = undefined
-    } else {
-      existing.status = 'draft'
+      await SenderIdRequest.deleteOne({ _id: existing._id })
+
+      const result = await submitSenderIdApplication({ userId, data })
+
+      return NextResponse.json({
+        success: true,
+        request: result.request,
+        invoice: result.invoice,
+        feeAmount: result.feeAmount,
+        message:
+          'Sender ID application created. Payment is required before review can begin.',
+      })
     }
+
+    existing.desiredSenderId = data.desiredSenderId as string
+    existing.businessCertificateUrl = data.businessCertificateUrl as string
+    existing.businessCertificateSecureUrl = data.businessCertificateSecureUrl as string
+    existing.businessCertificatePublicId = data.businessCertificatePublicId as string
+    existing.businessCertificateFileName = data.businessCertificateFileName as string
+    existing.businessCertificateMimeType = data.businessCertificateMimeType as string
+    existing.businessCertificateSize = data.businessCertificateSize as number
+    existing.contactPerson = data.contactPerson as string
+    existing.phoneNumber = data.phoneNumber as string
+    existing.email = data.email as string
+    existing.smsUseCase = data.smsUseCase as string
+    existing.sampleSmsMessage = data.sampleSmsMessage as string
+    existing.industry = data.industry as string
+    existing.status = 'draft'
+    existing.rejectionReason = undefined
 
     await existing.save()
 
     return NextResponse.json({
       success: true,
       request: formatSenderIdRequest(existing),
-      message:
-        intent === 'submit'
-          ? 'Sender ID application submitted successfully. We will review it and update you once approved.'
-          : 'Draft saved successfully.',
+      message: 'Draft saved successfully.',
     })
   } catch (error: any) {
     if (error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (error.statusCode === 409) {
+      return NextResponse.json(
+        {
+          error: error.message,
+          existingInvoiceId: error.existingInvoiceId,
+          existingRequestId: error.existingRequestId,
+        },
+        { status: 409 }
+      )
     }
     console.error('Update sender ID request error:', error)
     return NextResponse.json(
