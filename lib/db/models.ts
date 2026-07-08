@@ -136,6 +136,11 @@ export interface ISmsMessage {
   creditDeducted?: boolean // Guard flag to prevent double credit deduction
   channel?: string // e.g. 'sms'
   email?: string // User email snapshot (for admin notifications)
+  source?: 'dashboard' | 'bulk' | 'api_key' | 'system' | 'test'
+  apiKeyId?: mongoose.Types.ObjectId
+  apiKeyName?: string
+  normalizedPhone?: string
+  deliveryStatus?: string
   status: SmsStatus
   // Delivery-status worker fields
   nextCheckAt?: Date | null // When the status worker should check this message next (null once final)
@@ -165,12 +170,15 @@ export interface ISmsMessage {
     | 'retry_waiting_delivery'
     | 'queued_for_phone'
     | 'sending_via_phone'
+    | 'delivered_via_phone'
     | 'sent_via_phone'
     | 'phone_failed'
+    | 'phone_requires_topup'
     | 'cancelled'
   fallbackJobId?: string
   fallbackQueuedAt?: Date
   fallbackSentAt?: Date
+  fallbackDeliveredAt?: Date
   fallbackFailedAt?: Date
   fallbackFailureReason?: string
   fallbackFailureCode?: string
@@ -206,6 +214,14 @@ const SmsMessageSchema = new Schema<ISmsMessage>(
     creditDeducted: { type: Boolean, default: false },
     channel: { type: String },
     email: { type: String },
+    source: {
+      type: String,
+      enum: ['dashboard', 'bulk', 'api_key', 'system', 'test'],
+    },
+    apiKeyId: { type: Schema.Types.ObjectId, ref: 'ApiKey' },
+    apiKeyName: { type: String },
+    normalizedPhone: { type: String },
+    deliveryStatus: { type: String },
     status: {
       type: String,
       enum: [...SMS_PENDING_STATUSES, ...SMS_FINAL_STATUSES],
@@ -236,6 +252,7 @@ const SmsMessageSchema = new Schema<ISmsMessage>(
     fallbackJobId: { type: String },
     fallbackQueuedAt: { type: Date },
     fallbackSentAt: { type: Date },
+    fallbackDeliveredAt: { type: Date },
     fallbackFailedAt: { type: Date },
     fallbackFailureReason: { type: String },
     fallbackFailureCode: { type: String },
@@ -972,9 +989,20 @@ export interface ISmsFallbackJob {
     | 'retry_sent_waiting_delivery'
     | 'pending'
     | 'sending'
+    | 'delivered'
     | 'sent'
     | 'failed'
+    | 'blocked'
     | 'cancelled'
+  phoneStatus?:
+    | 'pending'
+    | 'sending'
+    | 'delivered'
+    | 'failed'
+    | 'requires_topup'
+    | 'cancelled'
+  source?: 'dashboard' | 'bulk' | 'api_key' | 'system' | 'test'
+  apiKeyId?: mongoose.Types.ObjectId
   attempts: number
   maxAttempts?: number
   deviceId?: string
@@ -985,6 +1013,7 @@ export interface ISmsFallbackJob {
   lockedBy?: string
   sendingAt?: Date
   sentAt?: Date
+  deliveredAt?: Date
   failedAt?: Date
   failureReason?: string
   failureCode?: string
@@ -1026,12 +1055,23 @@ const SmsFallbackJobSchema = new Schema<ISmsFallbackJob>(
         'retry_sent_waiting_delivery',
         'pending',
         'sending',
+        'delivered',
         'sent',
         'failed',
+        'blocked',
         'cancelled',
       ],
       default: 'waiting_retry',
     },
+    phoneStatus: {
+      type: String,
+      enum: ['pending', 'sending', 'delivered', 'failed', 'requires_topup', 'cancelled'],
+    },
+    source: {
+      type: String,
+      enum: ['dashboard', 'bulk', 'api_key', 'system', 'test'],
+    },
+    apiKeyId: { type: Schema.Types.ObjectId, ref: 'ApiKey' },
     attempts: { type: Number, default: 0 },
     maxAttempts: { type: Number, default: 3 },
     deviceId: { type: String },
@@ -1042,6 +1082,7 @@ const SmsFallbackJobSchema = new Schema<ISmsFallbackJob>(
     lockedBy: { type: String },
     sendingAt: { type: Date },
     sentAt: { type: Date },
+    deliveredAt: { type: Date },
     failedAt: { type: Date },
     failureReason: { type: String },
     failureCode: { type: String },

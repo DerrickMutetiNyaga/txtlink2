@@ -40,6 +40,17 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return gatewayAuthErrorResponse(auth)
     }
 
+    if (auth.device.requiresTopUp) {
+      return NextResponse.json(
+        {
+          success: false,
+          code: 'GATEWAY_REQUIRES_TOPUP',
+          message: 'Phone gateway paused — reload SMS bundle or airtime before claiming jobs',
+        },
+        { status: 403 }
+      )
+    }
+
     if (!jobId) {
       logGatewayJobAction({
         route: ROUTE,
@@ -123,6 +134,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       {
         $set: {
           status: 'sending',
+          phoneStatus: 'sending',
           sendingAt: now,
           lockedAt: now,
           lockedBy,

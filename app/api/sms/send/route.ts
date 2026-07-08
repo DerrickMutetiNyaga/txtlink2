@@ -182,6 +182,7 @@ export async function POST(request: NextRequest) {
         userId: userObjectId,
         senderName: senderId.senderName,
         toNumbers: [formattedPhone],
+        normalizedPhone: formattedPhone.replace(/^\+/, ''),
         message,
         segments, // Total segments for this message
         costPerSegment: pricePerCreditKes,
@@ -191,6 +192,9 @@ export async function POST(request: NextRequest) {
         chargedKes: totalCostKes,
         status: 'queued',
         providerStatus: 'PROCESSING',
+        deliveryStatus: 'queued',
+        deliveryMethod: 'provider',
+        source: 'dashboard',
         // Delivery-status worker scheduling: even if the async send below dies,
         // the background worker will pick this message up at nextCheckAt.
         nextCheckAt: initialNextCheckAt(),

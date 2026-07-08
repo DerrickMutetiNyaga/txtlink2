@@ -22,7 +22,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Already delivered via phone' }, { status: 400 })
     }
 
-    if (sms.fallbackStatus !== 'phone_failed') {
+    if (sms.fallbackStatus !== 'phone_failed' && sms.fallbackStatus !== 'phone_requires_topup') {
       return NextResponse.json(
         { error: 'Phone fallback has not failed for this message' },
         { status: 400 }
@@ -34,11 +34,15 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'No fallback job found' }, { status: 404 })
     }
 
-    if (job.status === 'sent') {
-      return NextResponse.json({ error: 'Phone fallback already sent successfully' }, { status: 400 })
+    if (job.status === 'delivered' || job.status === 'sent') {
+      return NextResponse.json(
+        { error: 'Phone fallback already delivered via phone' },
+        { status: 400 }
+      )
     }
 
     job.status = 'pending'
+    job.phoneStatus = 'pending'
     job.attempts = 0
     job.sendingAt = undefined
     job.sentAt = undefined

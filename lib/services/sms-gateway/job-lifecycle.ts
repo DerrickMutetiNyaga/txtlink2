@@ -7,7 +7,7 @@ export function parseGatewayJobId(jobId: string): mongoose.Types.ObjectId | null
   return new mongoose.Types.ObjectId(jobId)
 }
 
-export const TERMINAL_FALLBACK_JOB_STATUSES = ['sent', 'failed', 'cancelled'] as const
+export const TERMINAL_FALLBACK_JOB_STATUSES = ['delivered', 'sent', 'failed', 'blocked', 'cancelled'] as const
 
 export function isTerminalFallbackJobStatus(status: string): boolean {
   return (TERMINAL_FALLBACK_JOB_STATUSES as readonly string[]).includes(status)

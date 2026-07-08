@@ -39,9 +39,11 @@ export async function POST(request: NextRequest) {
       message: message.trim(),
       originalStatus: 'test',
       status: 'pending',
+      phoneStatus: 'pending',
       retryAttempted: false,
       attempts: 0,
       isTest: true,
+      source: 'test',
     })
 
     return NextResponse.json({

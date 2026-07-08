@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import connectDB from '@/lib/db/connect'
 import { SmsMessage, SmsFallbackJob } from '@/lib/db/models'
 import { requireAuth } from '@/lib/auth/middleware'
+import { isPhoneDeliveredFallbackStatus } from '@/lib/services/sms-fallback/phone-status'
 import mongoose from 'mongoose'
 
 type RouteContext = { params: Promise<{ messageId: string }> }
@@ -18,12 +19,12 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Message not found' }, { status: 404 })
     }
 
-    if (sms.fallbackStatus === 'sent_via_phone' || sms.status === 'delivered') {
+    if (isPhoneDeliveredFallbackStatus(sms.fallbackStatus) || sms.status === 'delivered') {
       return NextResponse.json({ error: 'Cannot cancel — already delivered' }, { status: 400 })
     }
 
     const job = await SmsFallbackJob.findOne({ originalSmsId: String(sms._id) })
-    if (job && ['sent'].includes(job.status)) {
+    if (job && ['delivered', 'sent'].includes(job.status)) {
       return NextResponse.json({ error: 'Phone fallback already sent' }, { status: 400 })
     }
 

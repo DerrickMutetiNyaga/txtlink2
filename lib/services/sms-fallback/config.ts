@@ -23,6 +23,7 @@ export function getCronSecret(): string | undefined {
 export const FALLBACK_PHONE_STATUSES = [
   'queued_for_phone',
   'sending_via_phone',
+  'delivered_via_phone',
   'sent_via_phone',
 ] as const
 
@@ -46,3 +47,5 @@ export const DLR_RETRY_KEYWORDS = [
   'invalid sender',
   'dlr failed',
 ] as const
+
+export const SMS_PENDING_FOR_FALLBACK = ['queued', 'processing', 'retrying'] as const

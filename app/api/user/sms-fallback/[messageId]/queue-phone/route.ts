@@ -3,7 +3,7 @@ import connectDB from '@/lib/db/connect'
 import { SmsMessage, SmsFallbackJob } from '@/lib/db/models'
 import { requireAuth } from '@/lib/auth/middleware'
 import { normalizeKenyanPhone } from '@/lib/utils/phone'
-import mongoose from 'mongoose'
+import { isPhoneDeliveredFallbackStatus } from '@/lib/services/sms-fallback/phone-status'
 
 type RouteContext = { params: Promise<{ messageId: string }> }
 
@@ -19,7 +19,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Message not found' }, { status: 404 })
     }
 
-    if (sms.status === 'delivered' || sms.fallbackStatus === 'sent_via_phone') {
+    if (sms.status === 'delivered' || isPhoneDeliveredFallbackStatus(sms.fallbackStatus)) {
       return NextResponse.json({ error: 'Message already delivered' }, { status: 400 })
     }
 

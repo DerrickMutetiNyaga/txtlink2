@@ -39,13 +39,6 @@ export async function POST(request: NextRequest, context: RouteContext) {
     }
 
     if (!jobId) {
-      logGatewayJobAction({
-        route: ROUTE,
-        jobId: rawJobId,
-        deviceName,
-        responseCode: 400,
-        message: 'Invalid job ID',
-      })
       return NextResponse.json({ success: false, message: 'Invalid job ID' }, { status: 400 })
     }
 
@@ -60,26 +53,15 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     const statusBefore = existing?.status ?? null
 
-    if (existing?.status === 'sent') {
-      logGatewayJobAction({
-        route: ROUTE,
-        jobId: rawJobId,
-        deviceName: deviceName || auth.device.boundDeviceName,
-        statusBefore: 'sent',
-        statusAfter: 'sent',
-        responseCode: 200,
-        message: 'Job already marked sent',
-      })
+    if (existing?.status === 'delivered' || existing?.status === 'sent') {
       return NextResponse.json({
         success: true,
-        message: existing.isTest
-          ? 'Test job already marked sent via phone gateway'
-          : 'SMS marked delivered via phone gateway',
-        jobStatus: 'sent',
+        message: 'SMS marked delivered via phone gateway',
+        jobStatus: 'delivered',
       })
     }
 
-    const sentAt = body.sentAt ? new Date(body.sentAt) : new Date()
+    const deliveredAt = body.sentAt ? new Date(body.sentAt) : new Date()
 
     const job = await SmsFallbackJob.findOneAndUpdate(
       {
@@ -89,15 +71,15 @@ export async function POST(request: NextRequest, context: RouteContext) {
       },
       {
         $set: {
-          status: 'sent',
-          sentAt,
+          status: 'delivered',
+          phoneStatus: 'delivered',
+          sentAt: deliveredAt,
+          deliveredAt,
           deviceName: deviceName || auth.device.boundDeviceName,
           simLabel: simLabel || auth.device.boundSimLabel,
           localMessageId: body.localMessageId,
         },
-        $unset: {
-          resetReason: 1,
-        },
+        $unset: { resetReason: 1 },
       },
       { new: true }
     )
@@ -121,17 +103,19 @@ export async function POST(request: NextRequest, context: RouteContext) {
     if (!job.isTest) {
       await SmsMessage.findByIdAndUpdate(job.originalSmsId, {
         status: 'delivered',
-        deliveredAt: sentAt,
+        deliveryStatus: 'delivered',
+        deliveredAt,
         deliveryMethod: 'android_phone_gateway',
-        fallbackStatus: 'sent_via_phone',
-        fallbackSentAt: sentAt,
+        fallbackStatus: 'delivered_via_phone',
+        fallbackSentAt: deliveredAt,
+        fallbackDeliveredAt: deliveredAt,
         fallbackProvider: 'android_phone_gateway',
         fallbackJobId: rawJobId,
         fallbackFailedAt: null,
         fallbackFailureReason: null,
         fallbackFailureCode: null,
         requiresPhoneTopUp: false,
-        finalizedAt: sentAt,
+        finalizedAt: deliveredAt,
         nextCheckAt: null,
       })
 
@@ -162,25 +146,17 @@ export async function POST(request: NextRequest, context: RouteContext) {
       jobId: rawJobId,
       deviceName: job.deviceName,
       statusBefore: statusBefore || 'sending',
-      statusAfter: 'sent',
+      statusAfter: 'delivered',
       responseCode: 200,
     })
 
     return NextResponse.json({
       success: true,
-      message: job.isTest
-        ? 'Test job marked sent via phone gateway'
-        : 'SMS marked delivered via phone gateway',
-      jobStatus: 'sent',
+      message: 'SMS marked delivered via phone gateway',
+      jobStatus: 'delivered',
     })
   } catch (error: any) {
     console.error('SMS gateway job sent error:', error)
-    logGatewayJobAction({
-      route: ROUTE,
-      jobId: rawJobId,
-      responseCode: 500,
-      message: error?.message,
-    })
     return NextResponse.json(
       { success: false, message: 'Internal server error' },
       { status: 500 }

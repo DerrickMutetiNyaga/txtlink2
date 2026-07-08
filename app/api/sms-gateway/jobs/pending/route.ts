@@ -7,45 +7,71 @@ import {
 } from '@/lib/services/sms-gateway/auth'
 import { cancelFallbackJobIfDelivered } from '@/lib/services/sms-fallback/helpers'
 import { logGatewayJobAction } from '@/lib/services/sms-gateway/job-logger'
+import { isPhoneDeliveredFallbackStatus } from '@/lib/services/sms-fallback/phone-status'
 
 const ROUTE = 'GET /api/sms-gateway/jobs/pending'
+
+async function finalizeDeliveredJob(jobId: unknown, deliveredAt: Date): Promise<void> {
+  await SmsFallbackJob.findByIdAndUpdate(jobId, {
+    status: 'delivered',
+    phoneStatus: 'delivered',
+    deliveredAt,
+    sentAt: deliveredAt,
+  })
+}
 
 export async function GET(request: NextRequest) {
   try {
     const auth = await validateGatewayDevice(request, { route: ROUTE })
     if (!auth.ok) {
-      logGatewayJobAction({
-        route: ROUTE,
-        responseCode: auth.status,
-        message: auth.message,
-        extra: { code: auth.code },
-      })
       return gatewayAuthErrorResponse(auth)
     }
 
     await connectDB()
 
+    if (auth.device.requiresTopUp) {
+      return NextResponse.json({
+        success: true,
+        jobs: [],
+        gatewayPaused: true,
+        requiresTopUp: true,
+        message: 'Phone gateway paused — reload SMS bundle or airtime on the device',
+      })
+    }
+
     const { searchParams } = new URL(request.url)
     const limit = Math.min(parseInt(searchParams.get('limit') || '5', 10) || 5, 50)
     const userId = auth.device.userId
 
-    // Legacy "notified" jobs (from removed FCM flow) → pending
     await SmsFallbackJob.updateMany(
       { userId, status: 'notified' },
-      { $set: { status: 'pending' } }
+      { $set: { status: 'pending', phoneStatus: 'pending' } }
     )
 
-    const jobs = await SmsFallbackJob.find({
-      userId,
-      status: 'pending',
-    })
+    await SmsFallbackJob.updateMany(
+      { userId, status: 'sent' },
+      [
+        {
+          $set: {
+            status: 'delivered',
+            phoneStatus: 'delivered',
+            deliveredAt: { $ifNull: ['$deliveredAt', '$sentAt'] },
+          },
+        },
+      ]
+    )
+
+    const jobs = await SmsFallbackJob.find({ userId, status: 'pending' })
       .sort({ createdAt: 1 })
       .limit(limit)
       .lean()
 
     const activeJobs = []
     for (const job of jobs) {
-      if (job.status !== 'pending') {
+      if (job.status !== 'pending') continue
+      if (job.phoneStatus === 'delivered') continue
+      if (job.deliveredAt || job.sentAt) {
+        await finalizeDeliveredJob(job._id, job.deliveredAt || job.sentAt || new Date())
         continue
       }
 
@@ -60,6 +86,7 @@ export async function GET(request: NextRequest) {
         if (!sms) {
           await SmsFallbackJob.findByIdAndUpdate(job._id, {
             status: 'cancelled',
+            phoneStatus: 'cancelled',
             cancelReason: 'Original SMS not found',
           })
           continue
@@ -67,12 +94,14 @@ export async function GET(request: NextRequest) {
 
         if (
           sms.status === 'delivered' ||
-          sms.fallbackStatus === 'sent_via_phone' ||
+          sms.deliveryStatus === 'delivered' ||
+          isPhoneDeliveredFallbackStatus(sms.fallbackStatus) ||
           sms.deliveryMethod === 'android_phone_gateway'
         ) {
           await SmsFallbackJob.findByIdAndUpdate(job._id, {
-            status: 'sent',
-            sentAt: sms.fallbackSentAt || sms.deliveredAt || new Date(),
+            status: 'cancelled',
+            phoneStatus: 'cancelled',
+            cancelReason: 'Original SMS delivered before phone fallback',
           })
           continue
         }
@@ -93,26 +122,9 @@ export async function GET(request: NextRequest) {
     auth.device.lastSyncAt = new Date()
     await auth.device.save()
 
-    logGatewayJobAction({
-      route: ROUTE,
-      deviceName: auth.device.boundDeviceName,
-      statusBefore: null,
-      statusAfter: 'pending',
-      responseCode: 200,
-      extra: { returnedCount: activeJobs.length },
-    })
-
-    return NextResponse.json({
-      success: true,
-      jobs: activeJobs,
-    })
+    return NextResponse.json({ success: true, jobs: activeJobs })
   } catch (error: any) {
     console.error('SMS gateway pending jobs error:', error)
-    logGatewayJobAction({
-      route: ROUTE,
-      responseCode: 500,
-      message: error?.message,
-    })
     return NextResponse.json(
       { success: false, message: 'Internal server error' },
       { status: 500 }

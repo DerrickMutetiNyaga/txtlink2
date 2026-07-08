@@ -6,6 +6,7 @@ import { createLogger } from '@/lib/worker/logger'
 import { normalizeKenyanPhone } from '@/lib/utils/phone'
 import { isSmsFallbackEnabled, getProviderRetryWaitMinutes, FALLBACK_PHONE_STATUSES } from './config'
 import { shouldSkipFallbackProcessing, minutesAgo, cancelFallbackJobIfDelivered } from './helpers'
+import { isPhoneDeliveredFallbackStatus } from './phone-status'
 
 async function checkRetryDeliveryStatus(sms: ISmsMessage & { _id: unknown }): Promise<void> {
   if (!sms.providerRetrySmsId || sms.providerRetryStatus !== 'sent') return
@@ -20,6 +21,9 @@ async function checkRetryDeliveryStatus(sms: ISmsMessage & { _id: unknown }): Pr
   const mapped = lookup.result.status
   if (mapped === 'delivered') {
     await SmsMessage.findByIdAndUpdate(sms._id, {
+      status: 'delivered',
+      deliveryStatus: 'delivered',
+      deliveredAt: new Date(),
       providerRetryStatus: 'delivered',
       providerRetryDeliveredAt: new Date(),
       fallbackStatus: 'not_needed',
@@ -36,49 +40,47 @@ async function checkRetryDeliveryStatus(sms: ISmsMessage & { _id: unknown }): Pr
 
 async function queuePhoneFallback(sms: ISmsMessage & { _id: unknown }): Promise<boolean> {
   const phone = sms.toNumbers[0] || ''
-  const normalized = normalizeKenyanPhone(phone)
+  const normalized = sms.normalizedPhone || normalizeKenyanPhone(phone)
   if (!normalized) return false
 
   const originalSmsId = String(sms._id)
+
+  if (sms.status === 'delivered' || sms.deliveryStatus === 'delivered') return false
+  if (isPhoneDeliveredFallbackStatus(sms.fallbackStatus)) return false
+
   const existing = await SmsFallbackJob.findOne({ originalSmsId }).lean()
-  if (existing && ['pending', 'sending', 'sent'].includes(existing.status)) {
+  if (existing && ['pending', 'sending', 'delivered', 'sent'].includes(existing.status)) {
     return false
   }
 
   const now = new Date()
-  let job = existing
-    ? await SmsFallbackJob.findOneAndUpdate(
-        { originalSmsId },
-        {
-          status: 'pending',
-          recipientPhone: phone,
-          normalizedPhone: normalized,
-          message: sms.message,
-          originalStatus: sms.status,
-          originalProviderMessageId: sms.hpTransactionId,
-          originalSentAt: sms.sentAt,
-          originalFailureReason: sms.deliveryCause || sms.errorMessage,
-        },
-        { new: true }
-      )
+  const jobPayload = {
+    status: 'pending' as const,
+    phoneStatus: 'pending' as const,
+    recipientPhone: phone,
+    normalizedPhone: normalized,
+    message: sms.message,
+    originalStatus: sms.status,
+    originalProviderMessageId: sms.hpTransactionId,
+    originalSentAt: sms.sentAt,
+    originalFailureReason: sms.deliveryCause || sms.errorMessage,
+    source: sms.source,
+    apiKeyId: sms.apiKeyId,
+  }
+
+  const job = existing
+    ? await SmsFallbackJob.findOneAndUpdate({ originalSmsId }, { $set: jobPayload }, { new: true })
     : await SmsFallbackJob.create({
         userId: sms.userId,
         originalSmsId,
-        recipientPhone: phone,
-        normalizedPhone: normalized,
-        message: sms.message,
-        originalStatus: sms.status,
-        originalProviderMessageId: sms.hpTransactionId,
-        originalSentAt: sms.sentAt,
-        originalFailureReason: sms.deliveryCause || sms.errorMessage,
+        ...jobPayload,
         retryAttempted: sms.providerRetryAttempted || false,
         retryAttemptedAt: sms.providerRetryAttemptedAt,
         retryProviderMessageId: sms.providerRetrySmsId,
-        retryStatus: sms.providerRetryStatus as any,
+        retryStatus: sms.providerRetryStatus as ISmsFallbackJob['retryStatus'],
         retrySentAt: sms.providerRetrySentAt,
         retryFailedAt: sms.providerRetryFailedAt,
         retryFailureReason: sms.providerRetryFailureReason,
-        status: 'pending',
         attempts: 0,
       })
 
@@ -105,9 +107,8 @@ export async function scanRetryResultsAndQueuePhoneFallback(): Promise<number> {
   const retriedMessages = await SmsMessage.find({
     providerRetryAttempted: true,
     status: { $ne: 'delivered' },
-    fallbackStatus: {
-      $nin: [...FALLBACK_PHONE_STATUSES, 'sent_via_phone', 'cancelled'],
-    },
+    deliveryStatus: { $ne: 'delivered' },
+    fallbackStatus: { $nin: [...FALLBACK_PHONE_STATUSES, 'cancelled'] },
   })
     .limit(100)
     .lean()
@@ -117,8 +118,7 @@ export async function scanRetryResultsAndQueuePhoneFallback(): Promise<number> {
   for (const raw of retriedMessages) {
     const sms = raw as ISmsMessage & { _id: unknown }
     if (shouldSkipFallbackProcessing(sms)) continue
-    if (sms.status === 'delivered') continue
-    if (sms.fallbackStatus === 'sent_via_phone') continue
+    if (isPhoneDeliveredFallbackStatus(sms.fallbackStatus)) continue
 
     await checkRetryDeliveryStatus(sms)
 
@@ -150,8 +150,9 @@ export async function scanRetryResultsAndQueuePhoneFallback(): Promise<number> {
         })
       }
 
-      const didQueue = await queuePhoneFallback(msg as ISmsMessage & { _id: unknown })
-      if (didQueue) queued++
+      if (await queuePhoneFallback(msg as ISmsMessage & { _id: unknown })) {
+        queued++
+      }
     }
   }
 
@@ -162,15 +163,16 @@ export async function cancelDeliveredFallbackJobs(): Promise<number> {
   await connectDB()
 
   const activeJobs = await SmsFallbackJob.find({
-    status: { $in: ['pending', 'waiting_retry', 'retrying_provider', 'retry_sent_waiting_delivery'] },
+    status: {
+      $in: ['pending', 'sending', 'waiting_retry', 'retrying_provider', 'retry_sent_waiting_delivery'],
+    },
   })
     .limit(100)
     .lean()
 
   let cancelled = 0
   for (const job of activeJobs) {
-    const didCancel = await cancelFallbackJobIfDelivered(job.originalSmsId)
-    if (didCancel) cancelled++
+    if (await cancelFallbackJobIfDelivered(job.originalSmsId)) cancelled++
   }
   return cancelled
 }

@@ -20,6 +20,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
+import { getPhoneJobStatusLabel } from '@/lib/services/sms-fallback/phone-status'
 
 interface GatewayStatus {
   hasToken: boolean
@@ -45,6 +46,7 @@ interface GatewayStatus {
   lastFailureReason?: string | null
   lastFailureCode?: string | null
   pendingPhoneJobs?: number
+  blockedTopUpJobs?: number
 }
 
 interface FallbackJobRow {
@@ -52,14 +54,17 @@ interface FallbackJobRow {
   originalSmsId: string
   recipientPhone: string
   message: string
+  source?: string
   originalStatus?: string
   retryStatus?: string
   status: string
+  phoneStatus?: string
   attempts: number
   maxAttempts?: number
   createdAt: string
   sendingAt?: string | null
   sentAt?: string | null
+  deliveredAt?: string | null
   failedAt?: string | null
   deviceName?: string | null
   simLabel?: string | null
@@ -106,6 +111,7 @@ export default function SmsGatewayPage() {
   const [showTokenModal, setShowTokenModal] = useState(false)
   const [copiedField, setCopiedField] = useState<string | null>(null)
   const [fallbackJobs, setFallbackJobs] = useState<FallbackJobRow[]>([])
+  const [queueFilter, setQueueFilter] = useState<'active' | 'completed' | 'all'>('active')
   const [showTestModal, setShowTestModal] = useState(false)
   const [testPhone, setTestPhone] = useState('')
   const [testMessage, setTestMessage] = useState('TXTLINK test — phone gateway connection OK.')
@@ -113,6 +119,8 @@ export default function SmsGatewayPage() {
   const [clearingTestJobs, setClearingTestJobs] = useState(false)
   const [jobActionId, setJobActionId] = useState<string | null>(null)
   const [clearingAlert, setClearingAlert] = useState(false)
+  const [resumingGateway, setResumingGateway] = useState(false)
+  const [retryingBlocked, setRetryingBlocked] = useState(false)
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -127,7 +135,7 @@ export default function SmsGatewayPage() {
         fetch('/api/user/sms-gateway', {
           headers: { Authorization: `Bearer ${token}` },
         }),
-        fetch('/api/user/sms-fallback', {
+        fetch(`/api/user/sms-fallback?filter=${queueFilter}`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
       ])
@@ -144,7 +152,7 @@ export default function SmsGatewayPage() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [queueFilter])
 
   useEffect(() => {
     fetchStatus()
@@ -285,6 +293,66 @@ export default function SmsGatewayPage() {
       })
     } finally {
       setRevoking(false)
+    }
+  }
+
+  const handleResumeGateway = async () => {
+    setResumingGateway(true)
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch('/api/user/sms-gateway/resume', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const data = await response.json()
+      if (response.ok) {
+        toast({ title: 'Gateway resumed', description: data.message })
+        await fetchStatus()
+      } else {
+        toast({
+          title: 'Error',
+          description: data.error || 'Failed to resume gateway',
+          variant: 'destructive',
+        })
+      }
+    } catch {
+      toast({
+        title: 'Error',
+        description: 'Failed to resume gateway',
+        variant: 'destructive',
+      })
+    } finally {
+      setResumingGateway(false)
+    }
+  }
+
+  const handleRetryBlockedJobs = async () => {
+    setRetryingBlocked(true)
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch('/api/user/sms-gateway/retry-blocked-jobs', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const data = await response.json()
+      if (response.ok) {
+        toast({ title: 'Jobs re-queued', description: data.message })
+        await fetchStatus()
+      } else {
+        toast({
+          title: 'Error',
+          description: data.error || 'Failed to retry blocked jobs',
+          variant: 'destructive',
+        })
+      }
+    } catch {
+      toast({
+        title: 'Error',
+        description: 'Failed to retry blocked jobs',
+        variant: 'destructive',
+      })
+    } finally {
+      setRetryingBlocked(false)
     }
   }
 
@@ -542,66 +610,103 @@ export default function SmsGatewayPage() {
         </div>
 
         {gateway?.showTopUpAlert && (
-          <Card className="p-6 bg-red-50 border border-red-200 shadow-sm">
-            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+          <Card className="p-6 bg-amber-50 border border-amber-300 shadow-sm">
+            <div className="flex flex-col gap-4">
               <div className="flex gap-3">
-                <div className="p-2.5 rounded-xl bg-red-100 text-red-600 shrink-0">
+                <div className="p-2.5 rounded-xl bg-amber-100 text-amber-700 shrink-0">
                   <AlertTriangle size={22} />
                 </div>
                 <div>
-                  <h2 className="text-lg font-semibold text-red-900 mb-1">
-                    Phone Gateway Needs Attention
+                  <h2 className="text-lg font-semibold text-amber-950 mb-1">
+                    Phone Gateway Needs Reload
                   </h2>
-                  <p className="text-sm text-red-800 mb-4">
-                    The phone gateway could not send SMS. The SIM may be out of SMS bundles or
-                    airtime. Reload the Safaricom line, then open the Android app and tap Resume
-                    Gateway.
+                  <p className="text-sm text-amber-900 mb-4">
+                    The Safaricom gateway phone could not send SMS. The SIM may be out of SMS
+                    bundles or airtime. Reload the line, then resume the gateway.
                   </p>
                   <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
                     <div>
-                      <dt className="text-red-700">Device</dt>
-                      <dd className="font-medium text-red-900">
+                      <dt className="text-amber-800">Device</dt>
+                      <dd className="font-medium text-amber-950">
                         {gateway.boundDeviceName || '—'}
                       </dd>
                     </div>
                     <div>
-                      <dt className="text-red-700">SIM</dt>
-                      <dd className="font-medium text-red-900">
+                      <dt className="text-amber-800">SIM</dt>
+                      <dd className="font-medium text-amber-950">
                         {gateway.boundSimLabel || '—'}
                       </dd>
                     </div>
                     <div>
-                      <dt className="text-red-700">Last failure</dt>
-                      <dd className="font-medium text-red-900">
+                      <dt className="text-amber-800">Blocked jobs</dt>
+                      <dd className="font-medium text-amber-950">
+                        {gateway.blockedTopUpJobs ?? 0}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-amber-800">Last failure</dt>
+                      <dd className="font-medium text-amber-950">
                         {gateway.lastFailureReason || '—'}
                       </dd>
                     </div>
                     <div>
-                      <dt className="text-red-700">Failed at</dt>
-                      <dd className="font-medium text-red-900">
+                      <dt className="text-amber-800">Failed at</dt>
+                      <dd className="font-medium text-amber-950">
                         {formatDate(gateway.lastFailureAt)}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="text-red-700">Pending phone jobs</dt>
-                      <dd className="font-medium text-red-900">
-                        {gateway.pendingPhoneJobs ?? 0}
                       </dd>
                     </div>
                   </dl>
                 </div>
               </div>
-              <Button
-                variant="outline"
-                className="border-red-300 text-red-800 hover:bg-red-100 shrink-0"
-                onClick={handleClearAlert}
-                disabled={clearingAlert}
-              >
-                {clearingAlert ? 'Clearing...' : 'Clear Alert'}
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  className="bg-amber-700 text-white hover:bg-amber-800"
+                  onClick={handleResumeGateway}
+                  disabled={resumingGateway}
+                >
+                  {resumingGateway ? 'Resuming…' : 'Mark Reloaded / Resume'}
+                </Button>
+                <Button
+                  variant="outline"
+                  className="border-amber-400 text-amber-900 hover:bg-amber-100"
+                  onClick={handleRetryBlockedJobs}
+                  disabled={retryingBlocked || (gateway.blockedTopUpJobs ?? 0) === 0}
+                >
+                  {retryingBlocked ? 'Re-queuing…' : 'Retry Phone Fallback'}
+                </Button>
+                <Button
+                  variant="outline"
+                  className="border-amber-300 text-amber-800 hover:bg-amber-100"
+                  onClick={handleClearAlert}
+                  disabled={clearingAlert}
+                >
+                  {clearingAlert ? 'Clearing…' : 'Clear Alert'}
+                </Button>
+              </div>
             </div>
           </Card>
         )}
+
+        {!gateway?.isOnline &&
+          gateway?.hasToken &&
+          (gateway.pendingPhoneJobs ?? 0) > 0 &&
+          !gateway?.requiresTopUp && (
+            <Card className="p-5 bg-slate-50 border border-slate-200 shadow-sm">
+              <div className="flex gap-3">
+                <div className="p-2 rounded-lg bg-slate-200 text-slate-600 shrink-0">
+                  <Smartphone size={20} />
+                </div>
+                <div>
+                  <h2 className="font-semibold text-slate-900 mb-1">Gateway Offline</h2>
+                  <p className="text-sm text-slate-700">
+                    The Android app has not synced recently.{' '}
+                    <strong>{gateway.pendingPhoneJobs}</strong> phone fallback job(s) are waiting
+                    safely in MongoDB. They will be fetched when the app comes back online.
+                  </p>
+                </div>
+              </div>
+            </Card>
+          )}
 
         {loading && !gateway ? (
           <Card className="p-12 bg-white border border-gray-100 shadow-sm text-center">
@@ -938,11 +1043,31 @@ export default function SmsGatewayPage() {
                       Phone Fallback Queue
                     </h2>
                     <p className="text-sm text-gray-500">
-                      Jobs waiting for your Android gateway
+                      {queueFilter === 'active'
+                        ? 'Pending and sending jobs only'
+                        : queueFilter === 'completed'
+                          ? 'Delivered, failed, and cancelled jobs'
+                          : 'All phone fallback jobs'}
                     </p>
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2 shrink-0">
+                  <div className="flex rounded-lg border border-gray-200 overflow-hidden">
+                    {(['active', 'completed', 'all'] as const).map((f) => (
+                      <button
+                        key={f}
+                        type="button"
+                        onClick={() => setQueueFilter(f)}
+                        className={`px-3 py-1.5 text-xs font-semibold capitalize ${
+                          queueFilter === f
+                            ? 'bg-teal-600 text-white'
+                            : 'bg-white text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        {f}
+                      </button>
+                    ))}
+                  </div>
                   <Button
                     variant="outline"
                     className="border-gray-200 text-gray-700 hover:bg-gray-50"
@@ -968,17 +1093,18 @@ export default function SmsGatewayPage() {
                 </p>
               ) : (
                 <div className="overflow-x-auto">
-                <table className="w-full text-sm min-w-[1100px]">
+                <table className="w-full text-sm min-w-[1200px]">
                   <thead className="border-b border-gray-200">
                     <tr className="text-left text-gray-600 font-semibold text-xs uppercase">
                       <th className="pb-3 pr-2">Created</th>
                       <th className="pb-3 pr-2">Job ID</th>
                       <th className="pb-3 pr-2">Phone</th>
                       <th className="pb-3 pr-2">Message</th>
+                      <th className="pb-3 pr-2">Source</th>
                       <th className="pb-3 pr-2">Phone Status</th>
                       <th className="pb-3 pr-2">Attempts</th>
                       <th className="pb-3 pr-2">Sending At</th>
-                      <th className="pb-3 pr-2">Sent At</th>
+                      <th className="pb-3 pr-2">Delivered At</th>
                       <th className="pb-3 pr-2">Failed At</th>
                       <th className="pb-3 pr-2">Last Device</th>
                       <th className="pb-3 pr-2">Last Error</th>
@@ -989,9 +1115,11 @@ export default function SmsGatewayPage() {
                   <tbody>
                     {fallbackJobs.map((job) => {
                       const isBusy = jobActionId === job.id
+                      const displayStatus = job.phoneStatus || job.status
+                      const statusLabel = getPhoneJobStatusLabel(displayStatus, job.phoneStatus)
                       const canCancel =
                         job.status !== 'cancelled' &&
-                        !(job.status === 'sent' && !job.isTest)
+                        !['delivered', 'sent'].includes(job.status)
 
                       return (
                       <tr key={job.id} className="border-b border-gray-100">
@@ -1010,17 +1138,25 @@ export default function SmsGatewayPage() {
                         <td className="py-3 pr-2 max-w-[180px] truncate text-gray-600" title={job.message}>
                           {job.message}
                         </td>
+                        <td className="py-3 pr-2 text-xs text-gray-600 capitalize">
+                          {job.source?.replace('_', ' ') || (job.isTest ? 'test' : '—')}
+                        </td>
                         <td className="py-3 pr-2">
                           <StatusBadge
-                            label={job.status}
+                            label={statusLabel}
                             variant={
-                              job.status === 'sent'
+                              displayStatus === 'delivered' ||
+                              displayStatus === 'sent' ||
+                              displayStatus === 'blocked' ||
+                              displayStatus === 'requires_topup'
                                 ? 'green'
-                                : job.status === 'failed'
+                                : displayStatus === 'failed'
                                   ? 'red'
-                                  : job.status === 'sending'
+                                  : displayStatus === 'sending'
                                     ? 'purple'
-                                    : 'amber'
+                                    : displayStatus === 'cancelled'
+                                      ? 'gray'
+                                      : 'amber'
                             }
                           />
                           {job.resetReason ? (
@@ -1042,14 +1178,21 @@ export default function SmsGatewayPage() {
                             : '—'}
                         </td>
                         <td className="py-3 pr-2 text-xs text-gray-500 whitespace-nowrap">
-                          {job.sentAt
-                            ? new Date(job.sentAt).toLocaleString('en-US', {
+                          {job.deliveredAt
+                            ? new Date(job.deliveredAt).toLocaleString('en-US', {
                                 month: 'short',
                                 day: 'numeric',
                                 hour: '2-digit',
                                 minute: '2-digit',
                               })
-                            : '—'}
+                            : job.sentAt
+                              ? new Date(job.sentAt).toLocaleString('en-US', {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })
+                              : '—'}
                         </td>
                         <td className="py-3 pr-2 text-xs text-gray-500 whitespace-nowrap">
                           {job.failedAt

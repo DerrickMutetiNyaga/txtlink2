@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import connectDB from '@/lib/db/connect'
 import { SmsFallbackJob, SmsMessage } from '@/lib/db/models'
 import { requireAuth } from '@/lib/auth/middleware'
+import { isPhoneDeliveredFallbackStatus } from '@/lib/services/sms-fallback/phone-status'
 import mongoose from 'mongoose'
 
 type RouteContext = { params: Promise<{ jobId: string }> }
@@ -26,7 +27,8 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
       const sms = await SmsMessage.findById(job.originalSmsId)
       if (
         sms &&
-        sms.fallbackStatus !== 'sent_via_phone' &&
+        sms.fallbackStatus !== 'delivered_via_phone' &&
+        !isPhoneDeliveredFallbackStatus(sms.fallbackStatus) &&
         sms.status !== 'delivered' &&
         String(sms.fallbackJobId) === jobId
       ) {

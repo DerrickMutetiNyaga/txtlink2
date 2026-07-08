@@ -7,7 +7,8 @@ import mongoose from 'mongoose'
 
 function formatDevice(
   device: Record<string, unknown> | null,
-  pendingPhoneJobs: number
+  pendingPhoneJobs: number,
+  blockedTopUpJobs = 0
 ) {
   if (!device) {
     return {
@@ -17,6 +18,7 @@ function formatDevice(
       connectionStatus: 'not_connected' as const,
       tokenStatus: 'none' as const,
       pendingPhoneJobs: 0,
+      blockedTopUpJobs: 0,
       showTopUpAlert: false,
     }
   }
@@ -52,14 +54,15 @@ function formatDevice(
     isSmsPermissionGranted: device.isSmsPermissionGranted ?? null,
     isGatewayRunning: device.isGatewayRunning ?? null,
     requiresTopUp,
-    showTopUpAlert: requiresTopUp && !topUpAlertDismissed,
+    showTopUpAlert: requiresTopUp,
+    blockedTopUpJobs,
+    pendingPhoneJobs,
     lastFailureAt: device.lastFailureAt || null,
     lastFailureReason: device.lastFailureReason || null,
     lastFailureCode: device.lastFailureCode || null,
     pausedAt: device.pausedAt || null,
     pauseReason: device.pauseReason || null,
-    pendingPhoneJobs,
-    createdAt: device.createdAt || null,
+    topUpAlertDismissed,
     updatedAt: device.updatedAt || null,
   }
 }
@@ -70,18 +73,27 @@ export async function GET(request: NextRequest) {
     const user = requireAuth(request)
     const userId = new mongoose.Types.ObjectId(user.userId)
 
-    const [device, pendingPhoneJobs] = await Promise.all([
+    const [device, pendingPhoneJobs, blockedTopUpJobs] = await Promise.all([
       SmsGatewayDevice.findOne({ userId }).lean(),
       SmsFallbackJob.countDocuments({
         userId,
         status: 'pending',
         isTest: { $ne: true },
       }),
+      SmsFallbackJob.countDocuments({
+        userId,
+        status: 'blocked',
+        requiresTopUp: true,
+      }),
     ])
 
     return NextResponse.json({
       success: true,
-      gateway: formatDevice(device as Record<string, unknown> | null, pendingPhoneJobs),
+      gateway: formatDevice(
+        device as Record<string, unknown> | null,
+        pendingPhoneJobs,
+        blockedTopUpJobs
+      ),
     })
   } catch (error: any) {
     if (error.message === 'Unauthorized') {

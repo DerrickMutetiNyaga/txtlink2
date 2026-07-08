@@ -10,6 +10,7 @@ import {
   getFallbackStaleMinutes,
   FAILED_ORIGINAL_STATUSES,
   DLR_RETRY_KEYWORDS,
+  SMS_PENDING_FOR_FALLBACK,
 } from './config'
 import { shouldSkipFallbackProcessing, minutesAgo } from './helpers'
 
@@ -38,6 +39,15 @@ function qualifiesForProviderRetry(sms: ISmsMessage, staleCutoff: Date): boolean
     sms.status === 'sent' &&
     sms.sentAt &&
     sms.sentAt <= staleCutoff &&
+    !sms.deliveredAt
+  ) {
+    return true
+  }
+
+  const pendingStatuses = SMS_PENDING_FOR_FALLBACK as readonly string[]
+  if (
+    pendingStatuses.includes(sms.status) &&
+    sms.createdAt <= staleCutoff &&
     !sms.deliveredAt
   ) {
     return true
@@ -200,6 +210,7 @@ export async function scanAndRetryUndeliveredSms(): Promise<number> {
       $nin: [
         'queued_for_phone',
         'sending_via_phone',
+        'delivered_via_phone',
         'sent_via_phone',
         'cancelled',
       ],
@@ -209,6 +220,11 @@ export async function scanAndRetryUndeliveredSms(): Promise<number> {
       {
         status: 'sent',
         sentAt: { $lte: staleCutoff },
+        deliveredAt: null,
+      },
+      {
+        status: { $in: [...SMS_PENDING_FOR_FALLBACK] },
+        createdAt: { $lte: staleCutoff },
         deliveredAt: null,
       },
     ],
@@ -223,7 +239,7 @@ export async function scanAndRetryUndeliveredSms(): Promise<number> {
     const existingJob = await SmsFallbackJob.findOne({
       originalSmsId: String(sms._id),
     }).lean()
-    if (existingJob && ['pending', 'sending', 'sent'].includes(existingJob.status)) {
+    if (existingJob && ['pending', 'sending', 'delivered', 'sent'].includes(existingJob.status)) {
       continue
     }
 
@@ -239,6 +255,7 @@ export async function scanAndRetryUndeliveredSms(): Promise<number> {
       $nin: [
         'queued_for_phone',
         'sending_via_phone',
+        'delivered_via_phone',
         'sent_via_phone',
         'cancelled',
       ],

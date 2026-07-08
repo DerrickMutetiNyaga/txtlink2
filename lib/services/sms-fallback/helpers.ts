@@ -1,11 +1,14 @@
 import mongoose from 'mongoose'
 import { ISmsMessage, SmsFallbackJob, SmsMessage } from '@/lib/db/models'
 import { FALLBACK_PHONE_STATUSES } from './config'
+import { isPhoneDeliveredFallbackStatus } from './phone-status'
 
 export function shouldSkipFallbackProcessing(sms: ISmsMessage): boolean {
   if (sms.status === 'delivered') return true
+  if (sms.deliveryStatus === 'delivered') return true
   if (sms.deliveryMethod === 'android_phone_gateway') return true
-  if (sms.fallbackStatus === 'sent_via_phone') return true
+  if (isPhoneDeliveredFallbackStatus(sms.fallbackStatus)) return true
+  if (sms.fallbackStatus === 'phone_requires_topup') return true
   if (sms.fallbackQueued === true) return true
   if (
     sms.fallbackStatus &&
@@ -25,27 +28,33 @@ export async function cancelFallbackJobIfDelivered(
 
   const isDelivered =
     sms.status === 'delivered' ||
+    sms.deliveryStatus === 'delivered' ||
     sms.providerRetryStatus === 'delivered' ||
-    sms.fallbackStatus === 'sent_via_phone'
+    isPhoneDeliveredFallbackStatus(sms.fallbackStatus) ||
+    sms.deliveryMethod === 'android_phone_gateway'
 
   if (!isDelivered) return false
 
   const job = await SmsFallbackJob.findOne({ originalSmsId })
   if (!job) return false
 
-  if (['sent', 'cancelled'].includes(job.status)) return false
+  if (['delivered', 'sent', 'cancelled'].includes(job.status)) return false
 
   if (
-    sms.fallbackStatus === 'sent_via_phone' ||
+    isPhoneDeliveredFallbackStatus(sms.fallbackStatus) ||
     sms.deliveryMethod === 'android_phone_gateway'
   ) {
-    job.status = 'sent'
-    job.sentAt = sms.fallbackSentAt || sms.deliveredAt || new Date()
+    const deliveredAt = sms.fallbackDeliveredAt || sms.fallbackSentAt || sms.deliveredAt || new Date()
+    job.status = 'delivered'
+    job.phoneStatus = 'delivered'
+    job.deliveredAt = deliveredAt
+    job.sentAt = job.sentAt || deliveredAt
     await job.save()
     return true
   }
 
   job.status = 'cancelled'
+  job.phoneStatus = 'cancelled'
   job.cancelReason = reason
   await job.save()
 

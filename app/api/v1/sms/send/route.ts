@@ -49,7 +49,9 @@ function formatPhoneNumber(phone: string): string {
 /**
  * Authenticate using API Key (Bearer token)
  */
-async function authenticateWithApiKey(apiKey: string): Promise<{ userId: string; user: any } | null> {
+async function authenticateWithApiKey(
+  apiKey: string
+): Promise<{ userId: string; user: any; apiKeyId?: string; apiKeyName?: string } | null> {
   try {
     // Fast lookup: narrow candidates by stored keyPrefix (sk_live_ + 8 chars / sk_test_ + 8 chars)
     const normalized = apiKey.trim()
@@ -73,7 +75,12 @@ async function authenticateWithApiKey(apiKey: string): Promise<{ userId: string;
         if (user && user.isActive) {
           // Update last used timestamp
           await ApiKey.findByIdAndUpdate(key._id, { lastUsedAt: new Date() })
-          return { userId: key.userId.toString(), user }
+          return {
+            userId: key.userId.toString(),
+            user,
+            apiKeyId: String(key._id),
+            apiKeyName: key.name,
+          }
         }
       }
     }
@@ -112,7 +119,10 @@ async function authenticateWithCredentials(email: string, password: string): Pro
  * Authenticate request - supports both API key and username/password
  * Returns auth result
  */
-async function authenticateRequest(request: NextRequest, body?: any): Promise<{ userId: string; user: any } | null> {
+async function authenticateRequest(
+  request: NextRequest,
+  body?: any
+): Promise<{ userId: string; user: any; apiKeyId?: string; apiKeyName?: string; authMethod?: string } | null> {
   // Try API Key authentication first (Bearer token)
   const authHeader = request.headers.get('authorization')
   
@@ -121,7 +131,7 @@ async function authenticateRequest(request: NextRequest, body?: any): Promise<{ 
     if (authHeader.startsWith('Bearer ')) {
       const apiKey = authHeader.substring(7).trim()
       const auth = await authenticateWithApiKey(apiKey)
-      if (auth) return auth
+      if (auth) return { ...auth, authMethod: 'api_key' }
     }
     
     // Check for Basic Auth (username:password)
@@ -132,7 +142,7 @@ async function authenticateRequest(request: NextRequest, body?: any): Promise<{ 
       
       if (email && password) {
         const auth = await authenticateWithCredentials(email, password)
-        if (auth) return auth
+        if (auth) return { ...auth, authMethod: 'credentials' }
       }
     }
   }
@@ -143,7 +153,7 @@ async function authenticateRequest(request: NextRequest, body?: any): Promise<{ 
     const emailToUse = username || email
     if (emailToUse && password) {
       const auth = await authenticateWithCredentials(emailToUse, password)
-      if (auth) return auth
+      if (auth) return { ...auth, authMethod: 'credentials' }
     }
   }
   
@@ -346,6 +356,7 @@ export async function POST(request: NextRequest) {
         userId: userObjectId,
         senderName: senderIdObj.senderName,
         toNumbers: [formattedPhone],
+        normalizedPhone: formattedPhone.replace(/^\+/, ''),
         message,
         segments,
         costPerSegment: pricePerCreditKes,
@@ -354,6 +365,11 @@ export async function POST(request: NextRequest) {
         parts: segments,
         chargedKes: totalCostKes,
         status: 'queued',
+        deliveryStatus: 'queued',
+        deliveryMethod: 'provider',
+        source: auth.apiKeyId ? 'api_key' : 'system',
+        apiKeyId: auth.apiKeyId ? new mongoose.Types.ObjectId(auth.apiKeyId) : undefined,
+        apiKeyName: auth.apiKeyName,
         nextCheckAt: initialNextCheckAt(),
         lastCheckedAt: null,
         statusCheckAttempts: 0,

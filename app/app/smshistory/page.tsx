@@ -76,7 +76,10 @@ function getFallbackBadgeClass(fallbackStatus?: string | null): string {
     case 'sending_via_phone':
       return 'bg-blue-100 text-blue-700'
     case 'sent_via_phone':
+    case 'delivered_via_phone':
       return 'bg-emerald-100 text-emerald-700'
+    case 'phone_requires_topup':
+      return 'bg-red-100 text-red-700'
     case 'phone_failed':
       return 'bg-red-100 text-red-700'
     case 'cancelled':
@@ -100,7 +103,10 @@ function getFallbackBadgeLabel(
     case 'sending_via_phone':
       return 'Sending via Phone'
     case 'sent_via_phone':
-      return 'Sent via Phone'
+    case 'delivered_via_phone':
+      return 'Delivered via Phone'
+    case 'phone_requires_topup':
+      return 'Phone Needs Reload'
     case 'phone_failed':
       return requiresPhoneTopUp ? 'Phone Send Failed - Reload SMS' : 'Phone Send Failed'
     case 'cancelled':
@@ -823,7 +829,7 @@ export default function SMSHistoryPage() {
                             Retry Provider Now
                           </Button>
                         )}
-                        {!['queued_for_phone', 'sending_via_phone', 'sent_via_phone'].includes(
+                        {!['queued_for_phone', 'sending_via_phone', 'sent_via_phone', 'delivered_via_phone'].includes(
                           selectedSms.fallbackStatus || ''
                         ) && (
                           <Button
