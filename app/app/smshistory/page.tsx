@@ -51,6 +51,7 @@ import {
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import Link from 'next/link'
 import SenderIdAdBanner from '@/components/sender-id-ad/SenderIdAdBanner'
+import { cn } from '@/lib/utils'
 
 // Message type
 interface SMSMessage {
@@ -103,6 +104,21 @@ const SMS_HISTORY_BTN = {
   sheetOutline:
     'text-xs border-[#E2E8F0] bg-white text-[#2F9B73] hover:bg-[#ECFDF5] hover:text-[#267D5E] hover:border-[#E2E8F0]',
 } as const
+
+const controlCardClass =
+  'rounded-[18px] border border-[#E2E8F0] bg-white p-4 shadow-sm w-full max-w-full min-w-0'
+
+const searchInputClass =
+  'w-full h-11 rounded-[14px] border border-[#E2E8F0] bg-[#F8FAFC] pl-10 pr-4 text-sm text-[#0F172A] placeholder:text-[#94A3B8] shadow-none focus-visible:border-[#2F9B73] focus-visible:ring-2 focus-visible:ring-[#2F9B73]/20 focus-visible:bg-white'
+
+const filterSelectClass =
+  'w-full h-11 rounded-xl border border-[#E2E8F0] bg-white px-3 text-sm text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#2F9B73]/20 focus:border-[#2F9B73] min-w-0'
+
+const mobilePrimaryBtnClass =
+  'h-[46px] w-full rounded-[14px] bg-[#2F9B73] text-white hover:bg-[#267D5E] font-medium shadow-sm'
+
+const quickActionBtnClass =
+  'h-11 min-w-0 rounded-xl border border-[#E2E8F0] bg-white text-[#2F9B73] text-xs sm:text-sm font-medium hover:bg-[#ECFDF5] inline-flex items-center justify-center gap-1.5 px-2 disabled:opacity-60'
 
 function formatDateLabel(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString(undefined, {
@@ -494,84 +510,93 @@ export default function SMSHistoryPage() {
 
   return (
     <PortalLayout activeSection="SMS History">
-      <div className="space-y-6">
-        {/* Sender ID Ad Banner */}
+      <div className="space-y-4 md:space-y-6 w-full max-w-full min-w-0">
         <SenderIdAdBanner currentPage="smshistory" />
-        
-        {/* Header - Compact Toolbar Style */}
-        <Card className="rounded-2xl border border-slate-200/70 bg-white px-4 sm:px-6 py-4 shadow-sm">
-          {/* Row 1: Title + Search + Actions */}
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            {/* Left: Title + Breadcrumb */}
-            <div className="min-w-0">
-              <h1 className="text-lg sm:text-xl font-semibold text-slate-900">SMS History</h1>
-              <p className="text-sm text-slate-500">Dashboard / Overview</p>
-              <p className="text-xs text-slate-500 mt-1">
-                Delivered/Failed status is updated by HostPinnacle delivery reports (DLR)—so you can see if each message actually reached the recipient.
-              </p>
+
+        {/* Controls card */}
+        <Card className={controlCardClass}>
+          {/* Header */}
+          <div className="min-w-0">
+            <h1 className="text-lg sm:text-xl font-semibold text-[#0F172A]">SMS History</h1>
+            <p className="text-sm text-[#64748B] mt-1 md:hidden">
+              Track sent, delivered, failed, and fallback messages.
+            </p>
+            <p className="text-sm text-[#64748B] mt-1 hidden md:block">
+              View, search, and track delivery status for all SMS messages.
+            </p>
+            <p className="text-xs text-[#64748B] mt-1 hidden lg:block">
+              Delivered/Failed status is updated by HostPinnacle delivery reports (DLR)—so you can see if each message actually reached the recipient.
+            </p>
+          </div>
+
+          {/* Search + desktop title row spacer / mobile stacked controls */}
+          <div className="mt-3 flex flex-col md:flex-row md:items-center md:gap-4 gap-2.5 min-w-0">
+            <div className="relative w-full md:flex-1 md:max-w-md min-w-0">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#64748B] pointer-events-none" />
+              <Input
+                type="text"
+                placeholder="Search phone, message, or sender ID"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className={searchInputClass}
+              />
             </div>
 
-            {/* Center: Search */}
-            <div className="w-full lg:flex-1 lg:max-w-md order-2 lg:order-none">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
-                <Input
-                  type="text"
-                  placeholder="Search recipient, message, sender ID…"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-4 py-2.5 text-sm focus:bg-white focus:ring-2 focus:ring-emerald-500"
-                />
-              </div>
-            </div>
+            <Link href="/app/send-sms" className="md:hidden w-full shrink-0">
+              <Button className={mobilePrimaryBtnClass}>
+                <Plus className="w-4 h-4" />
+                New SMS
+              </Button>
+            </Link>
 
-            {/* Right: Actions */}
-            <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto order-3">
+            <div className="grid grid-cols-3 gap-2 w-full md:flex md:flex-wrap md:w-auto md:shrink-0 min-w-0">
               <Button
-                variant="secondary"
+                type="button"
                 onClick={() => fetchSMSHistory(true)}
                 disabled={isAutoRefreshing}
-                className={SMS_HISTORY_BTN.outline}
+                className={quickActionBtnClass}
                 title="Refresh now"
               >
-                <RefreshCw className={`w-4 h-4 sm:mr-2 ${isAutoRefreshing ? 'animate-spin' : ''}`} />
-                <span className="hidden sm:inline">{isAutoRefreshing ? 'Refreshing...' : 'Refresh'}</span>
+                <RefreshCw className={cn('w-4 h-4 shrink-0', isAutoRefreshing && 'animate-spin')} />
+                <span className="truncate">{isAutoRefreshing ? '…' : 'Refresh'}</span>
               </Button>
               <Button
-                variant="secondary"
+                type="button"
                 onClick={() => {
                   setDraftFromDate(fromDate)
                   setDraftToDate(toDate)
                   setIsDateDialogOpen(true)
                 }}
-                className={SMS_HISTORY_BTN.outline}
+                className={quickActionBtnClass}
               >
-                <Calendar className="w-4 h-4 sm:mr-2" />
-                <span className="hidden sm:inline">Date Range</span>
+                <Calendar className="w-4 h-4 shrink-0" />
+                <span className="truncate hidden min-[360px]:inline">Date Range</span>
+                <span className="truncate min-[360px]:hidden">Dates</span>
               </Button>
               <Button
+                type="button"
                 onClick={handleExportCsv}
                 disabled={exportingCsv}
-                className={SMS_HISTORY_BTN.primary}
+                className={quickActionBtnClass}
               >
-                <Download className="w-4 h-4 sm:mr-2" />
-                <span className="hidden sm:inline">{exportingCsv ? 'Exporting…' : 'Export CSV'}</span>
+                <Download className="w-4 h-4 shrink-0" />
+                <span className="truncate">{exportingCsv ? '…' : 'Export'}</span>
               </Button>
-              <Link href="/app/send-sms" className="w-full sm:w-auto">
-                <Button className={`w-full sm:w-auto ${SMS_HISTORY_BTN.primary}`}>
-                  <Plus className="w-4 h-4 mr-2" />
+              <Link href="/app/send-sms" className="hidden md:block">
+                <Button className={cn(SMS_HISTORY_BTN.primary, 'h-11 px-4')}>
+                  <Plus className="w-4 h-4 mr-1.5" />
                   New SMS
                 </Button>
               </Link>
             </div>
           </div>
 
-          {/* Row 2: Filters (Compact Pills) */}
-          <div className="mt-4 flex flex-wrap gap-2">
+          {/* Filters */}
+          <div className="mt-3 grid grid-cols-2 md:flex md:flex-wrap gap-2 min-w-0">
             <select
               value={statusFilter}
               onChange={(e) => resetPageOnFilter(setStatusFilter)(e.target.value)}
-              className="h-9 rounded-full border border-slate-200 bg-slate-50 px-4 text-sm text-slate-700 hover:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className={filterSelectClass}
             >
               <option value="all">All Status</option>
               <option value="delivered">Delivered</option>
@@ -589,7 +614,7 @@ export default function SMSHistoryPage() {
             <select
               value={senderIdFilter}
               onChange={(e) => resetPageOnFilter(setSenderIdFilter)(e.target.value)}
-              className="h-9 rounded-full border border-slate-200 bg-slate-50 px-4 text-sm text-slate-700 hover:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className={filterSelectClass}
             >
               <option value="all">All Sender IDs</option>
               {availableSenderIds.map((senderId) => (
@@ -602,7 +627,7 @@ export default function SMSHistoryPage() {
             <select
               value={campaignFilter}
               onChange={(e) => resetPageOnFilter(setCampaignFilter)(e.target.value)}
-              className="h-9 rounded-full border border-slate-200 bg-slate-50 px-4 text-sm text-slate-700 hover:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className={filterSelectClass}
             >
               <option value="all">All Campaigns</option>
               {availableCampaigns.map((campaign) => (
@@ -615,7 +640,7 @@ export default function SMSHistoryPage() {
             <select
               value={countryFilter}
               onChange={(e) => resetPageOnFilter(setCountryFilter)(e.target.value)}
-              className="h-9 rounded-full border border-slate-200 bg-slate-50 px-4 text-sm text-slate-700 hover:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className={filterSelectClass}
             >
               <option value="all">All Countries</option>
               <option value="KE">Kenya</option>
@@ -629,7 +654,7 @@ export default function SMSHistoryPage() {
                 setLimit(parseInt(e.target.value, 10))
                 setPage(1)
               }}
-              className="h-9 rounded-full border border-slate-200 bg-slate-50 px-4 text-sm text-slate-700 hover:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className={cn(filterSelectClass, 'col-span-2 md:col-span-1 md:w-auto')}
             >
               <option value="25">25 / page</option>
               <option value="50">50 / page</option>
@@ -638,33 +663,37 @@ export default function SMSHistoryPage() {
           </div>
 
           {(fromDate || toDate || hasActiveFilters) && (
-            <div className="mt-3 flex flex-wrap items-center gap-2">
+            <div className="mt-3 flex flex-wrap items-center gap-2 min-w-0">
               {fromDate && toDate && (
-                <Badge variant="outline" className="rounded-full bg-emerald-50 text-emerald-800 border-emerald-200">
+                <Badge variant="outline" className="rounded-full bg-[#ECFDF5] text-[#047857] border-[#2F9B73]/30">
                   Showing {formatDateLabel(fromDate)} - {formatDateLabel(toDate)}
                 </Badge>
               )}
               {fromDate && !toDate && (
-                <Badge variant="outline" className="rounded-full bg-emerald-50 text-emerald-800 border-emerald-200">
+                <Badge variant="outline" className="rounded-full bg-[#ECFDF5] text-[#047857] border-[#2F9B73]/30">
                   From {formatDateLabel(fromDate)}
                 </Badge>
               )}
               {!fromDate && toDate && (
-                <Badge variant="outline" className="rounded-full bg-emerald-50 text-emerald-800 border-emerald-200">
+                <Badge variant="outline" className="rounded-full bg-[#ECFDF5] text-[#047857] border-[#2F9B73]/30">
                   Until {formatDateLabel(toDate)}
                 </Badge>
               )}
               {statusFilter !== 'all' && (
-                <Badge variant="outline" className="rounded-full">Status: {statusFilter.replace(/_/g, ' ')}</Badge>
+                <Badge variant="outline" className="rounded-full border-[#E2E8F0]">
+                  Status: {statusFilter.replace(/_/g, ' ')}
+                </Badge>
               )}
               {searchQuery.trim() && (
-                <Badge variant="outline" className="rounded-full">Search: {searchQuery.trim()}</Badge>
+                <Badge variant="outline" className="rounded-full border-[#E2E8F0] max-w-full truncate">
+                  Search: {searchQuery.trim()}
+                </Badge>
               )}
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={handleClearAllFilters}
-                className="h-7 text-xs text-slate-600 hover:text-emerald-700"
+                className="h-7 text-xs text-[#64748B] hover:text-[#2F9B73] hover:bg-[#ECFDF5]"
               >
                 Clear filters
               </Button>

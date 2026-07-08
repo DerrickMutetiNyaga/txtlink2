@@ -19,21 +19,17 @@ import {
   Plus,
   Users,
   Radio,
-  Key,
   CheckCircle2,
   Clock,
-  XCircle,
   ChevronRight,
   MoreVertical,
-  Filter,
   Loader2,
 } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
 import Link from 'next/link'
 import SenderIdAdBanner from '@/components/sender-id-ad/SenderIdAdBanner'
+import { cn } from '@/lib/utils'
 import {
-  LineChart,
-  Line,
   AreaChart,
   Area,
   PieChart,
@@ -47,27 +43,30 @@ import {
   CartesianGrid,
 } from 'recharts'
 
+const cardClass =
+  'bg-white border border-[#E2E8F0] rounded-2xl shadow-sm w-full max-w-full min-w-0'
+
+const primaryBtnClass =
+  'h-12 rounded-[14px] bg-[#2F9B73] hover:bg-[#267D5E] text-white font-medium shadow-sm'
+
+const segmentedActive =
+  'bg-[#ECFDF5] text-[#047857] border border-[#2F9B73]'
+
+const segmentedInactive =
+  'bg-white text-[#64748B] border border-transparent hover:bg-[#F8FAFC]'
+
 // Loading Skeleton for KPI Cards
 function KPISkeleton() {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-5">
       {[1, 2, 3, 4].map((idx) => (
-        <Card
-          key={idx}
-          className="p-6 bg-white border border-slate-200/80 rounded-2xl shadow-sm"
-        >
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <Skeleton className="w-4 h-4 rounded" />
-              <Skeleton className="h-4 w-24 rounded" />
-            </div>
-            <Skeleton className="h-6 w-16 rounded-full" />
+        <Card key={idx} className={cn(cardClass, 'p-3.5 md:p-6')}>
+          <div className="flex items-center justify-between mb-2 md:mb-4">
+            <Skeleton className="h-3.5 w-20 rounded" />
+            <Skeleton className="h-5 w-12 rounded-full hidden md:block" />
           </div>
-          <div className="flex items-end justify-between mb-3">
-            <Skeleton className="h-10 w-32 rounded" />
-            <Skeleton className="h-5 w-12 rounded" />
-          </div>
-          <Skeleton className="h-4 w-20 rounded" />
+          <Skeleton className="h-7 md:h-10 w-24 rounded" />
+          <Skeleton className="h-3 w-16 rounded mt-2 hidden md:block" />
         </Card>
       ))}
     </div>
@@ -79,30 +78,32 @@ function KPIPanel({ kpis, loading }: { kpis: any[]; loading?: boolean }) {
   if (loading) {
     return <KPISkeleton />
   }
-  // Simple sparkline SVG generator - thin line only
+
   const SparklineSVG = ({ data, positive }: { data: any[]; positive: boolean }) => {
     const width = 48
     const height = 20
     const padding = 2
     const chartWidth = width - padding * 2
     const chartHeight = height - padding * 2
-    
-    const max = Math.max(...data.map(d => d.value))
-    const min = Math.min(...data.map(d => d.value))
+
+    const max = Math.max(...data.map((d) => d.value))
+    const min = Math.min(...data.map((d) => d.value))
     const range = max - min || 1
-    
-    const points = data.map((d, i) => {
-      const x = padding + (i / (data.length - 1)) * chartWidth
-      const y = padding + chartHeight - ((d.value - min) / range) * chartHeight
-      return `${x},${y}`
-    }).join(' ')
-    
+
+    const points = data
+      .map((d, i) => {
+        const x = padding + (i / (data.length - 1)) * chartWidth
+        const y = padding + chartHeight - ((d.value - min) / range) * chartHeight
+        return `${x},${y}`
+      })
+      .join(' ')
+
     return (
       <svg width={width} height={height} className="opacity-40">
         <polyline
           points={points}
           fill="none"
-          stroke={positive ? '#10b981' : '#ef4444'}
+          stroke={positive ? '#2F9B73' : '#EF4444'}
           strokeWidth="1"
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -111,30 +112,42 @@ function KPIPanel({ kpis, loading }: { kpis: any[]; loading?: boolean }) {
     )
   }
 
+  const mobileLabel = (label: string) => {
+    if (label === 'Account Balance') return 'Remaining Credits'
+    if (label === 'SMS Sent (Today)') return 'SMS Sent Today'
+    return label
+  }
+
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-5">
       {kpis.map((kpi, idx) => {
         const IconComponent = kpi.icon
         const isAccountBalance = kpi.label === 'Account Balance'
-        
+
         return (
           <Card
             key={idx}
-            className="p-6 bg-white border border-slate-200/80 rounded-2xl shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
+            className={cn(
+              cardClass,
+              'p-3.5 md:p-6 hover:shadow-md md:hover:-translate-y-0.5 transition-all duration-200'
+            )}
           >
-            {/* Top Row: Icon + Label + Change Badge */}
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <IconComponent size={16} className="text-slate-400" />
-                <p className="text-sm font-medium text-slate-600">{kpi.label}</p>
+            <div className="flex items-start justify-between gap-1 mb-2 md:mb-4">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <IconComponent size={14} className="text-[#64748B] shrink-0 md:w-4 md:h-4" />
+                <p className="text-xs md:text-sm font-medium text-[#64748B] leading-tight break-words">
+                  <span className="md:hidden">{mobileLabel(kpi.label)}</span>
+                  <span className="hidden md:inline">{kpi.label}</span>
+                </p>
               </div>
               {kpi.change && kpi.positive !== null && (
                 <span
-                  className={`flex items-center gap-1 text-sm font-semibold px-2 py-1 rounded-full ${
+                  className={cn(
+                    'hidden md:flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full shrink-0',
                     kpi.positive
-                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/50'
-                      : 'bg-red-50 text-red-700 border border-red-200/50'
-                  }`}
+                      ? 'bg-[#ECFDF5] text-[#047857] border border-[#2F9B73]/30'
+                      : 'bg-red-50 text-[#EF4444] border border-red-200/50'
+                  )}
                 >
                   {kpi.positive ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
                   {kpi.change}
@@ -142,20 +155,26 @@ function KPIPanel({ kpis, loading }: { kpis: any[]; loading?: boolean }) {
               )}
             </div>
 
-            {/* Main Value + Optional Sparkline */}
-            <div className="flex items-end justify-between mb-3">
+            <div className="flex items-end justify-between mb-1 md:mb-3">
               {kpi.value === 'Loading...' ? (
-                <div className="flex items-center gap-3">
-                  <Loader2 className="w-8 h-8 text-slate-400 animate-spin" />
-                  <Skeleton className="h-10 w-32 rounded" />
+                <div className="flex items-center gap-2">
+                  <Loader2 className="w-5 h-5 md:w-8 md:h-8 text-[#64748B] animate-spin" />
+                  <Skeleton className="h-7 md:h-10 w-20 md:w-32 rounded" />
                 </div>
               ) : (
                 <>
-                  <p className="text-3xl md:text-4xl font-semibold text-slate-900 tracking-tight leading-tight">
-                    {kpi.value}
+                  <p className="text-xl md:text-3xl lg:text-4xl font-semibold text-[#0F172A] tracking-tight leading-tight break-words">
+                    {isAccountBalance ? (
+                      <>
+                        <span className="md:hidden">{kpi.value.replace(' credits', '')}</span>
+                        <span className="hidden md:inline">{kpi.value}</span>
+                      </>
+                    ) : (
+                      kpi.value
+                    )}
                   </p>
                   {kpi.sparklineData && (
-                    <div className="ml-3 mb-1">
+                    <div className="ml-2 mb-1 hidden md:block">
                       <SparklineSVG data={kpi.sparklineData} positive={kpi.positive} />
                     </div>
                   )}
@@ -163,15 +182,26 @@ function KPIPanel({ kpis, loading }: { kpis: any[]; loading?: boolean }) {
               )}
             </div>
 
-            {/* Caption + Action */}
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-sm text-slate-500">{kpi.footerHint}</p>
-              
-              {/* Top up button for Account Balance - Premium Primary Action */}
+            {kpi.change && kpi.positive !== null && (
+              <span
+                className={cn(
+                  'md:hidden inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full mb-1',
+                  kpi.positive
+                    ? 'bg-[#ECFDF5] text-[#047857]'
+                    : 'bg-red-50 text-[#EF4444]'
+                )}
+              >
+                {kpi.positive ? <ArrowUpRight size={10} /> : <ArrowDownRight size={10} />}
+                {kpi.change}
+              </span>
+            )}
+
+            <div className="hidden md:flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-[#64748B]">{kpi.footerHint}</p>
               {isAccountBalance && (
                 <Link
                   href="/app/billing"
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 text-white text-sm font-medium shadow-sm ring-1 ring-emerald-400/30 hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:shadow-sm transition-all duration-200"
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#2F9B73] hover:bg-[#267D5E] text-white text-sm font-medium shadow-sm transition-all"
                 >
                   <Plus size={14} />
                   Top up
@@ -187,44 +217,50 @@ function KPIPanel({ kpis, loading }: { kpis: any[]; loading?: boolean }) {
 
 // Premium Activity Item Component
 function ActivityItem({ icon, title, subtitle, time, status, category }: any) {
-  const statusColors: any = {
-    completed: 'bg-emerald-50 text-emerald-700 border-emerald-200/50',
+  const statusColors: Record<string, string> = {
+    completed: 'bg-[#ECFDF5] text-[#047857] border-[#2F9B73]/30',
     approved: 'bg-blue-50 text-blue-700 border-blue-200/50',
-    failed: 'bg-red-50 text-red-700 border-red-200/50',
-    pending: 'bg-amber-50 text-amber-700 border-amber-200/50',
+    failed: 'bg-red-50 text-[#EF4444] border-red-200/50',
+    pending: 'bg-amber-50 text-[#F59E0B] border-amber-200/50',
   }
 
-  // Map icon string to icon component
   const iconMap: Record<string, React.ElementType> = {
     MessageSquare,
     Radio,
     Wallet,
     Users,
-    Key,
   }
 
-  const IconComponent = typeof icon === 'string' ? iconMap[icon] || MessageSquare : icon || MessageSquare
+  const IconComponent =
+    typeof icon === 'string' ? iconMap[icon] || MessageSquare : icon || MessageSquare
 
   return (
-    <div className="flex flex-col sm:flex-row sm:items-start gap-3 sm:gap-4 p-4 sm:p-5 rounded-xl hover:bg-slate-50/50 transition-all duration-200 border border-slate-100 group">
-      <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center flex-shrink-0 group-hover:bg-[#ECFDF5] transition-colors">
-        <IconComponent size={20} className="text-[#0F766E]" />
+    <div className="flex items-start gap-3 p-3 md:p-5 rounded-xl hover:bg-[#F8FAFC] transition-all border border-[#E2E8F0] group min-w-0">
+      <div className="w-9 h-9 md:w-12 md:h-12 rounded-xl bg-[#F8FAFC] flex items-center justify-center shrink-0 group-hover:bg-[#ECFDF5] transition-colors">
+        <IconComponent size={16} className="text-[#2F9B73] md:w-5 md:h-5" />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-base font-medium text-slate-900 mb-1 leading-relaxed">{title}</p>
-        <p className="text-sm text-slate-500 mb-2 leading-relaxed">{subtitle}</p>
-        <div className="flex items-center gap-2 mt-2">
-          <span className="text-sm text-slate-400">{time}</span>
+        <p className="text-sm md:text-base font-medium text-[#0F172A] mb-0.5 leading-snug break-words">
+          {title}
+        </p>
+        <p className="text-xs md:text-sm text-[#64748B] mb-1 leading-snug line-clamp-2 break-words">
+          {subtitle}
+        </p>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-xs text-[#64748B]">{time}</span>
           {category && (
             <>
-              <span className="text-slate-300">•</span>
-              <span className="text-sm text-slate-400">{category}</span>
+              <span className="text-[#CBD5E1]">•</span>
+              <span className="text-xs text-[#64748B]">{category}</span>
             </>
           )}
         </div>
       </div>
       <span
-        className={`text-sm font-semibold px-3 py-1.5 rounded-full border capitalize flex-shrink-0 self-start sm:self-auto ${statusColors[status] || statusColors.completed}`}
+        className={cn(
+          'text-[10px] md:text-sm font-semibold px-2 py-1 md:px-3 md:py-1.5 rounded-full border capitalize shrink-0',
+          statusColors[status] || statusColors.completed
+        )}
       >
         {status}
       </span>
@@ -375,14 +411,14 @@ export default function DashboardPage() {
 
   const deliveryBreakdown = dashboardData
     ? [
-        { name: 'Delivered', value: dashboardData.deliveryBreakdown.delivered, color: '#10b981' },
-        { name: 'Pending', value: dashboardData.deliveryBreakdown.pending, color: '#f59e0b' },
-        { name: 'Failed', value: dashboardData.deliveryBreakdown.failed, color: '#ef4444' },
+        { name: 'Delivered', value: dashboardData.deliveryBreakdown.delivered, color: '#2F9B73' },
+        { name: 'Pending', value: dashboardData.deliveryBreakdown.pending, color: '#F59E0B' },
+        { name: 'Failed', value: dashboardData.deliveryBreakdown.failed, color: '#EF4444' },
       ]
     : [
-        { name: 'Delivered', value: 0, color: '#10b981' },
-        { name: 'Pending', value: 0, color: '#f59e0b' },
-        { name: 'Failed', value: 0, color: '#ef4444' },
+        { name: 'Delivered', value: 0, color: '#2F9B73' },
+        { name: 'Pending', value: 0, color: '#F59E0B' },
+        { name: 'Failed', value: 0, color: '#EF4444' },
       ]
 
   // Activity Data - using real data
@@ -390,397 +426,498 @@ export default function DashboardPage() {
 
   const activityFilters = ['All', 'Campaigns', 'Billing', 'Sender IDs', 'API', 'Contacts']
 
+  const filteredActivities = activities.filter(
+    (activity: { category?: string }) =>
+      activityFilter === 'All' || activity.category === activityFilter
+  )
+
+  const deliveryRateValue = dashboardData
+    ? `${dashboardData.kpis.deliveryRate.value.toFixed(1)}%`
+    : loadingStats
+      ? '—'
+      : '0%'
+
+  const failedCount = dashboardData
+    ? dashboardData.kpis.failedMessages.value.toLocaleString()
+    : loadingStats
+      ? '—'
+      : '0'
+
+  const creditsDisplay = loadingBalance ? '—' : balance.toLocaleString()
+
+  const dateRanges = ['Today', '7D', '30D'] as const
+  const chartPeriods = ['7D', '30D', '90D'] as const
+
   return (
     <PortalLayout activeSection="Dashboard">
-      <div className="space-y-6 w-full">
-        {/* Sender ID Ad Banner */}
+      <div className="space-y-4 md:space-y-6 w-full max-w-full min-w-0">
         <SenderIdAdBanner currentPage="dashboard" />
-        
-        {/* Premium Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 sm:gap-5 mb-4">
-          <div>
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-3">
-              <h1 className="text-2xl sm:text-3xl md:text-4xl font-semibold text-slate-900">Dashboard</h1>
-              <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700 text-xs sm:text-sm font-semibold border border-emerald-200/50 w-fit">
-                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+
+        {/* Mobile compact header */}
+        <div className="md:hidden min-w-0">
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <h1 className="text-xl font-semibold text-[#0F172A]">Dashboard</h1>
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#ECFDF5] text-[#047857] text-[11px] font-semibold border border-[#2F9B73]/30 shrink-0">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#2F9B73] animate-pulse" />
+              All systems operational
+            </span>
+          </div>
+          <div className="grid grid-cols-3 gap-1.5 p-1 bg-[#F8FAFC] rounded-xl border border-[#E2E8F0]">
+            {dateRanges.map((range) => (
+              <button
+                key={range}
+                type="button"
+                onClick={() => setDateRange(range)}
+                className={cn(
+                  'px-2 py-2 rounded-lg text-xs font-medium transition-all',
+                  dateRange === range ? segmentedActive : segmentedInactive
+                )}
+              >
+                {range}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Desktop header */}
+        <div className="hidden md:flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 sm:gap-5">
+          <div className="min-w-0">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-2">
+              <h1 className="text-2xl sm:text-3xl md:text-4xl font-semibold text-[#0F172A]">Dashboard</h1>
+              <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#ECFDF5] text-[#047857] text-sm font-semibold border border-[#2F9B73]/30 w-fit">
+                <span className="w-2 h-2 rounded-full bg-[#2F9B73] animate-pulse" />
                 All systems operational
               </span>
             </div>
-            <p className="text-base text-slate-500 leading-relaxed">Dashboard / Overview</p>
+            <p className="text-sm text-[#64748B]">Dashboard / Overview</p>
           </div>
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-            {/* Date Range Selector */}
-            <div className="flex items-center gap-1 p-1 sm:p-1.5 bg-slate-100 rounded-xl border border-slate-200/60 w-full sm:w-auto">
-              {['Today', '7D', '30D'].map((range) => (
+            <div className="flex items-center gap-1 p-1.5 bg-[#F8FAFC] rounded-xl border border-[#E2E8F0]">
+              {dateRanges.map((range) => (
                 <button
                   key={range}
+                  type="button"
                   onClick={() => setDateRange(range)}
-                  className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                    dateRange === range
-                      ? 'bg-white text-slate-900 shadow-sm'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
+                  className={cn(
+                    'px-4 py-2 rounded-lg text-sm font-medium transition-all',
+                    dateRange === range ? segmentedActive : segmentedInactive
+                  )}
                 >
                   {range}
                 </button>
               ))}
             </div>
-            {/* Quick Actions Dropdown */}
-            <div className="relative group">
+            <div className="relative group hidden lg:block">
               <Button
-                variant="outline"
-                className="h-9 px-3 border-slate-200 text-slate-700 hover:bg-slate-50"
+                type="button"
+                className="h-9 px-3 bg-white border border-[#E2E8F0] text-[#334155] hover:bg-[#F8FAFC] rounded-xl"
               >
                 <MoreVertical size={16} />
               </Button>
-              <div className="absolute right-0 top-full mt-2 w-52 bg-white rounded-xl shadow-lg border border-slate-200/60 p-1.5 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+              <div className="absolute right-0 top-full mt-2 w-52 bg-white rounded-xl shadow-lg border border-[#E2E8F0] p-1.5 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
                 <Link
                   href="/app/templates"
-                  className="flex items-center gap-2.5 px-4 py-2.5 rounded-lg hover:bg-slate-50 text-base text-slate-700 leading-relaxed"
+                  className="flex items-center gap-2.5 px-4 py-2.5 rounded-lg hover:bg-[#F8FAFC] text-sm text-[#334155]"
                 >
                   <FileText size={18} />
                   Create Template
                 </Link>
                 <Link
                   href="/app/billing"
-                  className="flex items-center gap-2.5 px-4 py-2.5 rounded-lg hover:bg-slate-50 text-base text-slate-700 leading-relaxed"
+                  className="flex items-center gap-2.5 px-4 py-2.5 rounded-lg hover:bg-[#F8FAFC] text-sm text-[#334155]"
                 >
                   <Wallet size={18} />
                   Buy Credits
                 </Link>
               </div>
             </div>
-            <Link href="/app/send-sms" className="w-full sm:w-auto">
-              <Button className="w-full sm:w-auto h-11 px-5 bg-[#0F766E] hover:bg-[#115E59] text-white rounded-xl text-base font-medium shadow-sm hover:shadow-md transition-all">
-                <Plus size={18} className="mr-2" />
+            <Link href="/app/send-sms">
+              <Button className={cn(primaryBtnClass, 'h-11 px-5')}>
+                <Plus size={18} />
                 New SMS
               </Button>
             </Link>
           </div>
         </div>
 
-        {/* Premium KPI Tiles */}
-        <div className="mb-2">
-          <KPIPanel kpis={kpis} loading={loadingStats && !dashboardData} />
-        </div>
+        {/* Mobile welcome summary */}
+        <Card className={cn(cardClass, 'md:hidden p-4')}>
+          <h2 className="text-base font-semibold text-[#0F172A] mb-0.5">Welcome back</h2>
+          <p className="text-sm text-[#64748B] mb-3">Your SMS workspace is running normally.</p>
+          <div className="grid grid-cols-3 gap-2">
+            <div className="rounded-xl bg-[#F8FAFC] border border-[#E2E8F0] p-2.5 min-w-0">
+              <p className="text-[10px] uppercase tracking-wide text-[#64748B] mb-0.5">Delivery</p>
+              <p className="text-sm font-semibold text-[#047857] truncate">{deliveryRateValue}</p>
+            </div>
+            <div className="rounded-xl bg-[#F8FAFC] border border-[#E2E8F0] p-2.5 min-w-0">
+              <p className="text-[10px] uppercase tracking-wide text-[#64748B] mb-0.5">Credits</p>
+              <p className="text-sm font-semibold text-[#0F172A] truncate">{creditsDisplay}</p>
+            </div>
+            <div className="rounded-xl bg-[#F8FAFC] border border-[#E2E8F0] p-2.5 min-w-0">
+              <p className="text-[10px] uppercase tracking-wide text-[#64748B] mb-0.5">Failed</p>
+              <p className="text-sm font-semibold text-[#EF4444] truncate">{failedCount}</p>
+            </div>
+          </div>
+        </Card>
 
-        {/* Charts Section */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
-          {/* SMS Volume Chart - Wider */}
-          <Card className="md:col-span-2 app-card-padding bg-white/80 backdrop-blur-sm border border-slate-200/70 rounded-2xl shadow-sm">
-            <div className="app-section-header mb-4 sm:mb-6">
-              <div className="flex items-center gap-3">
-                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/60">
-                  <BarChart3 size={20} className="text-[#0F766E]" />
+        {/* Mobile main action */}
+        <Link href="/app/send-sms" className="md:hidden block w-full">
+          <Button className={cn(primaryBtnClass, 'w-full text-base')}>
+            <Plus size={18} />
+            New SMS
+          </Button>
+        </Link>
+
+        {/* KPI stats grid */}
+        <KPIPanel kpis={kpis} loading={loadingStats && !dashboardData} />
+
+        {/* Mobile account balance / top up */}
+        <Card className={cn(cardClass, 'md:hidden p-4')}>
+          <div className="flex items-center justify-between gap-3 min-w-0">
+            <div className="min-w-0">
+              <p className="text-lg font-semibold text-[#0F172A]">
+                {loadingBalance ? 'Loading...' : `${balance.toLocaleString()} credits`}
+              </p>
+              <p className="text-xs text-[#64748B]">Available credits</p>
+            </div>
+            <Link href="/app/billing" className="shrink-0">
+              <Button className={cn(primaryBtnClass, 'h-10 px-4 text-sm')}>
+                <Plus size={14} />
+                Top up
+              </Button>
+            </Link>
+          </div>
+        </Card>
+
+        {/* Charts */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 min-w-0">
+          <Card className={cn(cardClass, 'md:col-span-2 p-4 md:p-6')}>
+            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between mb-3 md:mb-6 min-w-0">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="p-2 rounded-xl bg-[#ECFDF5] border border-[#E2E8F0] shrink-0">
+                  <BarChart3 size={18} className="text-[#2F9B73]" />
                 </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-slate-900 leading-tight">SMS Volume</h3>
-                  <p className="text-sm text-slate-500 leading-relaxed mt-0.5">Messages sent and delivered</p>
+                <div className="min-w-0">
+                  <h3 className="text-base md:text-lg font-semibold text-[#0F172A]">SMS Volume</h3>
+                  <p className="text-xs md:text-sm text-[#64748B]">Messages sent and delivered</p>
                 </div>
               </div>
-              <div className="flex flex-wrap items-center gap-2">
-                {['7D', '30D', '90D'].map((period) => (
-                  <button
-                    key={period}
-                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                      dateRange === period
-                        ? 'bg-slate-100 text-slate-900'
-                        : 'text-slate-500 hover:text-slate-700'
-                    }`}
-                  >
-                    {period}
-                  </button>
-                ))}
-                <button className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
-                  <Download size={18} className="text-slate-600" />
+              <div className="flex items-center gap-1.5 min-w-0">
+                <div className="grid grid-cols-3 gap-1 flex-1 md:flex-none p-0.5 bg-[#F8FAFC] rounded-xl border border-[#E2E8F0]">
+                  {chartPeriods.map((period) => (
+                    <button
+                      key={period}
+                      type="button"
+                      className={cn(
+                        'px-2 md:px-3 py-1.5 rounded-lg text-xs md:text-sm font-medium transition-all',
+                        dateRange === period ? segmentedActive : segmentedInactive
+                      )}
+                    >
+                      {period}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  className="hidden sm:flex p-2 hover:bg-[#F8FAFC] rounded-lg transition-colors shrink-0"
+                >
+                  <Download size={18} className="text-[#64748B]" />
                 </button>
               </div>
             </div>
-            <div className="h-56 sm:h-64 lg:h-72">
+            <div className="h-[220px] md:h-64 lg:h-72 min-w-0">
               {loadingStats && smsVolumeData.length === 0 ? (
                 <div className="h-full flex items-center justify-center">
                   <div className="text-center">
-                    <Loader2 className="w-12 h-12 text-slate-400 animate-spin mx-auto mb-4" />
-                    <p className="text-sm text-slate-500">Loading chart data...</p>
+                    <Loader2 className="w-8 h-8 text-[#64748B] animate-spin mx-auto mb-2" />
+                    <p className="text-sm text-[#64748B]">Loading chart data...</p>
                   </div>
                 </div>
               ) : (
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={smsVolumeData}>
-                  <defs>
-                    <linearGradient id="colorSent" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#0F766E" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#0F766E" stopOpacity={0} />
-                    </linearGradient>
-                    <linearGradient id="colorDelivered" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis dataKey="date" stroke="#94a3b8" fontSize={13} />
-                  <YAxis stroke="#94a3b8" fontSize={13} />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: 'white',
-                      border: '1px solid #e2e8f0',
-                      borderRadius: '8px',
-                      padding: '10px',
-                      fontSize: '14px',
-                    }}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="sent"
-                    stroke="#0F766E"
-                    strokeWidth={2}
-                    fillOpacity={1}
-                    fill="url(#colorSent)"
-                    name="Sent"
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="delivered"
-                    stroke="#10b981"
-                    strokeWidth={2}
-                    fillOpacity={1}
-                    fill="url(#colorDelivered)"
-                    name="Delivered"
-                  />
-                    <Legend />
+                    <defs>
+                      <linearGradient id="colorSent" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#2F9B73" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="#2F9B73" stopOpacity={0} />
+                      </linearGradient>
+                      <linearGradient id="colorDelivered" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#267D5E" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="#267D5E" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
+                    <XAxis dataKey="date" stroke="#94a3b8" fontSize={11} tick={{ fill: '#64748B' }} />
+                    <YAxis stroke="#94a3b8" fontSize={11} tick={{ fill: '#64748B' }} width={32} />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: 'white',
+                        border: '1px solid #E2E8F0',
+                        borderRadius: '8px',
+                        padding: '8px',
+                        fontSize: '12px',
+                      }}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="sent"
+                      stroke="#2F9B73"
+                      strokeWidth={2}
+                      fillOpacity={1}
+                      fill="url(#colorSent)"
+                      name="Sent"
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="delivered"
+                      stroke="#267D5E"
+                      strokeWidth={2}
+                      fillOpacity={1}
+                      fill="url(#colorDelivered)"
+                      name="Delivered"
+                    />
+                    <Legend wrapperStyle={{ fontSize: '12px' }} />
                   </AreaChart>
                 </ResponsiveContainer>
               )}
             </div>
           </Card>
 
-          {/* Delivery Breakdown - Narrower */}
-          <Card className="app-card-padding bg-white/80 backdrop-blur-sm border border-slate-200/70 rounded-2xl shadow-sm">
-            <div className="app-section-header mb-4 sm:mb-6">
-              <div className="flex items-center gap-3">
-                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/60">
-                  <Activity size={20} className="text-[#0F766E]" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-slate-900 leading-tight">Delivery Breakdown</h3>
-                  <p className="text-sm text-slate-500 leading-relaxed mt-0.5">Status distribution</p>
-                </div>
+          <Card className={cn(cardClass, 'p-4 md:p-6')}>
+            <div className="flex items-center gap-2.5 mb-3 md:mb-5">
+              <div className="p-2 rounded-xl bg-[#ECFDF5] border border-[#E2E8F0] shrink-0">
+                <Activity size={18} className="text-[#2F9B73]" />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-base md:text-lg font-semibold text-[#0F172A]">Delivery Breakdown</h3>
+                <p className="text-xs md:text-sm text-[#64748B] hidden md:block">Status distribution</p>
               </div>
             </div>
-            <div className="h-56 sm:h-64 lg:h-72">
-              {loadingStats && deliveryBreakdown.every(item => item.value === 0) ? (
+            <div className="h-[140px] md:h-56 lg:h-64 min-w-0">
+              {loadingStats && deliveryBreakdown.every((item) => item.value === 0) ? (
                 <div className="h-full flex items-center justify-center">
-                  <div className="text-center">
-                    <Loader2 className="w-12 h-12 text-slate-400 animate-spin mx-auto mb-4" />
-                    <p className="text-sm text-slate-500">Loading breakdown data...</p>
-                  </div>
+                  <Loader2 className="w-8 h-8 text-[#64748B] animate-spin" />
                 </div>
               ) : (
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                  <Pie
-                    data={deliveryBreakdown}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={90}
-                    paddingAngle={2}
-                    dataKey="value"
-                  >
-                    {deliveryBreakdown.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: 'white',
-                      border: '1px solid #e2e8f0',
-                      borderRadius: '8px',
-                      padding: '10px',
-                      fontSize: '14px',
-                    }}
-                  />
-                  <Legend
-                    verticalAlign="bottom"
-                    height={40}
-                    iconType="circle"
-                    wrapperStyle={{ fontSize: '13px' }}
+                    <Pie
+                      data={deliveryBreakdown}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius="45%"
+                      outerRadius="70%"
+                      paddingAngle={2}
+                      dataKey="value"
+                    >
+                      {deliveryBreakdown.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: 'white',
+                        border: '1px solid #E2E8F0',
+                        borderRadius: '8px',
+                        padding: '8px',
+                        fontSize: '12px',
+                      }}
+                    />
+                    <Legend
+                      verticalAlign="bottom"
+                      height={28}
+                      iconType="circle"
+                      wrapperStyle={{ fontSize: '11px' }}
                     />
                   </PieChart>
                 </ResponsiveContainer>
               )}
             </div>
-            <div className="mt-5 space-y-3 pt-5 border-t border-slate-100">
+            <div className="mt-3 md:mt-5 grid grid-cols-3 md:grid-cols-1 gap-2 md:gap-0 md:space-y-2.5 pt-3 md:pt-5 border-t border-[#E2E8F0]">
               {deliveryBreakdown.map((item, idx) => (
-                <div key={idx} className="flex items-center justify-between text-base">
-                  <div className="flex items-center gap-2.5">
+                <div
+                  key={idx}
+                  className="flex flex-col md:flex-row md:items-center md:justify-between rounded-xl md:rounded-none bg-[#F8FAFC] md:bg-transparent border border-[#E2E8F0] md:border-0 p-2.5 md:p-0 text-center md:text-left"
+                >
+                  <div className="flex items-center justify-center md:justify-start gap-1.5 md:gap-2.5">
                     <div
-                      className="w-3.5 h-3.5 rounded-full"
+                      className="w-2.5 h-2.5 rounded-full shrink-0"
                       style={{ backgroundColor: item.color }}
                     />
-                    <span className="text-slate-600 leading-relaxed">{item.name}</span>
+                    <span className="text-xs md:text-sm text-[#64748B]">{item.name}</span>
                   </div>
-                  <span className="font-semibold text-slate-900">{item.value.toLocaleString()}</span>
+                  <span className="text-sm md:text-base font-semibold text-[#0F172A] mt-1 md:mt-0">
+                    {item.value.toLocaleString()}
+                  </span>
                 </div>
               ))}
             </div>
           </Card>
         </div>
 
-        {/* Bottom Grid: Activity + System Status */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
-          {/* Recent Activity - Wider */}
-          <Card className="lg:col-span-2 app-card-padding bg-white/80 backdrop-blur-sm border border-slate-200/70 rounded-2xl shadow-sm">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between mb-4 sm:mb-6">
-              <div className="flex items-center gap-3">
-                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/60">
-                  <Calendar size={20} className="text-[#0F766E]" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-slate-900 leading-tight">Recent Activity</h3>
-                  <p className="text-sm text-slate-500 leading-relaxed mt-0.5">Latest platform events</p>
-                </div>
-              </div>
-              <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                <div className="flex flex-wrap items-center gap-1.5 p-1.5 bg-slate-100 rounded-lg border border-slate-200/60">
-                  {activityFilters.map((filter) => (
-                    <button
-                      key={filter}
-                      onClick={() => setActivityFilter(filter)}
-                      className={`px-3 py-1.5 rounded text-sm font-medium transition-all ${
-                        activityFilter === filter
-                          ? 'bg-white text-slate-900 shadow-sm'
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      {filter}
-                    </button>
-                  ))}
+        {/* Activity + sidebar */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6 min-w-0">
+          <Card className={cn(cardClass, 'lg:col-span-2 p-4 md:p-6')}>
+            <div className="flex flex-col gap-3 mb-4 min-w-0">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="p-2 rounded-xl bg-[#ECFDF5] border border-[#E2E8F0] shrink-0">
+                    <Calendar size={18} className="text-[#2F9B73]" />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="text-base md:text-lg font-semibold text-[#0F172A]">Recent Activity</h3>
+                    <p className="text-xs md:text-sm text-[#64748B] hidden md:block">Latest platform events</p>
+                  </div>
                 </div>
                 <Link
                   href="/app/reports"
-                  className="flex items-center gap-2 text-base font-medium text-[#0F766E] hover:text-[#115E59] transition-colors group"
+                  className="flex items-center gap-1 text-sm font-medium text-[#2F9B73] hover:text-[#267D5E] shrink-0"
                 >
                   View all
-                  <ChevronRight size={16} className="group-hover:translate-x-0.5 transition-transform" />
+                  <ChevronRight size={14} />
                 </Link>
               </div>
+              <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 md:flex-wrap md:overflow-visible md:mx-0 md:px-0 md:p-1 md:bg-[#F8FAFC] md:rounded-lg md:border md:border-[#E2E8F0]">
+                {activityFilters.map((filter) => (
+                  <button
+                    key={filter}
+                    type="button"
+                    onClick={() => setActivityFilter(filter)}
+                    className={cn(
+                      'shrink-0 px-3 py-1.5 rounded-full md:rounded-lg text-xs md:text-sm font-medium transition-all whitespace-nowrap',
+                      activityFilter === filter ? segmentedActive : segmentedInactive
+                    )}
+                  >
+                    {filter}
+                  </button>
+                ))}
+              </div>
             </div>
-            <div className="space-y-3">
+            <div className="space-y-2.5 md:space-y-3">
               {loadingStats && activities.length === 0 ? (
-                <div className="space-y-3">
+                <div className="space-y-2.5">
                   {[1, 2, 3].map((idx) => (
-                    <div key={idx} className="flex items-start gap-4 p-5 rounded-xl border border-slate-100">
-                      <Skeleton className="w-12 h-12 rounded-xl flex-shrink-0" />
+                    <div
+                      key={idx}
+                      className="flex items-start gap-3 p-3 rounded-xl border border-[#E2E8F0]"
+                    >
+                      <Skeleton className="w-9 h-9 rounded-xl shrink-0" />
                       <div className="flex-1 space-y-2">
-                        <Skeleton className="h-5 w-3/4 rounded" />
-                        <Skeleton className="h-4 w-full rounded" />
-                        <Skeleton className="h-4 w-1/2 rounded" />
+                        <Skeleton className="h-4 w-3/4 rounded" />
+                        <Skeleton className="h-3 w-full rounded" />
                       </div>
-                      <Skeleton className="h-6 w-20 rounded-full flex-shrink-0" />
+                      <Skeleton className="h-5 w-16 rounded-full shrink-0" />
                     </div>
                   ))}
                 </div>
-              ) : activities.length > 0 ? (
-                activities
-                  .filter(
-                    (activity) => activityFilter === 'All' || activity.category === activityFilter
-                  )
-                  .map((activity) => (
-                    <ActivityItem key={activity.id || activity._id} {...activity} />
-                  ))
+              ) : filteredActivities.length > 0 ? (
+                filteredActivities.map((activity: { id?: string; _id?: string }, index: number) => (
+                  <div key={activity.id || activity._id} className={cn(index >= 3 && 'hidden md:block')}>
+                    <ActivityItem {...activity} />
+                  </div>
+                ))
               ) : (
-                <div className="text-center py-12 text-slate-500">
-                  <MessageSquare size={48} className="mx-auto mb-4 text-slate-300" />
-                  <p className="text-base">No activities yet</p>
-                  <p className="text-sm mt-1">Your SMS activities will appear here</p>
+                <div className="text-center py-8 md:py-12 text-[#64748B]">
+                  <MessageSquare size={36} className="mx-auto mb-3 text-[#CBD5E1]" />
+                  <p className="text-sm md:text-base">No activities yet</p>
+                  <p className="text-xs md:text-sm mt-1">Your SMS activities will appear here</p>
                 </div>
               )}
             </div>
           </Card>
 
-          {/* System Status Panel - Narrower */}
-          <div className="space-y-6">
-            {/* System Status */}
-            <Card className="app-card-padding bg-white/80 backdrop-blur-sm border border-slate-200/70 rounded-2xl shadow-sm">
-              <div className="flex items-center gap-3 mb-5">
-                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/60">
-                  <Activity size={20} className="text-[#0F766E]" />
+          <div className="space-y-4 md:space-y-6 min-w-0">
+            <Card className={cn(cardClass, 'p-4 md:p-6')}>
+              <div className="flex items-center gap-2.5 mb-3 md:mb-5">
+                <div className="p-2 rounded-xl bg-[#ECFDF5] border border-[#E2E8F0] shrink-0">
+                  <Activity size={18} className="text-[#2F9B73]" />
                 </div>
-                <h3 className="text-lg font-semibold text-slate-900 leading-tight">System Status</h3>
+                <h3 className="text-base md:text-lg font-semibold text-[#0F172A]">System Status</h3>
               </div>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between p-4 rounded-xl bg-emerald-50/50 border border-emerald-200/30">
-                  <div className="flex items-center gap-2.5">
-                    <CheckCircle2 size={18} className="text-emerald-600" />
-                    <span className="text-base font-medium text-slate-900 leading-relaxed">API Services</span>
-                  </div>
-                  <span className="text-sm font-semibold text-emerald-700">Operational</span>
-                </div>
-                <div className="flex items-center justify-between p-4 rounded-xl bg-emerald-50/50 border border-emerald-200/30">
-                  <div className="flex items-center gap-2.5">
-                    <CheckCircle2 size={18} className="text-emerald-600" />
-                    <span className="text-base font-medium text-slate-900 leading-relaxed">SMS Gateway</span>
-                  </div>
-                  <span className="text-sm font-semibold text-emerald-700">Operational</span>
-                </div>
-                <div className="flex items-center justify-between p-4 rounded-xl bg-amber-50/50 border border-amber-200/30">
-                  <div className="flex items-center gap-2.5">
-                    <Clock size={18} className="text-amber-600" />
-                    <span className="text-base font-medium text-slate-900 leading-relaxed">Webhooks</span>
-                  </div>
-                  <span className="text-sm font-semibold text-amber-700">Degraded</span>
-                </div>
-              </div>
-            </Card>
-
-            {/* Deliverability Alerts */}
-            <Card className="app-card-padding bg-white/80 backdrop-blur-sm border border-slate-200/70 rounded-2xl shadow-sm">
-              <div className="flex items-center gap-3 mb-5">
-                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/60">
-                  <AlertCircle size={20} className="text-[#0F766E]" />
-                </div>
-                <h3 className="text-lg font-semibold text-slate-900 leading-tight">Alerts</h3>
-              </div>
-              <div className="space-y-3">
-                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/60">
-                  <div className="flex items-start gap-3">
-                    <AlertCircle size={18} className="text-amber-600 mt-0.5 flex-shrink-0" />
-                    <div className="flex-1">
-                      <p className="text-base font-medium text-slate-900 mb-1.5 leading-relaxed">
-                        Delivery rate below threshold
-                      </p>
-                      <p className="text-sm text-slate-500 leading-relaxed">
-                        Kenya region: 94.2% (target: 95%)
-                      </p>
+              <div className="space-y-2 md:space-y-3">
+                {[
+                  { label: 'API Services', status: 'Operational', tone: 'operational' as const },
+                  { label: 'SMS Gateway', status: 'Operational', tone: 'operational' as const },
+                  { label: 'Webhooks', status: 'Degraded', tone: 'degraded' as const },
+                ].map((item) => (
+                  <div
+                    key={item.label}
+                    className={cn(
+                      'flex items-center justify-between p-3 md:p-4 rounded-xl border min-w-0',
+                      item.tone === 'operational'
+                        ? 'bg-[#ECFDF5]/50 border-[#2F9B73]/20'
+                        : 'bg-amber-50/50 border-amber-200/40'
+                    )}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      {item.tone === 'operational' ? (
+                        <CheckCircle2 size={16} className="text-[#2F9B73] shrink-0" />
+                      ) : (
+                        <Clock size={16} className="text-[#F59E0B] shrink-0" />
+                      )}
+                      <span className="text-sm md:text-base font-medium text-[#0F172A] truncate">
+                        {item.label}
+                      </span>
                     </div>
+                    <span
+                      className={cn(
+                        'text-xs md:text-sm font-semibold shrink-0 ml-2',
+                        item.tone === 'operational' ? 'text-[#047857]' : 'text-[#F59E0B]'
+                      )}
+                    >
+                      {item.status}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </Card>
+
+            <Card className={cn(cardClass, 'p-4 md:p-6')}>
+              <div className="flex items-center justify-between gap-2 mb-3 md:mb-4">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-[#ECFDF5] border border-[#E2E8F0] shrink-0">
+                    <AlertCircle size={18} className="text-[#2F9B73]" />
+                  </div>
+                  <h3 className="text-base md:text-lg font-semibold text-[#0F172A]">Alerts</h3>
+                </div>
+                <Link href="/app/reports" className="text-xs font-medium text-[#2F9B73] md:hidden">
+                  View all
+                </Link>
+              </div>
+              <div className="p-3 md:p-4 rounded-xl bg-[#F8FAFC] border border-[#E2E8F0]">
+                <div className="flex items-start gap-2.5">
+                  <AlertCircle size={16} className="text-[#F59E0B] mt-0.5 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-[#0F172A] mb-0.5 break-words">
+                      Delivery rate below threshold
+                    </p>
+                    <p className="text-xs text-[#64748B]">Kenya region: 94.2% (target: 95%)</p>
                   </div>
                 </div>
               </div>
             </Card>
 
-            {/* Compliance Quick Links */}
-            <Card className="app-card-padding bg-white/80 backdrop-blur-sm border border-slate-200/70 rounded-2xl shadow-sm">
-              <div className="flex items-center gap-3 mb-5">
-                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/60">
-                  <Radio size={20} className="text-[#0F766E]" />
+            <Card className={cn(cardClass, 'p-4 md:p-6')}>
+              <div className="flex items-center gap-2.5 mb-3 md:mb-4">
+                <div className="p-2 rounded-xl bg-[#ECFDF5] border border-[#E2E8F0] shrink-0">
+                  <Radio size={18} className="text-[#2F9B73]" />
                 </div>
-                <h3 className="text-lg font-semibold text-slate-900 leading-tight">Compliance</h3>
+                <h3 className="text-base md:text-lg font-semibold text-[#0F172A]">Compliance</h3>
               </div>
-              <div className="space-y-2">
+              <div className="space-y-1">
                 <Link
                   href="/app/sender-ids"
-                  className="flex items-center justify-between p-4 rounded-xl hover:bg-slate-50 transition-colors group"
+                  className="flex items-center justify-between p-3 rounded-xl hover:bg-[#F8FAFC] transition-colors group border border-transparent hover:border-[#E2E8F0]"
                 >
-                  <span className="text-base text-slate-700 leading-relaxed">Sender ID Status</span>
-                  <ChevronRight size={16} className="text-slate-400 group-hover:text-slate-600 group-hover:translate-x-0.5 transition-all" />
+                  <span className="text-sm text-[#334155]">Sender ID Status</span>
+                  <ChevronRight size={16} className="text-[#64748B] group-hover:text-[#2F9B73]" />
                 </Link>
                 <Link
                   href="/app/settings"
-                  className="flex items-center justify-between p-4 rounded-xl hover:bg-slate-50 transition-colors group"
+                  className="flex items-center justify-between p-3 rounded-xl hover:bg-[#F8FAFC] transition-colors group border border-transparent hover:border-[#E2E8F0]"
                 >
-                  <span className="text-base text-slate-700 leading-relaxed">KYC Verification</span>
-                  <ChevronRight size={16} className="text-slate-400 group-hover:text-slate-600 group-hover:translate-x-0.5 transition-all" />
+                  <span className="text-sm text-[#334155]">KYC Verification</span>
+                  <ChevronRight size={16} className="text-[#64748B] group-hover:text-[#2F9B73]" />
                 </Link>
               </div>
             </Card>

@@ -54,7 +54,10 @@ const fieldClass =
   'h-11 rounded-xl border border-[#CBD5E1] bg-white text-[#0F172A] placeholder:text-[#94A3B8] shadow-none focus-visible:border-[#2F9B73] focus-visible:ring-2 focus-visible:ring-[#2F9B73]/20 focus-visible:ring-offset-0 disabled:cursor-not-allowed disabled:bg-[#F1F5F9] disabled:text-[#94A3B8] disabled:border-[#E2E8F0] [&:-webkit-autofill]:[-webkit-text-fill-color:#0F172A] [&:-webkit-autofill]:[box-shadow:0_0_0_1000px_#FFFFFF_inset]'
 
 const selectTriggerClass =
-  'h-11 rounded-xl border border-[#CBD5E1] bg-white text-[#0F172A] shadow-none focus:ring-2 focus:ring-[#2F9B73]/20 focus:ring-offset-0 focus:border-[#2F9B73] disabled:bg-[#F1F5F9] disabled:text-[#94A3B8] disabled:border-[#E2E8F0]'
+  'h-11 rounded-xl border border-[#CBD5E1] bg-white text-[#0F172A] shadow-none focus:ring-2 focus:ring-[#2F9B73]/20 focus:ring-offset-0 focus:border-[#2F9B73] disabled:bg-[#F1F5F9] disabled:text-[#94A3B8] disabled:border-[#E2E8F0] data-[placeholder]:text-[#94A3B8]'
+
+const selectContentClass =
+  'z-[60] max-h-[min(240px,calc(100dvh-12rem))] overflow-y-auto rounded-xl border border-[#E2E8F0] bg-white p-1.5 shadow-lg'
 
 const labelClass = 'text-sm font-medium text-[#0F172A] mb-1.5 block'
 
@@ -608,7 +611,12 @@ export default function WebhooksPage() {
                         <SelectTrigger id="product" className={selectTriggerClass}>
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectContent className="border-[#E2E8F0] bg-white">
+                        <SelectContent
+                          className={selectContentClass}
+                          position="popper"
+                          sideOffset={4}
+                          collisionPadding={16}
+                        >
                           <SelectItem value="SMS">SMS</SelectItem>
                           <SelectItem value="WhatsApp">WhatsApp</SelectItem>
                         </SelectContent>
@@ -628,7 +636,12 @@ export default function WebhooksPage() {
                         <SelectTrigger id="serverSendMethod" className={selectTriggerClass}>
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectContent className="border-[#E2E8F0] bg-white">
+                        <SelectContent
+                          className={selectContentClass}
+                          position="popper"
+                          sideOffset={4}
+                          collisionPadding={16}
+                        >
                           <SelectItem value="POST">POST</SelectItem>
                           <SelectItem value="GET">GET</SelectItem>
                           <SelectItem value="JSON">JSON</SelectItem>
@@ -652,7 +665,12 @@ export default function WebhooksPage() {
                       <SelectTrigger id="reportType" className={selectTriggerClass}>
                         <SelectValue />
                       </SelectTrigger>
-                      <SelectContent className="border-[#E2E8F0] bg-white">
+                      <SelectContent
+                        className={selectContentClass}
+                        position="popper"
+                        sideOffset={4}
+                        collisionPadding={16}
+                      >
                         <SelectItem value="DLR">DLR</SelectItem>
                         <SelectItem value="MO" disabled={formData.product === 'SMS'}>
                           MO
