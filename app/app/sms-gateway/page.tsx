@@ -23,7 +23,8 @@ interface GatewayStatus {
   hasToken: boolean
   isActive: boolean
   isOnline: boolean
-  connectionStatus: 'online' | 'offline' | 'waiting' | 'not_connected'
+  connectionStatus: 'online' | 'offline' | 'stopped' | 'waiting' | 'not_connected'
+  latestActivityAt?: string | null
   tokenStatus: 'active' | 'revoked' | 'none'
   label?: string
   boundDeviceName?: string | null
@@ -36,6 +37,12 @@ interface GatewayStatus {
   batteryLevel?: number | null
   isSmsPermissionGranted?: boolean | null
   isGatewayRunning?: boolean | null
+  requiresTopUp?: boolean
+  showTopUpAlert?: boolean
+  lastFailureAt?: string | null
+  lastFailureReason?: string | null
+  lastFailureCode?: string | null
+  pendingPhoneJobs?: number
 }
 
 interface FallbackJobRow {
@@ -92,6 +99,7 @@ export default function SmsGatewayPage() {
   const [testPhone, setTestPhone] = useState('')
   const [testMessage, setTestMessage] = useState('TXTLINK test — phone gateway connection OK.')
   const [creatingTest, setCreatingTest] = useState(false)
+  const [clearingAlert, setClearingAlert] = useState(false)
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -251,6 +259,36 @@ export default function SmsGatewayPage() {
     }
   }
 
+  const handleClearAlert = async () => {
+    setClearingAlert(true)
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch('/api/user/sms-gateway/clear-alert', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const data = await response.json()
+      if (response.ok) {
+        toast({ title: 'Alert cleared', description: data.message })
+        await fetchStatus()
+      } else {
+        toast({
+          title: 'Error',
+          description: data.error || 'Failed to clear alert',
+          variant: 'destructive',
+        })
+      }
+    } catch {
+      toast({
+        title: 'Error',
+        description: 'Failed to clear alert',
+        variant: 'destructive',
+      })
+    } finally {
+      setClearingAlert(false)
+    }
+  }
+
   const handleCreateTestJob = async () => {
     if (!testPhone.trim() || !testMessage.trim()) {
       toast({
@@ -315,6 +353,8 @@ export default function SmsGatewayPage() {
         return <StatusBadge label="Online" variant="green" />
       case 'offline':
         return <StatusBadge label="Offline" variant="red" />
+      case 'stopped':
+        return <StatusBadge label="Stopped" variant="gray" />
       case 'waiting':
         return <StatusBadge label="Waiting for device" variant="amber" />
       default:
@@ -360,6 +400,68 @@ export default function SmsGatewayPage() {
             Refresh
           </Button>
         </div>
+
+        {gateway?.showTopUpAlert && (
+          <Card className="p-6 bg-red-50 border border-red-200 shadow-sm">
+            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+              <div className="flex gap-3">
+                <div className="p-2.5 rounded-xl bg-red-100 text-red-600 shrink-0">
+                  <AlertTriangle size={22} />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-red-900 mb-1">
+                    Phone Gateway Needs Attention
+                  </h2>
+                  <p className="text-sm text-red-800 mb-4">
+                    The phone gateway could not send SMS. The SIM may be out of SMS bundles or
+                    airtime. Reload the Safaricom line, then open the Android app and tap Resume
+                    Gateway.
+                  </p>
+                  <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
+                    <div>
+                      <dt className="text-red-700">Device</dt>
+                      <dd className="font-medium text-red-900">
+                        {gateway.boundDeviceName || '—'}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-red-700">SIM</dt>
+                      <dd className="font-medium text-red-900">
+                        {gateway.boundSimLabel || '—'}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-red-700">Last failure</dt>
+                      <dd className="font-medium text-red-900">
+                        {gateway.lastFailureReason || '—'}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-red-700">Failed at</dt>
+                      <dd className="font-medium text-red-900">
+                        {formatDate(gateway.lastFailureAt)}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-red-700">Pending phone jobs</dt>
+                      <dd className="font-medium text-red-900">
+                        {gateway.pendingPhoneJobs ?? 0}
+                      </dd>
+                    </div>
+                  </dl>
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                className="border-red-300 text-red-800 hover:bg-red-100 shrink-0"
+                onClick={handleClearAlert}
+                disabled={clearingAlert}
+              >
+                {clearingAlert ? 'Clearing...' : 'Clear Alert'}
+              </Button>
+            </div>
+          </Card>
+        )}
 
         {loading && !gateway ? (
           <Card className="p-12 bg-white border border-gray-100 shadow-sm text-center">
@@ -499,6 +601,16 @@ export default function SmsGatewayPage() {
 
               <dl className="space-y-3 text-sm">
                 <div className="flex justify-between py-2 border-b border-gray-100">
+                  <dt className="text-gray-500">Status</dt>
+                  <dd>{connectionBadge()}</dd>
+                </div>
+                <div className="flex justify-between py-2 border-b border-gray-100">
+                  <dt className="text-gray-500">Latest activity</dt>
+                  <dd className="font-medium text-gray-900">
+                    {formatDate(gateway?.latestActivityAt)}
+                  </dd>
+                </div>
+                <div className="flex justify-between py-2 border-b border-gray-100">
                   <dt className="text-gray-500">Device name</dt>
                   <dd className="font-medium text-gray-900 text-right max-w-[60%] truncate">
                     {gateway?.boundDeviceName || '—'}
@@ -550,7 +662,7 @@ export default function SmsGatewayPage() {
                     ) : gateway.isGatewayRunning ? (
                       <StatusBadge label="Running" variant="green" />
                     ) : (
-                      <StatusBadge label="Stopped" variant="red" />
+                      <StatusBadge label="Stopped" variant="gray" />
                     )}
                   </dd>
                 </div>

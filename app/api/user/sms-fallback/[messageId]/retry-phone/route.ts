@@ -18,8 +18,15 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Message not found' }, { status: 404 })
     }
 
-    if (sms.status === 'delivered' && sms.deliveryMethod !== 'android_phone_gateway') {
-      return NextResponse.json({ error: 'Message delivered via provider' }, { status: 400 })
+    if (sms.status === 'delivered' && sms.deliveryMethod === 'android_phone_gateway') {
+      return NextResponse.json({ error: 'Already delivered via phone' }, { status: 400 })
+    }
+
+    if (sms.fallbackStatus !== 'phone_failed') {
+      return NextResponse.json(
+        { error: 'Phone fallback has not failed for this message' },
+        { status: 400 }
+      )
     }
 
     const job = await SmsFallbackJob.findOne({ originalSmsId: String(sms._id) })
@@ -37,22 +44,21 @@ export async function POST(request: NextRequest, context: RouteContext) {
     job.sentAt = undefined
     job.failedAt = undefined
     job.failureReason = undefined
+    job.failureCode = undefined
+    job.requiresTopUp = false
     await job.save()
 
     await SmsMessage.findByIdAndUpdate(sms._id, {
-      status: sms.status === 'delivered' && sms.deliveryMethod === 'android_phone_gateway'
-        ? 'failed'
-        : sms.status,
-      deliveredAt: sms.deliveryMethod === 'android_phone_gateway' ? null : sms.deliveredAt,
-      deliveryMethod: undefined,
       fallbackStatus: 'queued_for_phone',
       fallbackQueued: true,
-      fallbackSentAt: undefined,
       fallbackFailedAt: undefined,
       fallbackFailureReason: undefined,
+      fallbackFailureCode: undefined,
+      requiresPhoneTopUp: false,
+      deliveryMethod: undefined,
     })
 
-    return NextResponse.json({ success: true, message: 'Phone fallback re-queued' })
+    return NextResponse.json({ success: true, message: 'Phone fallback re-queued for manual retry' })
   } catch (error: any) {
     if (error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

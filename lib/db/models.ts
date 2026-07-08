@@ -173,8 +173,10 @@ export interface ISmsMessage {
   fallbackSentAt?: Date
   fallbackFailedAt?: Date
   fallbackFailureReason?: string
+  fallbackFailureCode?: string
   fallbackProvider?: string
-  deliveryMethod?: 'provider' | 'android_phone_gateway'
+  requiresPhoneTopUp?: boolean
+  deliveryMethod?: 'provider' | 'android_phone_gateway' | 'android_phone_gateway_failed'
   providerRetryAttempted?: boolean
   providerRetrySmsId?: string
   providerRetryAttemptedAt?: Date
@@ -236,8 +238,13 @@ const SmsMessageSchema = new Schema<ISmsMessage>(
     fallbackSentAt: { type: Date },
     fallbackFailedAt: { type: Date },
     fallbackFailureReason: { type: String },
+    fallbackFailureCode: { type: String },
     fallbackProvider: { type: String },
-    deliveryMethod: { type: String, enum: ['provider', 'android_phone_gateway'] },
+    requiresPhoneTopUp: { type: Boolean, default: false },
+    deliveryMethod: {
+      type: String,
+      enum: ['provider', 'android_phone_gateway', 'android_phone_gateway_failed'],
+    },
     providerRetryAttempted: { type: Boolean, default: false },
     providerRetrySmsId: { type: String },
     providerRetryAttemptedAt: { type: Date },
@@ -891,6 +898,13 @@ export interface ISmsGatewayDevice {
   isGatewayRunning?: boolean
   hourlyLimit?: number
   dailyLimit?: number
+  requiresTopUp?: boolean
+  topUpAlertDismissed?: boolean
+  lastFailureAt?: Date
+  lastFailureReason?: string
+  lastFailureCode?: string
+  pausedAt?: Date
+  pauseReason?: string
   createdAt: Date
   updatedAt: Date
 }
@@ -915,6 +929,13 @@ const SmsGatewayDeviceSchema = new Schema<ISmsGatewayDevice>(
     isGatewayRunning: { type: Boolean },
     hourlyLimit: { type: Number },
     dailyLimit: { type: Number },
+    requiresTopUp: { type: Boolean, default: false },
+    topUpAlertDismissed: { type: Boolean, default: false },
+    lastFailureAt: { type: Date },
+    lastFailureReason: { type: String },
+    lastFailureCode: { type: String },
+    pausedAt: { type: Date },
+    pauseReason: { type: String },
   },
   { timestamps: true }
 )
@@ -963,6 +984,8 @@ export interface ISmsFallbackJob {
   sentAt?: Date
   failedAt?: Date
   failureReason?: string
+  failureCode?: string
+  requiresTopUp?: boolean
   cancelReason?: string
   isTest?: boolean
   createdAt: Date
@@ -1014,6 +1037,8 @@ const SmsFallbackJobSchema = new Schema<ISmsFallbackJob>(
     sentAt: { type: Date },
     failedAt: { type: Date },
     failureReason: { type: String },
+    failureCode: { type: String },
+    requiresTopUp: { type: Boolean, default: false },
     cancelReason: { type: String },
     isTest: { type: Boolean, default: false },
   },

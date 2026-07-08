@@ -38,10 +38,16 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const failedAt = body.failedAt ? new Date(body.failedAt) : new Date()
     const failureReason =
       body.failureReason || 'SMS permission denied or network unavailable'
+    const failureCode = body.failureCode || undefined
+    const needsTopUp = body.requiresTopUp === true
+    const gatewayPaused =
+      body.isGatewayRunning === false || body.gatewayPaused === true || needsTopUp
 
     job.status = 'failed'
     job.failedAt = failedAt
     job.failureReason = failureReason
+    job.failureCode = failureCode
+    job.requiresTopUp = needsTopUp
     job.deviceName = deviceName || auth.device.boundDeviceName
     job.simLabel = simLabel || auth.device.boundSimLabel
     await job.save()
@@ -51,10 +57,32 @@ export async function POST(request: NextRequest, context: RouteContext) {
         fallbackStatus: 'phone_failed',
         fallbackFailedAt: failedAt,
         fallbackFailureReason: failureReason,
+        fallbackFailureCode: failureCode,
+        requiresPhoneTopUp: needsTopUp,
+        deliveryMethod: 'android_phone_gateway_failed',
       })
     }
 
-    return NextResponse.json({ success: true, message: 'Job marked as failed' })
+    auth.device.lastFailureAt = failedAt
+    auth.device.lastFailureReason = failureReason
+    auth.device.lastFailureCode = failureCode
+    if (needsTopUp) {
+      auth.device.requiresTopUp = true
+      auth.device.topUpAlertDismissed = false
+    }
+    if (gatewayPaused) {
+      auth.device.isGatewayRunning = false
+      auth.device.pausedAt = failedAt
+      auth.device.pauseReason = failureReason
+    }
+    await auth.device.save()
+
+    return NextResponse.json({
+      success: true,
+      message: needsTopUp
+        ? 'Job failed — phone gateway needs SMS bundle or airtime'
+        : 'Job marked as failed',
+    })
   } catch (error: any) {
     console.error('SMS gateway job failed error:', error)
     return NextResponse.json(

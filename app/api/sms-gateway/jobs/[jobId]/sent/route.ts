@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import connectDB from '@/lib/db/connect'
-import { SmsFallbackJob, SmsMessage } from '@/lib/db/models'
+import { SmsFallbackJob, SmsMessage, SmsGatewayDevice } from '@/lib/db/models'
 import { authenticateGatewayDevice } from '@/lib/services/sms-gateway/auth'
 import { logAuditAction } from '@/lib/utils/audit'
 
@@ -54,6 +54,10 @@ export async function POST(request: NextRequest, context: RouteContext) {
         fallbackSentAt: sentAt,
         fallbackProvider: 'android_phone_gateway',
         fallbackJobId: jobId,
+        fallbackFailedAt: null,
+        fallbackFailureReason: null,
+        fallbackFailureCode: null,
+        requiresPhoneTopUp: false,
         finalizedAt: sentAt,
         nextCheckAt: null,
       })
@@ -71,6 +75,13 @@ export async function POST(request: NextRequest, context: RouteContext) {
         }
       )
     }
+
+    auth.device.requiresTopUp = false
+    auth.device.topUpAlertDismissed = false
+    auth.device.isGatewayRunning = body.isGatewayRunning !== false ? true : auth.device.isGatewayRunning
+    auth.device.pausedAt = undefined
+    auth.device.pauseReason = undefined
+    await auth.device.save()
 
     return NextResponse.json({
       success: true,

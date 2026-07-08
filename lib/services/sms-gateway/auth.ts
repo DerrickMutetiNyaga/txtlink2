@@ -95,9 +95,3 @@ export async function authenticateGatewayDevice(
 
   return { ok: true, device }
 }
-
-export function isDeviceOnline(lastHeartbeatAt?: Date | null): boolean {
-  if (!lastHeartbeatAt) return false
-  const twoMinutesAgo = Date.now() - 2 * 60 * 1000
-  return new Date(lastHeartbeatAt).getTime() >= twoMinutesAgo
-}

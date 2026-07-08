@@ -160,6 +160,8 @@ export async function GET(request: NextRequest) {
         deliveryMethod: (msg as any).deliveryMethod || 'provider',
         fallbackStatus: (msg as any).fallbackStatus || null,
         fallbackJobId: (msg as any).fallbackJobId || null,
+        fallbackFailureReason: (msg as any).fallbackFailureReason || null,
+        requiresPhoneTopUp: (msg as any).requiresPhoneTopUp || false,
         providerRetryAttempted: (msg as any).providerRetryAttempted || false,
         providerRetryStatus: (msg as any).providerRetryStatus || null,
         failureReason: isInvalidPhone ? 'Invalid number' : normalizeFailureReason(failureReason),

@@ -54,6 +54,8 @@ interface SMSMessage {
   deliveryMethod?: string
   fallbackStatus?: string | null
   fallbackJobId?: string | null
+  fallbackFailureReason?: string | null
+  requiresPhoneTopUp?: boolean
   providerRetryAttempted?: boolean
   providerRetryStatus?: string | null
   failureReason?: string
@@ -84,7 +86,10 @@ function getFallbackBadgeClass(fallbackStatus?: string | null): string {
   }
 }
 
-function getFallbackBadgeLabel(fallbackStatus?: string | null): string | null {
+function getFallbackBadgeLabel(
+  fallbackStatus?: string | null,
+  requiresPhoneTopUp?: boolean
+): string | null {
   switch (fallbackStatus) {
     case 'retrying_provider':
       return 'Retrying Provider'
@@ -97,7 +102,7 @@ function getFallbackBadgeLabel(fallbackStatus?: string | null): string | null {
     case 'sent_via_phone':
       return 'Sent via Phone'
     case 'phone_failed':
-      return 'Phone Send Failed'
+      return requiresPhoneTopUp ? 'Phone Send Failed - Reload SMS' : 'Phone Send Failed'
     case 'cancelled':
       return 'Cancelled Fallback'
     default:
@@ -521,12 +526,12 @@ export default function SMSHistoryPage() {
                                 {getPrimaryStatusLabel(sms)}
                               </span>
                               {sms.fallbackStatus &&
-                                getFallbackBadgeLabel(sms.fallbackStatus) &&
+                                getFallbackBadgeLabel(sms.fallbackStatus, sms.requiresPhoneTopUp) &&
                                 sms.deliveryMethod !== 'android_phone_gateway' && (
                                   <span
                                     className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${getFallbackBadgeClass(sms.fallbackStatus)}`}
                                   >
-                                    {getFallbackBadgeLabel(sms.fallbackStatus)}
+                                    {getFallbackBadgeLabel(sms.fallbackStatus, sms.requiresPhoneTopUp)}
                                   </span>
                                 )}
                             </div>
@@ -672,12 +677,25 @@ export default function SMSHistoryPage() {
                     {getPrimaryStatusLabel(selectedSms)}
                   </Badge>
                   {selectedSms.fallbackStatus &&
-                    getFallbackBadgeLabel(selectedSms.fallbackStatus) && (
+                    getFallbackBadgeLabel(
+                      selectedSms.fallbackStatus,
+                      selectedSms.requiresPhoneTopUp
+                    ) && (
                       <Badge
                         className={`${getFallbackBadgeClass(selectedSms.fallbackStatus)} rounded-full px-3 py-1`}
                       >
-                        {getFallbackBadgeLabel(selectedSms.fallbackStatus)}
+                        {getFallbackBadgeLabel(
+                          selectedSms.fallbackStatus,
+                          selectedSms.requiresPhoneTopUp
+                        )}
                       </Badge>
+                    )}
+                  {selectedSms.fallbackStatus === 'phone_failed' &&
+                    selectedSms.fallbackFailureReason && (
+                      <div className="flex-1 p-3 bg-red-50 border border-red-200 rounded-xl">
+                        <p className="text-xs font-semibold text-red-900 mb-0.5">Phone Failure</p>
+                        <p className="text-sm text-red-700">{selectedSms.fallbackFailureReason}</p>
+                      </div>
                     )}
                   {selectedSms.status === 'failed' && selectedSms.failureReason && (
                     <div className="flex-1 p-3 bg-red-50 border border-red-200 rounded-xl">
