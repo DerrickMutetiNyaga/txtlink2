@@ -108,6 +108,7 @@ export default function SmsGatewayPage() {
   const [testPhone, setTestPhone] = useState('')
   const [testMessage, setTestMessage] = useState('TXTLINK test — phone gateway connection OK.')
   const [creatingTest, setCreatingTest] = useState(false)
+  const [clearingTestJobs, setClearingTestJobs] = useState(false)
   const [clearingAlert, setClearingAlert] = useState(false)
 
   useEffect(() => {
@@ -295,6 +296,43 @@ export default function SmsGatewayPage() {
       })
     } finally {
       setClearingAlert(false)
+    }
+  }
+
+  const handleClearCompletedTestJobs = async () => {
+    if (
+      !confirm(
+        'Remove completed test jobs (sent, failed, or cancelled) from the queue?'
+      )
+    ) {
+      return
+    }
+    setClearingTestJobs(true)
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch('/api/user/sms-gateway/clear-test-jobs', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const data = await response.json()
+      if (response.ok) {
+        toast({ title: 'Test jobs cleared', description: data.message })
+        await fetchStatus()
+      } else {
+        toast({
+          title: 'Error',
+          description: data.error || 'Failed to clear test jobs.',
+          variant: 'destructive',
+        })
+      }
+    } catch {
+      toast({
+        title: 'Error',
+        description: 'Failed to clear test jobs.',
+        variant: 'destructive',
+      })
+    } finally {
+      setClearingTestJobs(false)
     }
   }
 
@@ -810,14 +848,24 @@ export default function SmsGatewayPage() {
                     </p>
                   </div>
                 </div>
-                <Button
-                  variant="outline"
-                  className="border-teal-200 text-teal-700 hover:bg-teal-50 shrink-0"
-                  onClick={() => setShowTestModal(true)}
-                >
-                  <FlaskConical size={16} className="mr-2" />
-                  Create Test Phone Gateway Job
-                </Button>
+                <div className="flex flex-wrap gap-2 shrink-0">
+                  <Button
+                    variant="outline"
+                    className="border-gray-200 text-gray-700 hover:bg-gray-50"
+                    onClick={handleClearCompletedTestJobs}
+                    disabled={clearingTestJobs}
+                  >
+                    {clearingTestJobs ? 'Clearing…' : 'Clear Completed Test Jobs'}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="border-teal-200 text-teal-700 hover:bg-teal-50"
+                    onClick={() => setShowTestModal(true)}
+                  >
+                    <FlaskConical size={16} className="mr-2" />
+                    Create Test Phone Gateway Job
+                  </Button>
+                </div>
               </div>
 
               {fallbackJobs.length === 0 ? (

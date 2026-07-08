@@ -44,6 +44,10 @@ export async function GET(request: NextRequest) {
 
     const activeJobs = []
     for (const job of jobs) {
+      if (job.status !== 'pending') {
+        continue
+      }
+
       if (!job.isTest) {
         const cancelled = await cancelFallbackJobIfDelivered(
           job.originalSmsId,
@@ -52,10 +56,22 @@ export async function GET(request: NextRequest) {
         if (cancelled) continue
 
         const sms = await SmsMessage.findById(job.originalSmsId).lean()
-        if (!sms || sms.status === 'delivered' || sms.fallbackStatus === 'sent_via_phone') {
+        if (!sms) {
           await SmsFallbackJob.findByIdAndUpdate(job._id, {
             status: 'cancelled',
-            cancelReason: 'Original SMS delivered before phone fallback',
+            cancelReason: 'Original SMS not found',
+          })
+          continue
+        }
+
+        if (
+          sms.status === 'delivered' ||
+          sms.fallbackStatus === 'sent_via_phone' ||
+          sms.deliveryMethod === 'android_phone_gateway'
+        ) {
+          await SmsFallbackJob.findByIdAndUpdate(job._id, {
+            status: 'sent',
+            sentAt: sms.fallbackSentAt || sms.deliveredAt || new Date(),
           })
           continue
         }

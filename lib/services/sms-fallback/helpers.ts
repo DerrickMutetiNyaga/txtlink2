@@ -35,6 +35,16 @@ export async function cancelFallbackJobIfDelivered(
 
   if (['sent', 'cancelled'].includes(job.status)) return false
 
+  if (
+    sms.fallbackStatus === 'sent_via_phone' ||
+    sms.deliveryMethod === 'android_phone_gateway'
+  ) {
+    job.status = 'sent'
+    job.sentAt = sms.fallbackSentAt || sms.deliveredAt || new Date()
+    await job.save()
+    return true
+  }
+
   job.status = 'cancelled'
   job.cancelReason = reason
   await job.save()

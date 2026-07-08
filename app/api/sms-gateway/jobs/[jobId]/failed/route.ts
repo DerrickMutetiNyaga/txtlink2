@@ -3,13 +3,15 @@ import connectDB from '@/lib/db/connect'
 import { SmsFallbackJob, SmsMessage } from '@/lib/db/models'
 import { authenticateGatewayDevice } from '@/lib/services/sms-gateway/auth'
 import { logGatewayJobAction } from '@/lib/services/sms-gateway/job-logger'
+import { parseGatewayJobId } from '@/lib/services/sms-gateway/job-lifecycle'
 
 type RouteContext = { params: Promise<{ jobId: string }> }
 
 const ROUTE = 'POST /api/sms-gateway/jobs/[jobId]/failed'
 
 export async function POST(request: NextRequest, context: RouteContext) {
-  const { jobId } = await context.params
+  const { jobId: rawJobId } = await context.params
+  const jobId = parseGatewayJobId(rawJobId)
 
   try {
     const body = await request.json().catch(() => ({}))
@@ -20,7 +22,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     if (!auth.ok) {
       logGatewayJobAction({
         route: ROUTE,
-        jobId,
+        jobId: rawJobId,
         deviceName,
         responseCode: auth.status,
         message: auth.message,
@@ -31,16 +33,61 @@ export async function POST(request: NextRequest, context: RouteContext) {
       )
     }
 
+    if (!jobId) {
+      logGatewayJobAction({
+        route: ROUTE,
+        jobId: rawJobId,
+        deviceName,
+        responseCode: 400,
+        message: 'Invalid job ID',
+      })
+      return NextResponse.json({ success: false, message: 'Invalid job ID' }, { status: 400 })
+    }
+
     await connectDB()
 
     const existing = await SmsFallbackJob.findOne({
       _id: jobId,
       userId: auth.device.userId,
     })
-      .select('status')
+      .select('status isTest')
       .lean()
 
     const statusBefore = existing?.status ?? null
+
+    if (existing?.status === 'failed') {
+      logGatewayJobAction({
+        route: ROUTE,
+        jobId: rawJobId,
+        deviceName: deviceName || auth.device.boundDeviceName,
+        statusBefore: 'failed',
+        statusAfter: 'failed',
+        responseCode: 200,
+        message: 'Job already marked failed',
+      })
+      return NextResponse.json({
+        success: true,
+        message: 'Job already marked as failed',
+        jobStatus: 'failed',
+      })
+    }
+
+    if (existing?.status === 'sent') {
+      logGatewayJobAction({
+        route: ROUTE,
+        jobId: rawJobId,
+        deviceName: deviceName || auth.device.boundDeviceName,
+        statusBefore: 'sent',
+        statusAfter: 'sent',
+        responseCode: 409,
+        message: 'Job already sent',
+      })
+      return NextResponse.json(
+        { success: false, message: 'Job already sent' },
+        { status: 409 }
+      )
+    }
+
     const failedAt = body.failedAt ? new Date(body.failedAt) : new Date()
     const failureReason =
       body.failureReason || 'SMS permission denied or network unavailable'
@@ -53,7 +100,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       {
         _id: jobId,
         userId: auth.device.userId,
-        status: 'sending',
+        status: { $in: ['sending', 'pending'] },
       },
       {
         $set: {
@@ -65,6 +112,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
           deviceName: deviceName || auth.device.boundDeviceName,
           simLabel: simLabel || auth.device.boundSimLabel,
         },
+        $unset: {
+          resetReason: 1,
+        },
       },
       { new: true }
     )
@@ -72,7 +122,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     if (!job) {
       logGatewayJobAction({
         route: ROUTE,
-        jobId,
+        jobId: rawJobId,
         deviceName: deviceName || auth.device.boundDeviceName,
         statusBefore,
         statusAfter: statusBefore,
@@ -112,9 +162,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     logGatewayJobAction({
       route: ROUTE,
-      jobId,
+      jobId: rawJobId,
       deviceName: job.deviceName,
-      statusBefore: 'sending',
+      statusBefore: statusBefore || 'sending',
       statusAfter: 'failed',
       responseCode: 200,
       extra: { failureReason, failureCode, requiresTopUp: needsTopUp },
@@ -125,12 +175,13 @@ export async function POST(request: NextRequest, context: RouteContext) {
       message: needsTopUp
         ? 'Job failed — phone gateway needs SMS bundle or airtime'
         : 'Job marked as failed',
+      jobStatus: 'failed',
     })
   } catch (error: any) {
     console.error('SMS gateway job failed error:', error)
     logGatewayJobAction({
       route: ROUTE,
-      jobId,
+      jobId: rawJobId,
       responseCode: 500,
       message: error?.message,
     })
