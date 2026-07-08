@@ -10,7 +10,9 @@ import {
 import {
   buildGatewaySetupPayload,
   encodeConnectionCode,
+  INVALID_PUBLIC_ORIGIN_MESSAGE,
   resolveGatewayApiBaseUrl,
+  resolvePublicOriginFromRequest,
 } from '@/lib/services/sms-gateway/connection-code'
 import mongoose from 'mongoose'
 
@@ -21,7 +23,8 @@ export async function POST(request: NextRequest) {
     const userId = new mongoose.Types.ObjectId(user.userId)
 
     const body = await request.json().catch(() => ({}))
-    const replaceOldToken = body.replaceOldToken !== false
+    const replaceOldToken =
+      body.replaceOldActiveToken !== false && body.replaceOldToken !== false
 
     const existing = await SmsGatewayDevice.findOne({ userId })
 
@@ -35,9 +38,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const publicOrigin = resolvePublicOriginFromRequest(request, body.publicOrigin)
+    const apiBaseUrl = resolveGatewayApiBaseUrl(publicOrigin)
+
     const plainToken = generateGatewayToken()
     const tokenHash = hashGatewayToken(plainToken)
-    const apiBaseUrl = resolveGatewayApiBaseUrl(request.nextUrl.origin)
 
     if (existing) {
       existing.tokenHash = tokenHash
@@ -60,11 +65,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       connectionCode,
+      apiBaseUrl,
       message: 'Connection code generated. Copy it now.',
     })
   } catch (error: any) {
     if (error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (error.message === INVALID_PUBLIC_ORIGIN_MESSAGE) {
+      return NextResponse.json({ error: INVALID_PUBLIC_ORIGIN_MESSAGE }, { status: 400 })
     }
     console.error('Generate SMS gateway connection code error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

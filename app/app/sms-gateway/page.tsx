@@ -265,13 +265,18 @@ export default function SmsGatewayPage() {
 
     try {
       const token = localStorage.getItem('token')
+      const publicOrigin =
+        typeof window !== 'undefined' ? window.location.origin : undefined
       const response = await fetch('/api/user/sms-gateway/connection-code', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ replaceOldToken: resetBinding ? true : replaceOldToken }),
+        body: JSON.stringify({
+          publicOrigin,
+          replaceOldActiveToken: resetBinding ? true : replaceOldToken,
+        }),
       })
       const data = await response.json()
       if (response.ok) {
@@ -919,6 +924,15 @@ export default function SmsGatewayPage() {
                 />
                 <span className="text-sm text-[#64748B]">Replace old active token</span>
               </label>
+
+              <div className="mb-5 max-w-2xl rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] p-3">
+                <p className="text-xs font-medium text-[#64748B] mb-1">
+                  API URL inside connection code
+                </p>
+                <code className="text-xs font-mono text-[#0F172A] break-all">
+                  {apiBaseUrl || 'Loading...'}
+                </code>
+              </div>
 
               {!connectionCode ? (
                 <Button
