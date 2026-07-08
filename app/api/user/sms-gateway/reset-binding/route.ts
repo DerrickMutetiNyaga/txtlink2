@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import connectDB from '@/lib/db/connect'
 import { SmsGatewayDevice } from '@/lib/db/models'
 import { requireAuth } from '@/lib/auth/middleware'
+import { clearGatewayBindingFields } from '@/lib/services/sms-gateway/auth'
 import mongoose from 'mongoose'
 
 export async function POST(request: NextRequest) {
@@ -19,22 +20,13 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    device.boundDeviceFingerprint = undefined
-    device.boundDeviceName = undefined
-    device.boundSimLabel = undefined
-    device.lastHeartbeatAt = undefined
-    device.lastSyncAt = undefined
-    device.lastIp = undefined
-    device.lastUserAgent = undefined
-    device.appVersion = undefined
-    device.batteryLevel = undefined
-    device.isSmsPermissionGranted = undefined
-    device.isGatewayRunning = undefined
+    clearGatewayBindingFields(device)
     await device.save()
 
     return NextResponse.json({
       success: true,
-      message: 'Device binding reset. You can now connect this token on a different phone.',
+      message:
+        'Device binding and gateway pause cleared. The token can reconnect on the next app sync.',
     })
   } catch (error: any) {
     if (error.message === 'Unauthorized') {

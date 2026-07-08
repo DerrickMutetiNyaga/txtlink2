@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import connectDB from '@/lib/db/connect'
 import { SmsFallbackJob, SmsMessage } from '@/lib/db/models'
-import { authenticateGatewayDevice } from '@/lib/services/sms-gateway/auth'
+import {
+  validateGatewayDevice,
+  gatewayAuthErrorResponse,
+} from '@/lib/services/sms-gateway/auth'
 import { logAuditAction } from '@/lib/utils/audit'
 import { logGatewayJobAction } from '@/lib/services/sms-gateway/job-logger'
 import { parseGatewayJobId } from '@/lib/services/sms-gateway/job-lifecycle'
@@ -19,7 +22,10 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const deviceName = body.deviceName || ''
     const simLabel = body.simLabel || ''
 
-    const auth = await authenticateGatewayDevice(request, deviceName, simLabel)
+    const auth = await validateGatewayDevice(request, {
+      route: ROUTE,
+      body: { deviceName, simLabel, deviceId: body.deviceId },
+    })
     if (!auth.ok) {
       logGatewayJobAction({
         route: ROUTE,
@@ -27,11 +33,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
         deviceName,
         responseCode: auth.status,
         message: auth.message,
+        extra: { code: auth.code },
       })
-      return NextResponse.json(
-        { success: false, message: auth.message },
-        { status: auth.status }
-      )
+      return gatewayAuthErrorResponse(auth)
     }
 
     if (!jobId) {

@@ -1,19 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { authenticateGatewayDevice, getClientIp } from '@/lib/services/sms-gateway/auth'
+import {
+  validateGatewayDevice,
+  gatewayAuthErrorResponse,
+  getClientIp,
+} from '@/lib/services/sms-gateway/auth'
+
+const ROUTE = 'GET /api/sms-gateway/ping'
 
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url)
-    const deviceName = searchParams.get('deviceName') || ''
-    const simLabel = searchParams.get('simLabel') || ''
-
-    const auth = await authenticateGatewayDevice(request, deviceName, simLabel)
+    const auth = await validateGatewayDevice(request, { route: ROUTE })
 
     if (!auth.ok) {
-      return NextResponse.json(
-        { success: false, message: auth.message },
-        { status: auth.status }
-      )
+      return gatewayAuthErrorResponse(auth)
     }
 
     const userAgent = request.headers.get('user-agent') || 'unknown'

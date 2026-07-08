@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import connectDB from '@/lib/db/connect'
 import { SmsFallbackJob, SmsMessage } from '@/lib/db/models'
-import { authenticateGatewayDevice } from '@/lib/services/sms-gateway/auth'
+import {
+  validateGatewayDevice,
+  gatewayAuthErrorResponse,
+} from '@/lib/services/sms-gateway/auth'
 import { cancelFallbackJobIfDelivered } from '@/lib/services/sms-fallback/helpers'
 import { logGatewayJobAction } from '@/lib/services/sms-gateway/job-logger'
 
@@ -9,17 +12,15 @@ const ROUTE = 'GET /api/sms-gateway/jobs/pending'
 
 export async function GET(request: NextRequest) {
   try {
-    const auth = await authenticateGatewayDevice(request)
+    const auth = await validateGatewayDevice(request, { route: ROUTE })
     if (!auth.ok) {
       logGatewayJobAction({
         route: ROUTE,
         responseCode: auth.status,
         message: auth.message,
+        extra: { code: auth.code },
       })
-      return NextResponse.json(
-        { success: false, message: auth.message },
-        { status: auth.status }
-      )
+      return gatewayAuthErrorResponse(auth)
     }
 
     await connectDB()

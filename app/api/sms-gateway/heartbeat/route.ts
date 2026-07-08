@@ -1,23 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { authenticateGatewayDevice, getClientIp } from '@/lib/services/sms-gateway/auth'
+import {
+  validateGatewayDevice,
+  gatewayAuthErrorResponse,
+  getClientIp,
+} from '@/lib/services/sms-gateway/auth'
+
+const ROUTE = 'POST /api/sms-gateway/heartbeat'
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({}))
-    const deviceName = body.deviceName || ''
-    const simLabel = body.simLabel || ''
-
-    const auth = await authenticateGatewayDevice(request, deviceName, simLabel)
+    const auth = await validateGatewayDevice(request, { route: ROUTE, body })
 
     if (!auth.ok) {
-      return NextResponse.json(
-        { success: false, message: auth.message },
-        { status: auth.status }
-      )
+      return gatewayAuthErrorResponse(auth)
     }
 
     const now = new Date()
     const userAgent = request.headers.get('user-agent') || 'unknown'
+    const deviceName =
+      (typeof body.deviceName === 'string' ? body.deviceName : '') ||
+      auth.identity.deviceName
+    const simLabel =
+      (typeof body.simLabel === 'string' ? body.simLabel : '') || auth.identity.simLabel
 
     auth.device.lastHeartbeatAt = now
     auth.device.lastSyncAt = now

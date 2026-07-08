@@ -5,6 +5,7 @@ import { requireAuth } from '@/lib/auth/middleware'
 import {
   generateGatewayToken,
   hashGatewayToken,
+  clearGatewayTokenActivationFields,
 } from '@/lib/services/sms-gateway/auth'
 import mongoose from 'mongoose'
 
@@ -14,25 +15,28 @@ export async function POST(request: NextRequest) {
     const user = requireAuth(request)
     const userId = new mongoose.Types.ObjectId(user.userId)
 
-    const plainToken = generateGatewayToken()
-    const tokenHash = hashGatewayToken(plainToken)
+    const body = await request.json().catch(() => ({}))
+    const replaceOldToken = body.replaceOldToken !== false
 
     const existing = await SmsGatewayDevice.findOne({ userId })
+
+    if (existing && !replaceOldToken) {
+      return NextResponse.json(
+        {
+          error:
+            'An active token already exists. Generate with replaceOldToken to replace it.',
+        },
+        { status: 400 }
+      )
+    }
+
+    const plainToken = generateGatewayToken()
+    const tokenHash = hashGatewayToken(plainToken)
 
     if (existing) {
       existing.tokenHash = tokenHash
       existing.isActive = true
-      existing.boundDeviceFingerprint = undefined
-      existing.boundDeviceName = undefined
-      existing.boundSimLabel = undefined
-      existing.lastHeartbeatAt = undefined
-      existing.lastSyncAt = undefined
-      existing.lastIp = undefined
-      existing.lastUserAgent = undefined
-      existing.appVersion = undefined
-      existing.batteryLevel = undefined
-      existing.isSmsPermissionGranted = undefined
-      existing.isGatewayRunning = undefined
+      clearGatewayTokenActivationFields(existing)
       await existing.save()
     } else {
       await SmsGatewayDevice.create({
@@ -47,7 +51,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       token: plainToken,
-      message: 'Device token generated. Copy it now — it will not be shown again.',
+      replacedPreviousToken: Boolean(existing),
+      message: existing
+        ? 'New device token generated and previous token replaced. Copy it now — it will not be shown again.'
+        : 'Device token generated. Copy it now — it will not be shown again.',
     })
   } catch (error: any) {
     if (error.message === 'Unauthorized') {

@@ -168,12 +168,25 @@ export default function SmsGatewayPage() {
   }
 
   const handleGenerateToken = async () => {
+    if (gateway?.hasToken && gateway?.isActive) {
+      if (
+        !confirm(
+          'Generate a new token? This replaces the current active token and clears device binding. The Android app must be updated with the new token.'
+        )
+      ) {
+        return
+      }
+    }
     setGenerating(true)
     try {
       const token = localStorage.getItem('token')
       const response = await fetch('/api/user/sms-gateway/token', {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ replaceOldToken: true }),
       })
       const data = await response.json()
       if (response.ok) {
@@ -201,7 +214,7 @@ export default function SmsGatewayPage() {
   const handleResetBinding = async () => {
     if (
       !confirm(
-        'Reset device binding? The token can then be used on a different phone.'
+        'Reset device binding and clear gateway pause? The current token will stay active but can reconnect from the same or a different phone.'
       )
     ) {
       return
@@ -215,7 +228,10 @@ export default function SmsGatewayPage() {
       })
       const data = await response.json()
       if (response.ok) {
-        toast({ title: 'Binding reset', description: data.message })
+        toast({
+          title: 'Binding & pause cleared',
+          description: data.message,
+        })
         await fetchStatus()
       } else {
         toast({
@@ -656,15 +672,16 @@ export default function SmsGatewayPage() {
               <div className="space-y-4">
                 {gateway?.hasToken && gateway.isActive ? (
                   <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
-                    <p className="text-xs font-semibold text-gray-600 mb-1">
-                      Token status
-                    </p>
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <p className="text-xs font-semibold text-gray-600">Token status</p>
+                      <StatusBadge label="Active" variant="green" />
+                    </div>
                     <code className="text-sm font-mono text-gray-500">
                       gw_live_••••••••••••••••••••••••••••••••••••••••••
                     </code>
                     <p className="text-xs text-amber-700 mt-2">
-                      Token is hidden for security. Generate a new token if you lost
-                      it.
+                      Token is hidden for security. Generate a new token to replace it — the
+                      old token stops working immediately.
                     </p>
                   </div>
                 ) : (
@@ -844,15 +861,15 @@ export default function SmsGatewayPage() {
 
               <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg mb-4">
                 <p className="text-xs text-amber-800">
-                  Resetting device binding allows this token to be linked to a different
-                  phone on the next connection.
+                  Reset binding clears the linked phone fingerprint and any gateway pause or
+                  top-up alert. Use this if the app shows &quot;bound to another device&quot;.
                 </p>
               </div>
 
               <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg mb-4">
                 <p className="text-xs text-blue-800">
-                  Each token works on one phone at a time. If another device tries
-                  to use the same token, it will be blocked with a 403 error.
+                  Each token binds to one phone using a stable device ID from the app. GET
+                  requests like job polling work even before the first bind.
                 </p>
               </div>
 
@@ -865,7 +882,7 @@ export default function SmsGatewayPage() {
                     resetting || !gateway?.hasToken || !gateway?.isActive
                   }
                 >
-                  {resetting ? 'Resetting...' : 'Reset Device Binding'}
+                  {resetting ? 'Resetting...' : 'Reset Binding & Clear Gateway Pause'}
                 </Button>
                 <Button
                   variant="outline"
