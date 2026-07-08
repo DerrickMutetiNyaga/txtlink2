@@ -16,6 +16,8 @@ import {
   ListOrdered,
   Inbox,
   FlaskConical,
+  XCircle,
+  Trash2,
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 
@@ -109,6 +111,7 @@ export default function SmsGatewayPage() {
   const [testMessage, setTestMessage] = useState('TXTLINK test — phone gateway connection OK.')
   const [creatingTest, setCreatingTest] = useState(false)
   const [clearingTestJobs, setClearingTestJobs] = useState(false)
+  const [jobActionId, setJobActionId] = useState<string | null>(null)
   const [clearingAlert, setClearingAlert] = useState(false)
 
   useEffect(() => {
@@ -296,6 +299,80 @@ export default function SmsGatewayPage() {
       })
     } finally {
       setClearingAlert(false)
+    }
+  }
+
+  const handleCancelJob = async (job: FallbackJobRow) => {
+    if (
+      !confirm(
+        `Cancel this ${job.isTest ? 'test ' : ''}phone fallback job? It will no longer be sent by the gateway.`
+      )
+    ) {
+      return
+    }
+    setJobActionId(job.id)
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch(`/api/user/sms-fallback/jobs/${job.id}/cancel`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const data = await response.json()
+      if (response.ok) {
+        toast({ title: 'Job cancelled', description: data.message })
+        await fetchStatus()
+      } else {
+        toast({
+          title: 'Error',
+          description: data.error || 'Failed to cancel job.',
+          variant: 'destructive',
+        })
+      }
+    } catch {
+      toast({
+        title: 'Error',
+        description: 'Failed to cancel job.',
+        variant: 'destructive',
+      })
+    } finally {
+      setJobActionId(null)
+    }
+  }
+
+  const handleDeleteJob = async (job: FallbackJobRow) => {
+    if (
+      !confirm(
+        `Delete this ${job.isTest ? 'test ' : ''}job from the queue? This cannot be undone.`
+      )
+    ) {
+      return
+    }
+    setJobActionId(job.id)
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch(`/api/user/sms-fallback/jobs/${job.id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const data = await response.json()
+      if (response.ok) {
+        toast({ title: 'Job deleted', description: data.message })
+        await fetchStatus()
+      } else {
+        toast({
+          title: 'Error',
+          description: data.error || 'Failed to delete job.',
+          variant: 'destructive',
+        })
+      }
+    } catch {
+      toast({
+        title: 'Error',
+        description: 'Failed to delete job.',
+        variant: 'destructive',
+      })
+    } finally {
+      setJobActionId(null)
     }
   }
 
@@ -889,10 +966,17 @@ export default function SmsGatewayPage() {
                       <th className="pb-3 pr-2">Last Device</th>
                       <th className="pb-3 pr-2">Last Error</th>
                       <th className="pb-3 pr-2">Type</th>
+                      <th className="pb-3">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {fallbackJobs.map((job) => (
+                    {fallbackJobs.map((job) => {
+                      const isBusy = jobActionId === job.id
+                      const canCancel =
+                        job.status !== 'cancelled' &&
+                        !(job.status === 'sent' && !job.isTest)
+
+                      return (
                       <tr key={job.id} className="border-b border-gray-100">
                         <td className="py-3 pr-2 text-gray-600 whitespace-nowrap">
                           {new Date(job.createdAt).toLocaleString('en-US', {
@@ -976,8 +1060,36 @@ export default function SmsGatewayPage() {
                             <span className="text-gray-400 text-xs">Live</span>
                           )}
                         </td>
+                        <td className="py-3">
+                          <div className="flex items-center gap-1">
+                            {canCancel ? (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 px-2 text-amber-700 hover:text-amber-800 hover:bg-amber-50"
+                                disabled={isBusy}
+                                onClick={() => handleCancelJob(job)}
+                                title="Cancel job"
+                              >
+                                <XCircle size={14} className="mr-1" />
+                                Cancel
+                              </Button>
+                            ) : null}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 px-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+                              disabled={isBusy}
+                              onClick={() => handleDeleteJob(job)}
+                              title="Delete job"
+                            >
+                              <Trash2 size={14} className="mr-1" />
+                              Delete
+                            </Button>
+                          </div>
+                        </td>
                       </tr>
-                    ))}
+                    )})}
                   </tbody>
                 </table>
                 </div>
