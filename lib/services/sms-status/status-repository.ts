@@ -10,8 +10,6 @@
 
 import mongoose from 'mongoose'
 import { SmsMessage, User, SMS_PENDING_STATUSES, type ISmsMessage, type SmsStatus } from '@/lib/db/models'
-import { buildRedactedMessageUpdate } from '@/lib/services/sms/message-body'
-
 export interface ClaimedMessage {
   _id: mongoose.Types.ObjectId
   userId: mongoose.Types.ObjectId
@@ -121,7 +119,6 @@ export class StatusRepository {
       update.deliveredAt = now
       update.deliveryStatus = 'delivered'
       update.deliveryMethod = 'provider'
-      Object.assign(update, buildRedactedMessageUpdate(now))
     }
     if (params.status !== 'delivered') update.failedAt = now
 

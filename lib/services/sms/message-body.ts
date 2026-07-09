@@ -273,6 +273,7 @@ export function logFallbackJobMessageDebug(params: {
   }
 }
 
+/** Reserved for a future optional "Delete message body after delivery" privacy setting (default: off). */
 export function buildRedactedMessageUpdate(now = new Date()): Record<string, unknown> {
   return {
     messageBody: null,

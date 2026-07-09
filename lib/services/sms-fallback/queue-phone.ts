@@ -15,8 +15,6 @@ import {
   getAgeMinutes,
 } from './status-normalize'
 import { createOrUpdatePhoneFallbackJob } from './create-fallback-job'
-import { buildRedactedMessageUpdate } from '@/lib/services/sms/message-body'
-
 async function checkRetryDeliveryStatus(sms: ISmsMessage & { _id: unknown }): Promise<void> {
   if (!sms.providerRetrySmsId || !isRetrySentPending(sms.providerRetryStatus)) return
 
@@ -37,7 +35,6 @@ async function checkRetryDeliveryStatus(sms: ISmsMessage & { _id: unknown }): Pr
       providerRetryStatus: 'delivered',
       providerRetryDeliveredAt: new Date(),
       fallbackStatus: 'not_needed',
-      ...buildRedactedMessageUpdate(),
     })
     await cancelFallbackJobIfDelivered(String(sms._id), 'Provider retry delivered')
   } else if (['failed', 'expired', 'rejected', 'undeliverable', 'provider_timeout'].includes(mapped)) {
