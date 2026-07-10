@@ -46,6 +46,7 @@ import {
   CheckCircle2,
   Store,
   Trash2,
+  Radio,
 } from 'lucide-react'
 import {
   Select,
@@ -355,8 +356,8 @@ export default function SuperAdminPricing() {
   // Filter accounts for table
   const filteredAccounts = accounts.filter((acc) => {
     const matchesSearch =
-      acc.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      acc.email.toLowerCase().includes(searchTerm.toLowerCase())
+      (acc.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (acc.email || '').toLowerCase().includes(searchTerm.toLowerCase())
     
     const matchesFilter =
       filterOverride === 'all' ||
