@@ -56,20 +56,20 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import {
+  PricingRuleEditorDialog,
+  formatRulePriceLabel,
+  getDefaultPricingRule,
+  copyGlobalRuleForOverride,
+  type EditablePricingRule,
+} from '@/components/super-admin/pricing-rule-form'
+import {
+  getModeLabel,
+  getSampleBlockBreakdown,
+  type PricingRuleConfig,
+} from '@/lib/utils/pricing-calculations'
 
-interface PricingRule {
-  _id?: string
-  scope: 'global' | 'user'
-  userId?: any
-  mode: string
-  pricePerPart?: number
-  pricePerSms?: number
-  gsm7Part1?: number
-  gsm7PartN?: number
-  ucs2Part1?: number
-  ucs2PartN?: number
-  chargeFailed?: boolean
-  refundOnFail?: boolean
+interface PricingRule extends EditablePricingRule {
   updatedAt?: string
   createdAt?: string
 }
@@ -83,6 +83,9 @@ interface Account {
     mode: string
     pricePerSms?: number
     pricePerPart?: number
+    pricePerBlock?: number
+    charsPerBlock?: number
+    pricePerCharacter?: number
   } | null
 }
 
@@ -434,8 +437,55 @@ export default function SuperAdminPricing() {
                 <div className="space-y-4">
                   <div className="flex justify-between items-center py-2 border-b border-[#E5E7EB]">
                     <span className="text-sm text-[#64748B]">Mode</span>
-                    <span className="text-sm font-medium text-[#020617] capitalize">{globalRule.mode?.replace('_', ' ')}</span>
+                    <span className="text-sm font-medium text-[#020617]">{getModeLabel(globalRule.mode as PricingRuleConfig['mode'])}</span>
                   </div>
+
+                  {globalRule.mode === 'per_char_block' && (
+                    <>
+                      <div className="flex justify-between items-center py-2 border-b border-[#E5E7EB]">
+                        <span className="text-sm text-[#64748B]">Billing unit</span>
+                        <span className="text-sm font-medium text-[#020617]">{globalRule.charsPerBlock || 160} characters</span>
+                      </div>
+                      <div className="flex justify-between items-center py-2 border-b border-[#E5E7EB]">
+                        <span className="text-sm text-[#64748B]">Price per billing unit</span>
+                        <span className="text-sm font-medium text-[#020617]">KSh {globalRule.pricePerBlock || 0}</span>
+                      </div>
+                      <div className="flex justify-between items-center py-2 border-b border-[#E5E7EB]">
+                        <span className="text-sm text-[#64748B]">Partial block billing</span>
+                        <span className="text-sm font-medium text-[#020617]">{globalRule.roundPartialBlocks !== false ? 'Round up' : 'Exact'}</span>
+                      </div>
+                      <div className="bg-[#F8FAFC] rounded-lg p-4 border border-[#E5E7EB] space-y-2">
+                        <p className="text-sm font-medium text-[#020617] mb-2">Example Breakdown</p>
+                        {getSampleBlockBreakdown(
+                          globalRule.charsPerBlock || 160,
+                          globalRule.pricePerBlock || 0,
+                          globalRule.roundPartialBlocks !== false,
+                          3
+                        ).map((sample) => (
+                          <div key={sample.range} className="flex justify-between text-sm">
+                            <span className="text-[#64748B]">{sample.range}</span>
+                            <span className="font-medium text-[#020617]">KSh {sample.charge.toFixed(2)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+
+                  {globalRule.mode === 'per_character' && (
+                    <>
+                      <div className="flex justify-between items-center py-2 border-b border-[#E5E7EB]">
+                        <span className="text-sm text-[#64748B]">Price per character</span>
+                        <span className="text-sm font-medium text-[#020617]">KSh {globalRule.pricePerCharacter || 0}</span>
+                      </div>
+                      {(globalRule.minimumChargePerMessage ?? 0) > 0 && (
+                        <div className="flex justify-between items-center py-2 border-b border-[#E5E7EB]">
+                          <span className="text-sm text-[#64748B]">Minimum charge per message</span>
+                          <span className="text-sm font-medium text-[#020617]">KSh {globalRule.minimumChargePerMessage}</span>
+                        </div>
+                      )}
+                    </>
+                  )}
+
                   {globalRule.mode === 'per_part' && (
                     <>
                       <div className="flex justify-between items-center py-2 border-b border-[#E5E7EB]">
@@ -539,7 +589,7 @@ export default function SuperAdminPricing() {
               <div>
                 <p className="text-sm text-[#64748B] mb-4">No global rule configured</p>
                 <Button
-                  onClick={() => setEditingRule({ scope: 'global', mode: 'per_part', pricePerPart: 2.0 } as PricingRule)}
+                  onClick={() => setEditingRule(getDefaultPricingRule('global'))}
                   className="bg-[#FACC15] hover:bg-[#EAB308] text-[#020617] font-medium"
                 >
                   Create Global Rule
@@ -617,31 +667,24 @@ export default function SuperAdminPricing() {
                 const parts = preview.calculation.parts
                 const totalCost = preview.calculation.chargedKes
                 const charCount = preview.message?.length || 0
-                
-                // Get the pricing rule to determine mode and pricing
+                const billingBlocks = preview.calculation.billingBlocks
+                const calcMode = preview.calculation.mode
+
                 const rule = preview.selectedAccountId
                   ? rules.find((r) => {
                       const userId = typeof r.userId === 'object' ? r.userId._id?.toString() : r.userId?.toString()
                       return r.scope === 'user' && userId === preview.selectedAccountId
                     })
                   : globalRule
-                
-                const isPerPart = rule?.mode === 'per_part'
-                const pricePerPart = rule?.pricePerPart || (isPerPart ? (totalCost / parts) : 0)
-                const pricePerSms = rule?.pricePerSms || (!isPerPart ? totalCost : 0)
-                
-                // Get segment sizes based on encoding
-                const firstSegmentSize = encoding === 'gsm7' ? (rule?.gsm7Part1 || 160) : (rule?.ucs2Part1 || 70)
-                const extraSegmentSize = encoding === 'gsm7' ? (rule?.gsm7PartN || 153) : (rule?.ucs2PartN || 67)
-                
-                const firstSegmentCost = isPerPart ? pricePerPart : pricePerSms
-                const extraSegments = parts > 1 ? parts - 1 : 0
-                const extraSegmentsCost = isPerPart ? (extraSegments * pricePerPart) : 0
-                
+
                 return (
                   <div className="bg-[#F8FAFC] border border-[#E5E7EB] rounded-lg p-4 space-y-3">
                     <p className="text-sm font-medium text-[#020617] mb-3">Result:</p>
                     <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-[#64748B]">Pricing mode:</span>
+                        <span className="font-medium text-[#020617]">{getModeLabel((calcMode || rule?.mode || 'per_part') as PricingRuleConfig['mode'])}</span>
+                      </div>
                       <div className="flex justify-between">
                         <span className="text-[#64748B]">Encoding detected:</span>
                         <span className="font-medium text-[#020617]">{encoding.toUpperCase()}</span>
@@ -651,41 +694,54 @@ export default function SuperAdminPricing() {
                         <span className="font-medium text-[#020617]">{charCount}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-[#64748B]">Parts:</span>
+                        <span className="text-[#64748B]">Provider SMS parts:</span>
                         <span className="font-medium text-[#020617]">{parts}</span>
                       </div>
-                      
-                      <Separator className="bg-[#E5E7EB] my-2" />
-                      
-                      {/* Cost Breakdown */}
-                      {isPerPart ? (
-                        <div className="space-y-1.5 bg-white rounded p-3 border border-[#E5E7EB]">
-                          <p className="text-xs font-medium text-[#020617] mb-2">Cost Breakdown:</p>
-                          <div className="flex justify-between text-sm">
-                            <span className="text-[#64748B]">First {firstSegmentSize} chars:</span>
-                            <span className="font-medium text-[#020617]">KSh {firstSegmentCost.toFixed(2)}</span>
-                          </div>
-                          {extraSegments > 0 && (
-                            <div className="flex justify-between text-sm">
-                              <span className="text-[#64748B]">
-                                {extraSegments} extra {extraSegmentSize}-char segment{extraSegments > 1 ? 's' : ''}:
-                              </span>
-                              <span className="font-medium text-[#020617]">KSh {extraSegmentsCost.toFixed(2)}</span>
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="space-y-1.5 bg-white rounded p-3 border border-[#E5E7EB]">
-                          <p className="text-xs font-medium text-[#020617] mb-2">Cost Breakdown:</p>
-                          <div className="flex justify-between text-sm">
-                            <span className="text-[#64748B]">Per SMS:</span>
-                            <span className="font-medium text-[#020617]">KSh {pricePerSms.toFixed(2)}</span>
-                          </div>
+                      {billingBlocks != null && (
+                        <div className="flex justify-between">
+                          <span className="text-[#64748B]">Billing blocks:</span>
+                          <span className="font-medium text-[#020617]">{billingBlocks}</span>
                         </div>
                       )}
-                      
+
                       <Separator className="bg-[#E5E7EB] my-2" />
-                      
+
+                      <div className="space-y-1.5 bg-white rounded p-3 border border-[#E5E7EB]">
+                        <p className="text-xs font-medium text-[#020617] mb-2">Cost Breakdown:</p>
+                        {calcMode === 'per_char_block' && (
+                          <div className="flex justify-between text-sm">
+                            <span className="text-[#64748B]">
+                              {billingBlocks} block{(billingBlocks ?? 0) !== 1 ? 's' : ''} × KSh {preview.calculation.pricePerBlock ?? rule?.pricePerBlock ?? 0}
+                            </span>
+                            <span className="font-medium text-[#020617]">KSh {totalCost.toFixed(2)}</span>
+                          </div>
+                        )}
+                        {calcMode === 'per_character' && (
+                          <div className="flex justify-between text-sm">
+                            <span className="text-[#64748B]">
+                              {charCount} chars × KSh {preview.calculation.pricePerCharacter ?? rule?.pricePerCharacter ?? 0}
+                            </span>
+                            <span className="font-medium text-[#020617]">KSh {totalCost.toFixed(2)}</span>
+                          </div>
+                        )}
+                        {calcMode === 'per_part' && rule && (
+                          <>
+                            <div className="flex justify-between text-sm">
+                              <span className="text-[#64748B]">{parts} SMS part{parts !== 1 ? 's' : ''} × KSh {rule.pricePerPart || 0}</span>
+                              <span className="font-medium text-[#020617]">KSh {totalCost.toFixed(2)}</span>
+                            </div>
+                          </>
+                        )}
+                        {calcMode === 'per_sms' && (
+                          <div className="flex justify-between text-sm">
+                            <span className="text-[#64748B]">{parts} SMS × KSh {rule?.pricePerSms || 0}</span>
+                            <span className="font-medium text-[#020617]">KSh {totalCost.toFixed(2)}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      <Separator className="bg-[#E5E7EB] my-2" />
+
                       <div className="flex justify-between items-center">
                         <span className="text-[#64748B] font-medium">Total cost:</span>
                         <div className="text-right">
@@ -862,7 +918,7 @@ export default function SuperAdminPricing() {
                         <TableCell>
                           {account.pricing ? (
                             <Badge className="bg-[#FACC15] text-[#020617] border-0">
-                              {account.pricing.mode === 'per_sms' ? 'Per SMS' : 'Per Part'}
+                              {getModeLabel(account.pricing.mode as PricingRuleConfig['mode'])}
                             </Badge>
                           ) : (
                             <Badge variant="outline" className="bg-[#F8FAFC] text-[#64748B] border-[#E5E7EB]">
@@ -874,18 +930,8 @@ export default function SuperAdminPricing() {
                           {account.pricing ? (
                             <div className="space-y-0.5">
                               <span className="text-sm font-medium text-[#020617]">
-                                KSh {account.pricing.pricePerSms || account.pricing.pricePerPart || 0}
+                                {formatRulePriceLabel(account.pricing as PricingRuleConfig)}
                               </span>
-                              {account.pricing.mode === 'per_part' && (
-                                <p className="text-xs text-[#64748B]">
-                                  per SMS segment
-                                </p>
-                              )}
-                              {account.pricing.mode === 'per_sms' && (
-                                <p className="text-xs text-[#64748B]">
-                                  per SMS
-                                </p>
-                              )}
                             </div>
                           ) : (
                             <span className="text-sm text-[#64748B]">—</span>
@@ -920,12 +966,11 @@ export default function SuperAdminPricing() {
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => {
-                                  setEditingRule({
-                                    scope: 'user',
-                                    userId: account.id,
-                                    mode: 'per_part',
-                                    pricePerPart: globalRule?.pricePerPart || 2.0,
-                                  } as PricingRule)
+                                  if (globalRule) {
+                                    setEditingRule(copyGlobalRuleForOverride(globalRule, account.id))
+                                  } else {
+                                    setEditingRule(getDefaultPricingRule('user', account.id))
+                                  }
                                 }}
                                 className="text-[#64748B] hover:text-[#020617] hover:bg-[#F8FAFC]"
                               >
@@ -1670,112 +1715,20 @@ export default function SuperAdminPricing() {
           </Dialog>
         )}
 
-        {/* Edit Rule Modal */}
         {editingRule && (
-          <Dialog open={!!editingRule} onOpenChange={(open) => !open && setEditingRule(null)}>
-            <DialogContent 
-              overlayClassName="bg-black/40 backdrop-blur-sm"
-              className="max-w-2xl bg-white border border-slate-200 rounded-2xl shadow-xl p-8 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 duration-150 ease-out [&>button]:text-slate-400 [&>button]:hover:text-slate-700 [&>button]:transition-colors"
-            >
-              <DialogHeader className="pb-5 border-b border-slate-200">
-                <DialogTitle className="text-xl font-semibold text-slate-900">
-                  {editingRule.scope === 'global' ? 'Edit Global Rule' : 'Edit User Override'}
-                </DialogTitle>
-                <DialogDescription className="text-slate-500 text-sm mt-1.5">
-                  {editingRule.scope === 'user' && getAccountForRule(editingRule)
-                    ? `${getAccountForRule(editingRule)?.name} (${getAccountForRule(editingRule)?.email})`
-                    : 'Configure pricing settings'}
-                </DialogDescription>
-              </DialogHeader>
-
-              <div className="space-y-5 mt-6">
-                <div>
-                  <Label className="text-sm font-medium text-slate-900 mb-2 block">Pricing Mode</Label>
-                  <Select
-                    value={editingRule.mode || 'per_part'}
-                    onValueChange={(value) => setEditingRule({ ...editingRule, mode: value })}
-                  >
-                    <SelectTrigger className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-900 transition focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-0 focus:border-emerald-500 [&_svg]:text-slate-400">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="bg-white border border-slate-200 rounded-xl shadow-lg [&_[data-highlighted]]:bg-emerald-50 [&_[data-highlighted]]:text-emerald-900">
-                      <SelectItem value="per_part" className="focus:bg-emerald-50 focus:text-emerald-900 data-[highlighted]:bg-emerald-50 data-[highlighted]:text-emerald-900">Per Part</SelectItem>
-                      <SelectItem value="per_sms" className="focus:bg-emerald-50 focus:text-emerald-900 data-[highlighted]:bg-emerald-50 data-[highlighted]:text-emerald-900">Per SMS</SelectItem>
-                      <SelectItem value="tiered" className="focus:bg-emerald-50 focus:text-emerald-900 data-[highlighted]:bg-emerald-50 data-[highlighted]:text-emerald-900">Tiered</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {editingRule.mode === 'per_part' && (
-                  <div>
-                    <Label className="text-sm font-medium text-slate-900 mb-2 block">Price per Part (KES)</Label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={editingRule.pricePerPart || ''}
-                      onChange={(e) =>
-                        setEditingRule({ ...editingRule, pricePerPart: parseFloat(e.target.value) })
-                      }
-                      className="rounded-xl border border-slate-200 bg-white text-slate-900 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition"
-                    />
-                  </div>
-                )}
-
-                {editingRule.mode === 'per_sms' && (
-                  <div>
-                    <Label className="text-sm font-medium text-slate-900 mb-2 block">Price per SMS (KES)</Label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={editingRule.pricePerSms || ''}
-                      onChange={(e) =>
-                        setEditingRule({ ...editingRule, pricePerSms: parseFloat(e.target.value) })
-                      }
-                      className="rounded-xl border border-slate-200 bg-white text-slate-900 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition"
-                    />
-                  </div>
-                )}
-
-                <div className="flex items-center gap-6 pt-5 border-t border-slate-200">
-                  <label className="flex items-center gap-2.5 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={editingRule.chargeFailed || false}
-                      onChange={(e) => setEditingRule({ ...editingRule, chargeFailed: e.target.checked })}
-                      className="w-4 h-4 accent-emerald-600 border-slate-300 rounded focus:ring-2 focus:ring-emerald-500 focus:ring-offset-0 cursor-pointer transition-colors"
-                    />
-                    <span className="text-sm text-slate-900">Charge for failed SMS</span>
-                  </label>
-                  <label className="flex items-center gap-2.5 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={editingRule.refundOnFail !== false}
-                      onChange={(e) => setEditingRule({ ...editingRule, refundOnFail: e.target.checked })}
-                      className="w-4 h-4 accent-emerald-600 border-slate-300 rounded focus:ring-2 focus:ring-emerald-500 focus:ring-offset-0 cursor-pointer transition-colors"
-                    />
-                    <span className="text-sm text-slate-900">Refund on failure</span>
-                  </label>
-                </div>
-
-                <div className="flex gap-3 pt-5 border-t border-slate-200">
-                  <Button
-                    onClick={handleSave}
-                    className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-xl shadow-sm active:scale-95 focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-all duration-150"
-                  >
-                    <Save className="w-4 h-4 mr-2" />
-                    Save Rule
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => setEditingRule(null)}
-                    className="bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 rounded-xl transition-all duration-150"
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
+          <PricingRuleEditorDialog
+            open={!!editingRule}
+            onOpenChange={(open) => !open && setEditingRule(null)}
+            rule={editingRule}
+            title={editingRule.scope === 'global' ? 'Edit Global Rule' : 'Edit User Override'}
+            description={
+              editingRule.scope === 'user' && getAccountForRule(editingRule)
+                ? `${getAccountForRule(editingRule)?.name} (${getAccountForRule(editingRule)?.email})`
+                : 'Configure both the price charged and how many characters that price covers'
+            }
+            onChange={setEditingRule}
+            onSave={handleSave}
+          />
         )}
       </div>
     </div>

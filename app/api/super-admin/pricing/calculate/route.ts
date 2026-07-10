@@ -19,19 +19,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Message is required' }, { status: 400 })
     }
 
-    const result = await calculatePricing(message, userId, monthlyVolume)
+    const encodingOverride =
+      encoding && (encoding === 'gsm7' || encoding === 'ucs2') ? encoding : undefined
 
-    // Override encoding if provided
-    if (encoding && (encoding === 'gsm7' || encoding === 'ucs2')) {
-      const { getPricingRule, calculateParts, calculateCharge } = require('@/lib/utils/pricing')
-      await connectDB()
-      const rule = await getPricingRule(userId)
-      const parts = calculateParts(message, encoding, rule)
-      const chargedKes = calculateCharge(parts, rule, monthlyVolume)
-      result.encoding = encoding
-      result.parts = parts
-      result.chargedKes = chargedKes
-    }
+    const result = await calculatePricing(message, userId, monthlyVolume, encodingOverride)
 
     return NextResponse.json({
       success: true,
@@ -51,4 +42,3 @@ export async function POST(request: NextRequest) {
     )
   }
 }
-

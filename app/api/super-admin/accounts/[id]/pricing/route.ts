@@ -20,9 +20,15 @@ export async function POST(
     const owner = requireOwner(request)
     const { id: userId } = await params
 
-    const { mode, pricePerSms, pricePerPart, chargeFailed, refundOnFail } = await request.json()
+    const { mode, pricePerSms, pricePerPart, pricePerBlock, pricePerCharacter, charsPerBlock, chargeFailed, refundOnFail, samePriceForEncodings, roundPartialBlocks, minimumChargePerMessage, gsm7Part1, gsm7PartN, ucs2Part1, ucs2PartN, ucs2CharsPerBlock, ucs2PricePerBlock, ucs2PricePerCharacter } = await request.json()
 
-    if (!mode || (mode === 'per_sms' && !pricePerSms) || (mode === 'per_part' && !pricePerPart)) {
+    const hasValidPrice =
+      (mode === 'per_sms' && pricePerSms) ||
+      (mode === 'per_part' && pricePerPart) ||
+      (mode === 'per_char_block' && pricePerBlock && charsPerBlock) ||
+      (mode === 'per_character' && pricePerCharacter)
+
+    if (!mode || !hasValidPrice) {
       return NextResponse.json(
         { error: 'mode and corresponding price field are required' },
         { status: 400 }
@@ -50,16 +56,27 @@ export async function POST(
       : null
 
     if (pricingRule) {
-      // Update existing
       pricingRule.mode = mode
       pricingRule.pricePerSms = pricePerSms
       pricingRule.pricePerPart = pricePerPart
+      pricingRule.pricePerBlock = pricePerBlock
+      pricingRule.charsPerBlock = charsPerBlock
+      pricingRule.pricePerCharacter = pricePerCharacter
+      pricingRule.samePriceForEncodings = samePriceForEncodings ?? pricingRule.samePriceForEncodings
+      pricingRule.roundPartialBlocks = roundPartialBlocks ?? pricingRule.roundPartialBlocks
+      pricingRule.minimumChargePerMessage = minimumChargePerMessage ?? pricingRule.minimumChargePerMessage
+      if (gsm7Part1 !== undefined) pricingRule.gsm7Part1 = gsm7Part1
+      if (gsm7PartN !== undefined) pricingRule.gsm7PartN = gsm7PartN
+      if (ucs2Part1 !== undefined) pricingRule.ucs2Part1 = ucs2Part1
+      if (ucs2PartN !== undefined) pricingRule.ucs2PartN = ucs2PartN
+      if (ucs2CharsPerBlock !== undefined) pricingRule.ucs2CharsPerBlock = ucs2CharsPerBlock
+      if (ucs2PricePerBlock !== undefined) pricingRule.ucs2PricePerBlock = ucs2PricePerBlock
+      if (ucs2PricePerCharacter !== undefined) pricingRule.ucs2PricePerCharacter = ucs2PricePerCharacter
       pricingRule.chargeFailed = chargeFailed ?? pricingRule.chargeFailed
       pricingRule.refundOnFail = refundOnFail ?? pricingRule.refundOnFail
       pricingRule.updatedBy = new mongoose.Types.ObjectId(owner.userId)
       await pricingRule.save()
     } else {
-      // Create new
       pricingRule = await PricingRule.create({
         scope: 'user',
         userId: userObjectId,
@@ -67,10 +84,19 @@ export async function POST(
         mode,
         pricePerSms,
         pricePerPart,
-        gsm7Part1: 160,
-        gsm7PartN: 153,
-        ucs2Part1: 70,
-        ucs2PartN: 67,
+        pricePerBlock,
+        charsPerBlock,
+        pricePerCharacter,
+        gsm7Part1: gsm7Part1 ?? 160,
+        gsm7PartN: gsm7PartN ?? 153,
+        ucs2Part1: ucs2Part1 ?? 70,
+        ucs2PartN: ucs2PartN ?? 67,
+        ucs2CharsPerBlock,
+        ucs2PricePerBlock,
+        ucs2PricePerCharacter,
+        samePriceForEncodings: samePriceForEncodings ?? true,
+        roundPartialBlocks: roundPartialBlocks ?? true,
+        minimumChargePerMessage,
         chargeFailed: chargeFailed ?? false,
         refundOnFail: refundOnFail ?? true,
         updatedBy: new mongoose.Types.ObjectId(owner.userId),

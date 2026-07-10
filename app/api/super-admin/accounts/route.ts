@@ -59,6 +59,9 @@ export async function GET(request: NextRequest) {
                 mode: userPricing.mode,
                 pricePerSms: userPricing.pricePerSms,
                 pricePerPart: userPricing.pricePerPart,
+                pricePerBlock: userPricing.pricePerBlock,
+                charsPerBlock: userPricing.charsPerBlock,
+                pricePerCharacter: userPricing.pricePerCharacter,
                 chargeFailed: userPricing.chargeFailed,
                 refundOnFail: userPricing.refundOnFail,
               }

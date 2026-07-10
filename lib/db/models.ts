@@ -420,15 +420,27 @@ export interface IPricingRule {
   scope: 'global' | 'user'
   userId?: mongoose.Types.ObjectId
   currency: string
-  mode: 'per_part' | 'per_sms' | 'tiered'
-  // Character rules
+  mode: 'per_part' | 'per_sms' | 'per_char_block' | 'per_character' | 'tiered'
+  // SMS provider segmentation (actual SMS parts)
   gsm7Part1: number // 160
   gsm7PartN: number // 153
   ucs2Part1: number // 70
   ucs2PartN: number // 67
-  // Pricing
+  // Per-part / per-SMS pricing
   pricePerPart?: number
   pricePerSms?: number
+  // Per character block billing (custom billing unit)
+  charsPerBlock?: number
+  pricePerBlock?: number
+  ucs2CharsPerBlock?: number
+  ucs2PricePerBlock?: number
+  // Per individual character billing
+  pricePerCharacter?: number
+  ucs2PricePerCharacter?: number
+  // Shared billing options
+  samePriceForEncodings?: boolean
+  roundPartialBlocks?: boolean
+  minimumChargePerMessage?: number
   tiers?: Array<{ from: number; to: number; pricePerPart: number }>
   // Settings
   chargeFailed: boolean
@@ -443,13 +455,22 @@ const PricingRuleSchema = new Schema<IPricingRule>(
     scope: { type: String, enum: ['global', 'user'], required: true },
     userId: { type: Schema.Types.ObjectId, ref: 'User' },
     currency: { type: String, default: 'KES' },
-    mode: { type: String, enum: ['per_part', 'per_sms', 'tiered'], required: true },
+    mode: { type: String, enum: ['per_part', 'per_sms', 'per_char_block', 'per_character', 'tiered'], required: true },
     gsm7Part1: { type: Number, default: 160 },
     gsm7PartN: { type: Number, default: 153 },
     ucs2Part1: { type: Number, default: 70 },
     ucs2PartN: { type: Number, default: 67 },
     pricePerPart: { type: Number },
     pricePerSms: { type: Number },
+    charsPerBlock: { type: Number },
+    pricePerBlock: { type: Number },
+    ucs2CharsPerBlock: { type: Number },
+    ucs2PricePerBlock: { type: Number },
+    pricePerCharacter: { type: Number },
+    ucs2PricePerCharacter: { type: Number },
+    samePriceForEncodings: { type: Boolean, default: true },
+    roundPartialBlocks: { type: Boolean, default: true },
+    minimumChargePerMessage: { type: Number },
     tiers: [{
       from: { type: Number },
       to: { type: Number },
