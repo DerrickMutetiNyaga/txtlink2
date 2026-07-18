@@ -88,16 +88,12 @@ export async function POST(
     }
 
     const existingNewAssignment = await UserSenderId.findOne({
+      userId: userObjectId,
       senderId: newSenderDoc._id,
     }).session(session)
 
-    if (existingNewAssignment && existingNewAssignment.userId.toString() !== userId) {
-      await UserSenderId.deleteOne({ _id: existingNewAssignment._id }).session(session)
-    }
-
     if (
       existingNewAssignment &&
-      existingNewAssignment.userId.toString() === userId &&
       existingNewAssignment._id.toString() !== currentAssignment._id.toString()
     ) {
       await session.abortTransaction()

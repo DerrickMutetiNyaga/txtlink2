@@ -130,18 +130,13 @@ export async function POST(
       return NextResponse.json({ error: 'Failed to find or create sender ID' }, { status: 500 })
     }
 
-    // Check if sender ID is already assigned
-    // As super admin, we can transfer sender IDs by removing the old assignment
-    const existingAssignment = await UserSenderId.findOne({ senderId: senderIdObject._id })
+    // Check if this user already has this sender ID (shared IDs allowed across users)
+    const existingAssignment = await UserSenderId.findOne({
+      userId: userObjectId,
+      senderId: senderIdObject._id,
+    })
     if (existingAssignment) {
-      if (existingAssignment.userId.toString() === userId) {
-        // Already assigned to this user
-        return NextResponse.json({ error: 'Sender ID is already assigned to this user' }, { status: 400 })
-      } else {
-        // Transfer: Remove old assignment first (super admin privilege)
-        await UserSenderId.deleteOne({ _id: existingAssignment._id })
-        console.log(`Super admin transferred sender ID ${senderIdObject.senderName} from user ${existingAssignment.userId} to user ${userId}`)
-      }
+      return NextResponse.json({ error: 'Sender ID is already assigned to this user' }, { status: 400 })
     }
 
     // If this is the first sender ID for the user, make it default
@@ -198,10 +193,15 @@ export async function POST(
     // Handle duplicate key errors (unique index violations)
     if (error.code === 11000) {
       // Check which unique index was violated
+      if (error.keyPattern?.senderId && error.keyPattern?.userId) {
+        return NextResponse.json({
+          error: 'Sender ID is already assigned to this user',
+        }, { status: 400 })
+      }
       if (error.keyPattern?.senderId) {
-        return NextResponse.json({ 
-          error: 'Sender ID is already assigned to another user',
-          details: 'This sender ID can only be assigned to one user at a time'
+        return NextResponse.json({
+          error: 'Sender ID assignment conflict',
+          details: 'Run scripts/migrate-shared-sender-ids.ts to allow shared sender IDs across accounts',
         }, { status: 400 })
       }
       if (error.keyPattern?.['userId'] && error.keyPattern?.['isDefault']) {

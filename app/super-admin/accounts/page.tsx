@@ -57,11 +57,12 @@ interface HostPinnacleSenderId {
   senderName: string
   status: string
   hpSenderId?: string
-  assignedTo?: {
+  assignedUsers?: Array<{
     userId: string
     userName?: string
     userEmail?: string
-  } | null
+  }>
+  assignedCount?: number
 }
 
 interface Account {
@@ -395,6 +396,15 @@ export default function SuperAdminAccounts() {
     } finally {
       setActionLoading(false)
     }
+  }
+
+  const formatSharedLabel = (sid: HostPinnacleSenderId, currentAccountId?: string) => {
+    const others = (sid.assignedUsers || []).filter((u) => u.userId !== currentAccountId)
+    if (others.length === 0) return null
+    if (others.length === 1) {
+      return `Also used by ${others[0].userName || others[0].userEmail}`
+    }
+    return `Shared with ${others.length} other accounts`
   }
 
   const getAvailableReplacementIds = (currentSenderId: string) =>
@@ -923,7 +933,7 @@ export default function SuperAdminAccounts() {
                   Manage Sender IDs — {selectedAccount.name}
                 </DialogTitle>
                 <DialogDescription className="text-slate-600">
-                  Assign, remove, or replace sender IDs for this account. Changes apply immediately for the user.
+                  Assign shared sender IDs to this account. Each user keeps their own SMS history and credits — sender IDs are labels only, not wallets.
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
@@ -1000,8 +1010,8 @@ export default function SuperAdminAccounts() {
                                     getAvailableReplacementIds(sid.id).map((hpSid) => (
                                       <SelectItem key={hpSid.id} value={hpSid.id}>
                                         {hpSid.senderName}
-                                        {hpSid.assignedTo && hpSid.assignedTo.userId !== selectedAccount.id
-                                          ? ` (from ${hpSid.assignedTo.userName || 'another user'})`
+                                        {formatSharedLabel(hpSid, selectedAccount.id)
+                                          ? ` (${formatSharedLabel(hpSid, selectedAccount.id)})`
                                           : ''}
                                       </SelectItem>
                                     ))
@@ -1061,11 +1071,11 @@ export default function SuperAdminAccounts() {
                         >
                           <div>
                             <span className="text-sm font-medium text-slate-900">{sid.senderName}</span>
-                            <div className="flex items-center gap-2 mt-1">
+                            <div className="flex items-center gap-2 mt-1 flex-wrap">
                               <span className="text-xs text-slate-500 capitalize">{sid.status}</span>
-                              {sid.assignedTo && sid.assignedTo.userId !== selectedAccount.id && (
-                                <span className="text-xs text-amber-700">
-                                  Assigned to {sid.assignedTo.userName || sid.assignedTo.userEmail}
+                              {formatSharedLabel(sid, selectedAccount.id) && (
+                                <span className="text-xs text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded">
+                                  {formatSharedLabel(sid, selectedAccount.id)}
                                 </span>
                               )}
                             </div>

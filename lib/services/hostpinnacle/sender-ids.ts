@@ -10,6 +10,12 @@ export interface NormalizedHostPinnacleSenderId {
   hpSenderId?: string
 }
 
+export interface SenderIdAssignee {
+  userId: string
+  userName?: string
+  userEmail?: string
+}
+
 export function parseHostPinnacleSenderIds(hpData: any): NormalizedHostPinnacleSenderId[] {
   let senderIdList: any[] = []
 
@@ -58,9 +64,7 @@ export function parseHostPinnacleSenderIds(hpData: any): NormalizedHostPinnacleS
     .filter(Boolean) as NormalizedHostPinnacleSenderId[]
 }
 
-export async function upsertSenderIdFromHostPinnacle(
-  normalized: NormalizedHostPinnacleSenderId
-) {
+export async function upsertSenderIdFromHostPinnacle(normalized: NormalizedHostPinnacleSenderId) {
   const { senderName, status, hpSenderId } = normalized
 
   let senderId = await SenderId.findOne({ senderName })
@@ -111,22 +115,26 @@ export async function upsertSenderIdFromHostPinnacle(
   return senderId
 }
 
-export async function getSenderIdAssignmentMap(): Promise<
-  Map<string, { userId: string; userName?: string; userEmail?: string }>
-> {
+/** All accounts using each sender ID (shared sender IDs supported). */
+export async function getSenderIdAssignmentMap(): Promise<Map<string, SenderIdAssignee[]>> {
   const assignments = await UserSenderId.find({}).populate('userId', 'name email').populate('senderId')
-  const map = new Map<string, { userId: string; userName?: string; userEmail?: string }>()
+  const map = new Map<string, SenderIdAssignee[]>()
 
   for (const assignment of assignments) {
     const sender = assignment.senderId as any
     const user = assignment.userId as any
-    if (sender?._id) {
-      map.set(sender._id.toString(), {
-        userId: user?._id?.toString() || String(assignment.userId),
-        userName: user?.name,
-        userEmail: user?.email,
-      })
+    if (!sender?._id) continue
+
+    const senderKey = sender._id.toString()
+    const entry: SenderIdAssignee = {
+      userId: user?._id?.toString() || String(assignment.userId),
+      userName: user?.name,
+      userEmail: user?.email,
     }
+
+    const existing = map.get(senderKey) || []
+    existing.push(entry)
+    map.set(senderKey, existing)
   }
 
   return map

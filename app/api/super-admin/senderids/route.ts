@@ -51,20 +51,15 @@ export async function GET(request: NextRequest) {
     const senderIds = await Promise.all(
       normalized.map(async (item) => {
         const doc = await upsertSenderIdFromHostPinnacle(item)
-        const assignment = assignmentMap.get(doc._id.toString())
+        const assignees = assignmentMap.get(doc._id.toString()) || []
 
         return {
           id: doc._id.toString(),
           senderName: doc.senderName,
           status: doc.status,
           hpSenderId: doc.hpSenderId || item.hpSenderId,
-          assignedTo: assignment
-            ? {
-                userId: assignment.userId,
-                userName: assignment.userName,
-                userEmail: assignment.userEmail,
-              }
-            : null,
+          assignedUsers: assignees,
+          assignedCount: assignees.length,
         }
       })
     )

@@ -122,8 +122,9 @@ const UserSenderIdSchema = new Schema<IUserSenderId>(
 
 // Ensure only one default per user
 UserSenderIdSchema.index({ userId: 1, isDefault: 1 }, { unique: true, partialFilterExpression: { isDefault: true } })
-// Ensure senderId can only be assigned to ONE user at a time (global uniqueness)
-UserSenderIdSchema.index({ senderId: 1 }, { unique: true })
+// Same sender ID can be shared across multiple users; each user links at most once per sender ID
+UserSenderIdSchema.index({ userId: 1, senderId: 1 }, { unique: true })
+UserSenderIdSchema.index({ senderId: 1 })
 
 export type SenderIdRequestStatus =
   | 'draft'
