@@ -191,6 +191,9 @@ export default function SuperAdminAccounts() {
   const [allSenderIds, setAllSenderIds] = useState<HostPinnacleSenderId[]>([])
   const [fetchingSenderIds, setFetchingSenderIds] = useState(false)
   const [assigningSenderId, setAssigningSenderId] = useState<string | null>(null)
+  const [replacingSenderId, setReplacingSenderId] = useState<string | null>(null)
+  const [replaceTargetId, setReplaceTargetId] = useState<string>('')
+  const [actionLoading, setActionLoading] = useState(false)
 
   useEffect(() => {
     fetchAccounts()
@@ -244,6 +247,25 @@ export default function SuperAdminAccounts() {
     }
   }
 
+  const refreshSelectedAccount = async () => {
+    if (!selectedAccount) return
+    const token = localStorage.getItem('token')
+    const accountsResponse = await fetch('/api/super-admin/accounts', {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (accountsResponse.ok) {
+      const data = await accountsResponse.json()
+      const updated = (data.accounts || []).find((a: Account) => a.id === selectedAccount.id)
+      if (updated) setSelectedAccount(updated)
+    }
+  }
+
+  const refreshAfterSenderIdChange = async () => {
+    await fetchAccounts()
+    await fetchAllSenderIds()
+    await refreshSelectedAccount()
+  }
+
   const handleAssignSenderId = async (senderIdOrName: string, senderName?: string) => {
     if (!selectedAccount) return
 
@@ -267,16 +289,7 @@ export default function SuperAdminAccounts() {
       )
 
       if (response.ok) {
-        await fetchAccounts()
-        await fetchAllSenderIds()
-        const accountsResponse = await fetch('/api/super-admin/accounts', {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        if (accountsResponse.ok) {
-          const data = await accountsResponse.json()
-          const updated = (data.accounts || []).find((a: Account) => a.id === selectedAccount.id)
-          if (updated) setSelectedAccount(updated)
-        }
+        await refreshAfterSenderIdChange()
         alert('Sender ID assigned successfully')
       } else {
         const error = await response.json()
@@ -289,13 +302,24 @@ export default function SuperAdminAccounts() {
     }
   }
 
-  const handleUnassignSenderId = async (senderId: string) => {
-    if (!selectedAccount) return
+  const handleUnassignSenderId = async (
+    senderId: string,
+    senderName?: string,
+    accountOverride?: Account
+  ) => {
+    const account = accountOverride || selectedAccount
+    if (!account) return
+
+    const label = senderName || account.senderIds.find((s) => s.id === senderId)?.senderName || 'this sender ID'
+    if (!window.confirm(`Remove "${label}" from ${account.name}? They will no longer be able to send with it.`)) {
+      return
+    }
 
     try {
+      setActionLoading(true)
       const token = localStorage.getItem('token')
       const response = await fetch(
-        `/api/super-admin/accounts/${selectedAccount.id}/senderids/unassign`,
+        `/api/super-admin/accounts/${account.id}/senderids/unassign`,
         {
           method: 'POST',
           headers: {
@@ -307,25 +331,80 @@ export default function SuperAdminAccounts() {
       )
 
       if (response.ok) {
-        await fetchAccounts()
-        await fetchAllSenderIds()
-        const accountsResponse = await fetch('/api/super-admin/accounts', {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        if (accountsResponse.ok) {
-          const data = await accountsResponse.json()
-          const updated = (data.accounts || []).find((a: Account) => a.id === selectedAccount.id)
-          if (updated) setSelectedAccount(updated)
-        }
-        alert('Sender ID unassigned successfully')
+        setReplacingSenderId(null)
+        setReplaceTargetId('')
+        await refreshAfterSenderIdChange()
+        alert('Sender ID removed successfully')
       } else {
         const error = await response.json()
         alert(error.error || 'Failed to unassign sender ID')
       }
     } catch (error) {
-      alert('Failed to unassign sender ID')
+      alert('Failed to remove sender ID')
+    } finally {
+      setActionLoading(false)
     }
   }
+
+  const handleReplaceSenderId = async (oldSenderId: string) => {
+    if (!selectedAccount || !replaceTargetId) return
+
+    const oldSid = selectedAccount.senderIds.find((s) => s.id === oldSenderId)
+    const newSid = allSenderIds.find((s) => s.id === replaceTargetId)
+    if (!oldSid || !newSid) return
+
+    if (
+      !window.confirm(
+        `Replace "${oldSid.senderName}" with "${newSid.senderName}" for ${selectedAccount.name}?`
+      )
+    ) {
+      return
+    }
+
+    try {
+      setActionLoading(true)
+      const token = localStorage.getItem('token')
+      const response = await fetch(
+        `/api/super-admin/accounts/${selectedAccount.id}/senderids/replace`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            oldSenderId,
+            newSenderId: newSid.id,
+            newSenderName: newSid.senderName,
+            makeDefault: oldSid.isDefault,
+          }),
+        }
+      )
+
+      if (response.ok) {
+        setReplacingSenderId(null)
+        setReplaceTargetId('')
+        await refreshAfterSenderIdChange()
+        alert(`Sender ID replaced with "${newSid.senderName}"`)
+      } else {
+        const error = await response.json()
+        alert(error.error || error.details || 'Failed to replace sender ID')
+      }
+    } catch (error) {
+      alert('Failed to replace sender ID')
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  const getAvailableReplacementIds = (currentSenderId: string) =>
+    allSenderIds.filter(
+      (sid) =>
+        sid.id !== currentSenderId &&
+        !selectedAccount?.senderIds.some(
+          (asid) => asid.id === sid.id || asid.senderName === sid.senderName
+        )
+    )
 
   const handleSetDefault = async (senderId: string) => {
     if (!selectedAccount) return
@@ -630,11 +709,22 @@ export default function SuperAdminAccounts() {
                             {account.senderIds.slice(0, 2).map((sid) => (
                               <span
                                 key={sid.id}
-                                className="inline-flex items-center px-2 py-1 rounded-lg text-xs font-medium bg-emerald-50 text-emerald-800 border border-emerald-200"
+                                className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium bg-emerald-50 text-emerald-800 border border-emerald-200 group"
                                 title={sid.isDefault ? 'Default sender ID' : sid.status}
                               >
                                 {sid.senderName}
                                 {sid.isDefault && ' ★'}
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleUnassignSenderId(sid.id, sid.senderName, account)
+                                  }}
+                                  className="ml-0.5 p-0.5 rounded hover:bg-emerald-200/60 text-emerald-700 opacity-60 hover:opacity-100"
+                                  title={`Remove ${sid.senderName}`}
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
                               </span>
                             ))}
                             {account.senderIds.length > 2 && (
@@ -819,7 +909,12 @@ export default function SuperAdminAccounts() {
             open={senderIdDrawerOpen}
             onOpenChange={(open) => {
               setSenderIdDrawerOpen(open)
-              if (open && allSenderIds.length === 0) fetchAllSenderIds()
+              if (!open) {
+                setReplacingSenderId(null)
+                setReplaceTargetId('')
+              } else if (allSenderIds.length === 0) {
+                fetchAllSenderIds()
+              }
             }}
           >
             <DialogContent className="max-w-2xl bg-white border border-slate-200 rounded-2xl shadow-xl max-h-[90vh] overflow-y-auto">
@@ -828,13 +923,111 @@ export default function SuperAdminAccounts() {
                   Manage Sender IDs — {selectedAccount.name}
                 </DialogTitle>
                 <DialogDescription className="text-slate-600">
-                  Fetch sender IDs from HostPinnacle, then assign one to this account. The user will see it when sending SMS.
+                  Assign, remove, or replace sender IDs for this account. Changes apply immediately for the user.
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-slate-700">
+                    Assigned to {selectedAccount.name} ({selectedAccount.senderIds.length})
+                  </Label>
+                  {selectedAccount.senderIds.length === 0 ? (
+                    <p className="text-sm text-slate-500 py-4 text-center border border-dashed border-slate-200 rounded-lg">
+                      No sender IDs assigned yet. Add one from HostPinnacle below.
+                    </p>
+                  ) : (
+                    <div className="space-y-3">
+                      {selectedAccount.senderIds.map((sid) => (
+                        <div
+                          key={sid.id}
+                          className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-3"
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-sm font-medium text-slate-900">{sid.senderName}</span>
+                              {sid.isDefault && (
+                                <span className="px-2 py-0.5 text-xs font-medium bg-emerald-100 text-emerald-700 rounded">
+                                  Default
+                                </span>
+                              )}
+                              <span className="text-xs text-slate-500 capitalize">{sid.status}</span>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              {!sid.isDefault && (
+                                <button
+                                  onClick={() => handleSetDefault(sid.id)}
+                                  disabled={actionLoading}
+                                  className="px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-50"
+                                >
+                                  Set Default
+                                </button>
+                              )}
+                              <button
+                                onClick={() => {
+                                  setReplacingSenderId(replacingSenderId === sid.id ? null : sid.id)
+                                  setReplaceTargetId('')
+                                }}
+                                disabled={actionLoading}
+                                className="px-3 py-1.5 text-xs font-medium text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 rounded-lg transition-colors disabled:opacity-50"
+                              >
+                                {replacingSenderId === sid.id ? 'Cancel' : 'Replace'}
+                              </button>
+                              <button
+                                onClick={() => handleUnassignSenderId(sid.id, sid.senderName)}
+                                disabled={actionLoading}
+                                className="px-3 py-1.5 text-xs font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          </div>
+
+                          {replacingSenderId === sid.id && (
+                            <div className="pt-3 border-t border-slate-200 space-y-3">
+                              <p className="text-xs text-slate-600">
+                                Choose a new HostPinnacle sender ID to replace <strong>{sid.senderName}</strong>
+                              </p>
+                              <Select value={replaceTargetId} onValueChange={setReplaceTargetId}>
+                                <SelectTrigger className="w-full border-slate-200 bg-white">
+                                  <SelectValue placeholder="Select replacement sender ID" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {getAvailableReplacementIds(sid.id).length === 0 ? (
+                                    <SelectItem value="__none" disabled>
+                                      No other sender IDs available — fetch from HostPinnacle first
+                                    </SelectItem>
+                                  ) : (
+                                    getAvailableReplacementIds(sid.id).map((hpSid) => (
+                                      <SelectItem key={hpSid.id} value={hpSid.id}>
+                                        {hpSid.senderName}
+                                        {hpSid.assignedTo && hpSid.assignedTo.userId !== selectedAccount.id
+                                          ? ` (from ${hpSid.assignedTo.userName || 'another user'})`
+                                          : ''}
+                                      </SelectItem>
+                                    ))
+                                  )}
+                                </SelectContent>
+                              </Select>
+                              <button
+                                onClick={() => handleReplaceSenderId(sid.id)}
+                                disabled={!replaceTargetId || actionLoading}
+                                className="w-full px-3 py-2 text-sm font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+                              >
+                                {actionLoading ? 'Replacing...' : 'Replace with selected ID'}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <Separator />
+
                 <div className="flex items-center justify-between gap-3">
                   <Label className="text-sm font-medium text-slate-700">
-                    HostPinnacle Sender IDs ({allSenderIds.length})
+                    Add from HostPinnacle ({allSenderIds.length})
                   </Label>
                   <button
                     onClick={fetchAllSenderIds}
@@ -842,7 +1035,7 @@ export default function SuperAdminAccounts() {
                     className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-60"
                   >
                     <RefreshCw className={`w-3.5 h-3.5 ${fetchingSenderIds ? 'animate-spin' : ''}`} />
-                    Refresh from HostPinnacle
+                    Refresh
                   </button>
                 </div>
 
@@ -851,7 +1044,7 @@ export default function SuperAdminAccounts() {
                     <p className="text-sm text-slate-500 py-6 text-center">Fetching sender IDs from HostPinnacle...</p>
                   ) : allSenderIds.length === 0 ? (
                     <p className="text-sm text-slate-500 py-6 text-center">
-                      No sender IDs found. Click &quot;Refresh from HostPinnacle&quot; to load them.
+                      No sender IDs found. Click Refresh to load from HostPinnacle.
                     </p>
                   ) : (
                     allSenderIds
@@ -879,10 +1072,10 @@ export default function SuperAdminAccounts() {
                           </div>
                           <button
                             onClick={() => handleAssignSenderId(sid.id, sid.senderName)}
-                            disabled={assigningSenderId === sid.id}
+                            disabled={assigningSenderId === sid.id || actionLoading}
                             className="px-3 py-1.5 text-xs font-medium text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors disabled:opacity-50"
                           >
-                            {assigningSenderId === sid.id ? 'Assigning...' : 'Assign'}
+                            {assigningSenderId === sid.id ? 'Adding...' : 'Add'}
                           </button>
                         </div>
                       ))
@@ -896,57 +1089,9 @@ export default function SuperAdminAccounts() {
                         )
                     ).length === 0 && (
                       <p className="text-sm text-slate-500 py-4 text-center">
-                        All HostPinnacle sender IDs are already assigned to this account.
+                        All available HostPinnacle sender IDs are already on this account.
                       </p>
                     )}
-                </div>
-
-                <Separator />
-
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium text-slate-700">
-                    Assigned to {selectedAccount.name}
-                  </Label>
-                  {selectedAccount.senderIds.length === 0 ? (
-                    <p className="text-sm text-slate-500 py-4 text-center border border-dashed border-slate-200 rounded-lg">
-                      No sender IDs assigned yet. Pick one from HostPinnacle above.
-                    </p>
-                  ) : (
-                    <div className="space-y-2">
-                      {selectedAccount.senderIds.map((sid) => (
-                        <div
-                          key={sid.id}
-                          className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-lg"
-                        >
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium text-slate-900">{sid.senderName}</span>
-                            {sid.isDefault && (
-                              <span className="px-2 py-0.5 text-xs font-medium bg-emerald-100 text-emerald-700 rounded">
-                                Default
-                              </span>
-                            )}
-                            <span className="text-xs text-slate-500 capitalize">{sid.status}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {!sid.isDefault && (
-                              <button
-                                onClick={() => handleSetDefault(sid.id)}
-                                className="px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
-                              >
-                                Set Default
-                              </button>
-                            )}
-                            <button
-                              onClick={() => handleUnassignSenderId(sid.id)}
-                              className="px-3 py-1.5 text-xs font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
-                            >
-                              Unassign
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
                 </div>
               </div>
             </DialogContent>
