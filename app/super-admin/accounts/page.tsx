@@ -52,6 +52,18 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Separator } from '@/components/ui/separator'
 
+interface HostPinnacleSenderId {
+  id: string
+  senderName: string
+  status: string
+  hpSenderId?: string
+  assignedTo?: {
+    userId: string
+    userName?: string
+    userEmail?: string
+  } | null
+}
+
 interface Account {
   id: string
   name: string
@@ -176,7 +188,9 @@ export default function SuperAdminAccounts() {
   const [senderIdDrawerOpen, setSenderIdDrawerOpen] = useState(false)
   const [pricingDrawerOpen, setPricingDrawerOpen] = useState(false)
   const [transferDialogOpen, setTransferDialogOpen] = useState(false)
-  const [allSenderIds, setAllSenderIds] = useState<any[]>([])
+  const [allSenderIds, setAllSenderIds] = useState<HostPinnacleSenderId[]>([])
+  const [fetchingSenderIds, setFetchingSenderIds] = useState(false)
+  const [assigningSenderId, setAssigningSenderId] = useState<string | null>(null)
 
   useEffect(() => {
     fetchAccounts()
@@ -206,6 +220,7 @@ export default function SuperAdminAccounts() {
 
   const fetchAllSenderIds = async () => {
     try {
+      setFetchingSenderIds(true)
       const token = localStorage.getItem('token')
       const response = await fetch('/api/super-admin/senderids', {
         headers: { Authorization: `Bearer ${token}` },
@@ -214,39 +229,63 @@ export default function SuperAdminAccounts() {
       if (response.ok) {
         const data = await response.json()
         setAllSenderIds(data.senderIds || [])
+        return data.senderIds || []
       }
+
+      const error = await response.json()
+      alert(error.error || 'Failed to fetch sender IDs from HostPinnacle')
+      return []
     } catch (error) {
       console.error('Error fetching sender IDs:', error)
+      alert('Failed to fetch sender IDs from HostPinnacle')
+      return []
+    } finally {
+      setFetchingSenderIds(false)
     }
   }
 
-  const handleAssignSenderId = async (senderId: string) => {
+  const handleAssignSenderId = async (senderIdOrName: string, senderName?: string) => {
     if (!selectedAccount) return
 
     try {
+      setAssigningSenderId(senderIdOrName)
       const token = localStorage.getItem('token')
-      const response = await fetch('/api/super-admin/senderids/assign', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          senderId,
-          userId: selectedAccount.id,
-        }),
-      })
+      const response = await fetch(
+        `/api/super-admin/accounts/${selectedAccount.id}/senderids/assign`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            senderId: senderIdOrName,
+            senderName,
+            makeDefault: selectedAccount.senderIds.length === 0,
+          }),
+        }
+      )
 
       if (response.ok) {
         await fetchAccounts()
-        setSenderIdDrawerOpen(false)
+        await fetchAllSenderIds()
+        const accountsResponse = await fetch('/api/super-admin/accounts', {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (accountsResponse.ok) {
+          const data = await accountsResponse.json()
+          const updated = (data.accounts || []).find((a: Account) => a.id === selectedAccount.id)
+          if (updated) setSelectedAccount(updated)
+        }
         alert('Sender ID assigned successfully')
       } else {
         const error = await response.json()
-        alert(error.error || 'Failed to assign sender ID')
+        alert(error.error || error.details || 'Failed to assign sender ID')
       }
     } catch (error) {
       alert('Failed to assign sender ID')
+    } finally {
+      setAssigningSenderId(null)
     }
   }
 
@@ -255,20 +294,29 @@ export default function SuperAdminAccounts() {
 
     try {
       const token = localStorage.getItem('token')
-      const response = await fetch('/api/super-admin/senderids/unassign', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          senderId,
-          userId: selectedAccount.id,
-        }),
-      })
+      const response = await fetch(
+        `/api/super-admin/accounts/${selectedAccount.id}/senderids/unassign`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ senderId }),
+        }
+      )
 
       if (response.ok) {
         await fetchAccounts()
+        await fetchAllSenderIds()
+        const accountsResponse = await fetch('/api/super-admin/accounts', {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (accountsResponse.ok) {
+          const data = await accountsResponse.json()
+          const updated = (data.accounts || []).find((a: Account) => a.id === selectedAccount.id)
+          if (updated) setSelectedAccount(updated)
+        }
         alert('Sender ID unassigned successfully')
       } else {
         const error = await response.json()
@@ -284,20 +332,28 @@ export default function SuperAdminAccounts() {
 
     try {
       const token = localStorage.getItem('token')
-      const response = await fetch('/api/super-admin/senderids/set-default', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          senderId,
-          userId: selectedAccount.id,
-        }),
-      })
+      const response = await fetch(
+        `/api/super-admin/accounts/${selectedAccount.id}/senderids/default`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ senderId }),
+        }
+      )
 
       if (response.ok) {
         await fetchAccounts()
+        const accountsResponse = await fetch('/api/super-admin/accounts', {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (accountsResponse.ok) {
+          const data = await accountsResponse.json()
+          const updated = (data.accounts || []).find((a: Account) => a.id === selectedAccount.id)
+          if (updated) setSelectedAccount(updated)
+        }
       } else {
         const error = await response.json()
         alert(error.error || 'Failed to set default')
@@ -427,6 +483,14 @@ export default function SuperAdminAccounts() {
           </div>
           <div className="flex items-center gap-3">
             <button
+              onClick={fetchAllSenderIds}
+              disabled={fetchingSenderIds}
+              className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 border border-emerald-600 rounded-xl shadow-sm text-white hover:bg-emerald-700 disabled:opacity-60 active:scale-95 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-all duration-200"
+            >
+              <RefreshCw className={`w-4 h-4 ${fetchingSenderIds ? 'animate-spin' : ''}`} />
+              {fetchingSenderIds ? 'Fetching...' : 'Fetch HostPinnacle IDs'}
+            </button>
+            <button
               onClick={handleExportCSV}
               className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-xl shadow-sm text-slate-700 hover:bg-slate-100 hover:text-slate-900 active:scale-95 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-all duration-200"
             >
@@ -434,7 +498,10 @@ export default function SuperAdminAccounts() {
               Export
             </button>
             <button
-              onClick={fetchAccounts}
+              onClick={async () => {
+                await fetchAccounts()
+                await fetchAllSenderIds()
+              }}
               className="flex items-center justify-center p-2.5 bg-white border border-slate-200 rounded-xl shadow-sm text-slate-700 hover:bg-slate-100 hover:text-slate-900 active:scale-95 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-all duration-200"
             >
               <RefreshCw className="w-4 h-4 text-slate-500" />
@@ -559,22 +626,51 @@ export default function SuperAdminAccounts() {
                       </td>
                       <td className="py-3 px-6">
                         {account.senderIds.length > 0 ? (
-                          <div className="flex items-center gap-2">
-                            <span className="inline-flex items-center px-2 py-1 rounded-lg text-xs font-medium bg-slate-100 text-slate-700">
-                              {account.senderIds.length}
-                            </span>
-                            <button
-                              onClick={() => {
-                                setSelectedAccount(account)
-                                setSenderIdDrawerOpen(true)
-                              }}
-                              className="text-xs text-emerald-600 hover:text-emerald-700 font-medium"
-                            >
-                              View
-                            </button>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            {account.senderIds.slice(0, 2).map((sid) => (
+                              <span
+                                key={sid.id}
+                                className="inline-flex items-center px-2 py-1 rounded-lg text-xs font-medium bg-emerald-50 text-emerald-800 border border-emerald-200"
+                                title={sid.isDefault ? 'Default sender ID' : sid.status}
+                              >
+                                {sid.senderName}
+                                {sid.isDefault && ' ★'}
+                              </span>
+                            ))}
+                            {account.senderIds.length > 2 && (
+                              <button
+                                onClick={() => {
+                                  setSelectedAccount(account)
+                                  setSenderIdDrawerOpen(true)
+                                }}
+                                className="text-xs text-emerald-600 hover:text-emerald-700 font-medium"
+                              >
+                                +{account.senderIds.length - 2} more
+                              </button>
+                            )}
+                            {account.senderIds.length <= 2 && (
+                              <button
+                                onClick={() => {
+                                  setSelectedAccount(account)
+                                  setSenderIdDrawerOpen(true)
+                                }}
+                                className="text-xs text-slate-500 hover:text-slate-700"
+                              >
+                                Manage
+                              </button>
+                            )}
                           </div>
                         ) : (
-                          <span className="text-sm text-slate-400">None</span>
+                          <button
+                            onClick={async () => {
+                              setSelectedAccount(account)
+                              if (allSenderIds.length === 0) await fetchAllSenderIds()
+                              setSenderIdDrawerOpen(true)
+                            }}
+                            className="text-sm text-emerald-600 hover:text-emerald-700 font-medium"
+                          >
+                            Assign Sender ID
+                          </button>
                         )}
                       </td>
                       <td className="py-3 px-6">
@@ -682,7 +778,9 @@ export default function SuperAdminAccounts() {
                   <div>
                     <p className="text-xs text-slate-500 mb-1">Sender IDs</p>
                     <p className="text-sm font-medium text-slate-900">
-                      {account.senderIds.length} {account.senderIds.length === 1 ? 'ID' : 'IDs'}
+                      {account.senderIds.length > 0
+                        ? account.senderIds.map((s) => s.senderName).join(', ')
+                        : 'None assigned'}
                     </p>
                   </div>
                   <div>
@@ -717,74 +815,138 @@ export default function SuperAdminAccounts() {
 
         {/* Sender ID Management Modal */}
         {selectedAccount && (
-          <Dialog open={senderIdDrawerOpen} onOpenChange={setSenderIdDrawerOpen}>
-            <DialogContent className="max-w-2xl bg-white border border-slate-200 rounded-2xl shadow-xl">
+          <Dialog
+            open={senderIdDrawerOpen}
+            onOpenChange={(open) => {
+              setSenderIdDrawerOpen(open)
+              if (open && allSenderIds.length === 0) fetchAllSenderIds()
+            }}
+          >
+            <DialogContent className="max-w-2xl bg-white border border-slate-200 rounded-2xl shadow-xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle className="text-xl font-semibold text-slate-900">
-                  Manage Sender IDs - {selectedAccount.name}
+                  Manage Sender IDs — {selectedAccount.name}
                 </DialogTitle>
                 <DialogDescription className="text-slate-600">
-                  Assign, unassign, or set default sender IDs for this account.
+                  Fetch sender IDs from HostPinnacle, then assign one to this account. The user will see it when sending SMS.
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium text-slate-700">Available Sender IDs</Label>
-                  <div className="space-y-2 max-h-64 overflow-y-auto">
-                    {allSenderIds
-                      .filter((sid) => !selectedAccount.senderIds.some((asid) => asid.id === sid.id))
+                <div className="flex items-center justify-between gap-3">
+                  <Label className="text-sm font-medium text-slate-700">
+                    HostPinnacle Sender IDs ({allSenderIds.length})
+                  </Label>
+                  <button
+                    onClick={fetchAllSenderIds}
+                    disabled={fetchingSenderIds}
+                    className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-60"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${fetchingSenderIds ? 'animate-spin' : ''}`} />
+                    Refresh from HostPinnacle
+                  </button>
+                </div>
+
+                <div className="space-y-2 max-h-64 overflow-y-auto">
+                  {fetchingSenderIds && allSenderIds.length === 0 ? (
+                    <p className="text-sm text-slate-500 py-6 text-center">Fetching sender IDs from HostPinnacle...</p>
+                  ) : allSenderIds.length === 0 ? (
+                    <p className="text-sm text-slate-500 py-6 text-center">
+                      No sender IDs found. Click &quot;Refresh from HostPinnacle&quot; to load them.
+                    </p>
+                  ) : (
+                    allSenderIds
+                      .filter(
+                        (sid) =>
+                          !selectedAccount.senderIds.some(
+                            (asid) => asid.id === sid.id || asid.senderName === sid.senderName
+                          )
+                      )
                       .map((sid) => (
+                        <div
+                          key={sid.id || sid.senderName}
+                          className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-lg"
+                        >
+                          <div>
+                            <span className="text-sm font-medium text-slate-900">{sid.senderName}</span>
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className="text-xs text-slate-500 capitalize">{sid.status}</span>
+                              {sid.assignedTo && sid.assignedTo.userId !== selectedAccount.id && (
+                                <span className="text-xs text-amber-700">
+                                  Assigned to {sid.assignedTo.userName || sid.assignedTo.userEmail}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => handleAssignSenderId(sid.id, sid.senderName)}
+                            disabled={assigningSenderId === sid.id}
+                            className="px-3 py-1.5 text-xs font-medium text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors disabled:opacity-50"
+                          >
+                            {assigningSenderId === sid.id ? 'Assigning...' : 'Assign'}
+                          </button>
+                        </div>
+                      ))
+                  )}
+                  {!fetchingSenderIds &&
+                    allSenderIds.length > 0 &&
+                    allSenderIds.filter(
+                      (sid) =>
+                        !selectedAccount.senderIds.some(
+                          (asid) => asid.id === sid.id || asid.senderName === sid.senderName
+                        )
+                    ).length === 0 && (
+                      <p className="text-sm text-slate-500 py-4 text-center">
+                        All HostPinnacle sender IDs are already assigned to this account.
+                      </p>
+                    )}
+                </div>
+
+                <Separator />
+
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-slate-700">
+                    Assigned to {selectedAccount.name}
+                  </Label>
+                  {selectedAccount.senderIds.length === 0 ? (
+                    <p className="text-sm text-slate-500 py-4 text-center border border-dashed border-slate-200 rounded-lg">
+                      No sender IDs assigned yet. Pick one from HostPinnacle above.
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      {selectedAccount.senderIds.map((sid) => (
                         <div
                           key={sid.id}
                           className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-lg"
                         >
-                          <span className="text-sm text-slate-900">{sid.senderName}</span>
-                          <button
-                            onClick={() => handleAssignSenderId(sid.id)}
-                            className="px-3 py-1.5 text-xs font-medium text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors"
-                          >
-                            Assign
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-slate-900">{sid.senderName}</span>
+                            {sid.isDefault && (
+                              <span className="px-2 py-0.5 text-xs font-medium bg-emerald-100 text-emerald-700 rounded">
+                                Default
+                              </span>
+                            )}
+                            <span className="text-xs text-slate-500 capitalize">{sid.status}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {!sid.isDefault && (
+                              <button
+                                onClick={() => handleSetDefault(sid.id)}
+                                className="px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+                              >
+                                Set Default
+                              </button>
+                            )}
+                            <button
+                              onClick={() => handleUnassignSenderId(sid.id)}
+                              className="px-3 py-1.5 text-xs font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+                            >
+                              Unassign
+                            </button>
+                          </div>
                         </div>
                       ))}
-                  </div>
-                </div>
-                <Separator />
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium text-slate-700">Assigned Sender IDs</Label>
-                  <div className="space-y-2">
-                    {selectedAccount.senderIds.map((sid) => (
-                      <div
-                        key={sid.id}
-                        className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-lg"
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium text-slate-900">{sid.senderName}</span>
-                          {sid.isDefault && (
-                            <span className="px-2 py-0.5 text-xs font-medium bg-emerald-100 text-emerald-700 rounded">
-                              Default
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {!sid.isDefault && (
-                            <button
-                              onClick={() => handleSetDefault(sid.id)}
-                              className="px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
-                            >
-                              Set Default
-                            </button>
-                          )}
-                          <button
-                            onClick={() => handleUnassignSenderId(sid.id)}
-                            className="px-3 py-1.5 text-xs font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
-                          >
-                            Unassign
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </DialogContent>

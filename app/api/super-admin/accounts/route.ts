@@ -24,17 +24,23 @@ export async function GET(request: NextRequest) {
         
         // Get user's sender IDs with details
         const userSenderIds = await UserSenderId.find({ userId: user._id }).populate('senderId')
-        const senderIds = await Promise.all(
-          userSenderIds.map(async (usi) => {
-            const senderId = await SenderId.findById(usi.senderId)
+        const senderIds = userSenderIds
+          .map((usi) => {
+            const senderId = usi.senderId as any
+            if (!senderId?._id || !senderId?.senderName) return null
             return {
-              id: senderId?._id.toString(),
-              senderName: senderId?.senderName,
-              status: senderId?.status,
+              id: senderId._id.toString(),
+              senderName: senderId.senderName,
+              status: senderId.status,
               isDefault: usi.isDefault,
             }
           })
-        )
+          .filter(Boolean) as Array<{
+          id: string
+          senderName: string
+          status: string
+          isDefault: boolean
+        }>
 
         // Get user pricing override
         const userPricing = await PricingRule.findOne({
