@@ -130,11 +130,13 @@ function ActionsMenu({
   account,
   onManageSenderIds,
   onPricingOverride,
+  onAdjustCredits,
   onSuspend,
 }: {
   account: Account
   onManageSenderIds: () => void
   onPricingOverride: () => void
+  onAdjustCredits: () => void
   onSuspend: () => void
 }) {
   return (
@@ -166,6 +168,13 @@ function ActionsMenu({
           <DollarSign className="w-4 h-4 text-slate-500 group-hover:text-slate-900 transition-colors" />
           <span>Pricing Override</span>
         </DropdownMenuItem>
+        <DropdownMenuItem
+          onClick={onAdjustCredits}
+          className="flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer text-slate-700 hover:bg-slate-100 hover:text-slate-900 focus:bg-slate-100 focus:text-slate-900 transition-colors group"
+        >
+          <Wallet className="w-4 h-4 text-slate-500 group-hover:text-slate-900 transition-colors" />
+          <span>Adjust Credits</span>
+        </DropdownMenuItem>
         <DropdownMenuSeparator className="bg-slate-200 my-1" />
         <DropdownMenuItem
           onClick={onSuspend}
@@ -195,6 +204,11 @@ export default function SuperAdminAccounts() {
   const [replacingSenderId, setReplacingSenderId] = useState<string | null>(null)
   const [replaceTargetId, setReplaceTargetId] = useState<string>('')
   const [actionLoading, setActionLoading] = useState(false)
+  const [creditsDrawerOpen, setCreditsDrawerOpen] = useState(false)
+  const [creditAction, setCreditAction] = useState<'add_credits' | 'remove_credits'>('add_credits')
+  const [creditAmount, setCreditAmount] = useState('')
+  const [creditReason, setCreditReason] = useState('')
+  const [creditSubmitting, setCreditSubmitting] = useState(false)
 
   useEffect(() => {
     fetchAccounts()
@@ -481,6 +495,62 @@ export default function SuperAdminAccounts() {
       }
     } catch (error) {
       alert('Failed to transfer sender ID')
+    }
+  }
+
+  const handleAdjustCredits = async () => {
+    if (!selectedAccount) return
+    const amount = Math.trunc(Number(creditAmount))
+    if (!amount || amount <= 0) {
+      alert('Enter a valid credit amount')
+      return
+    }
+
+    try {
+      setCreditSubmitting(true)
+      const token = localStorage.getItem('token')
+      const response = await fetch(`/api/super-admin/accounts/${selectedAccount.id}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          action: creditAction,
+          amount,
+          reason: creditReason.trim() || undefined,
+        }),
+      })
+
+      const data = await response.json()
+      if (response.ok) {
+        const token2 = localStorage.getItem('token')
+        const accountsResponse = await fetch('/api/super-admin/accounts', {
+          headers: { Authorization: `Bearer ${token2}` },
+        })
+        if (accountsResponse.ok) {
+          const accountsData = await accountsResponse.json()
+          setAccounts(accountsData.accounts || [])
+          const updated = (accountsData.accounts || []).find(
+            (a: Account) => a.id === selectedAccount.id
+          )
+          if (updated) setSelectedAccount(updated)
+        }
+        setCreditsDrawerOpen(false)
+        setCreditAmount('')
+        setCreditReason('')
+        alert(
+          creditAction === 'add_credits'
+            ? `Added ${amount} credits. New balance: ${data.newBalance}`
+            : `Removed ${amount} credits. New balance: ${data.newBalance}`
+        )
+      } else {
+        alert(data.error || 'Failed to adjust credits')
+      }
+    } catch {
+      alert('Failed to adjust credits')
+    } finally {
+      setCreditSubmitting(false)
     }
   }
 
@@ -811,6 +881,13 @@ export default function SuperAdminAccounts() {
                             setSelectedAccount(account)
                             setPricingDrawerOpen(true)
                           }}
+                          onAdjustCredits={() => {
+                            setSelectedAccount(account)
+                            setCreditAction('add_credits')
+                            setCreditAmount('')
+                            setCreditReason('')
+                            setCreditsDrawerOpen(true)
+                          }}
                           onSuspend={() => handleSuspend(account.id, account.isActive)}
                         />
                       </td>
@@ -870,6 +947,13 @@ export default function SuperAdminAccounts() {
                     onPricingOverride={() => {
                       setSelectedAccount(account)
                       setPricingDrawerOpen(true)
+                    }}
+                    onAdjustCredits={() => {
+                      setSelectedAccount(account)
+                      setCreditAction('add_credits')
+                      setCreditAmount('')
+                      setCreditReason('')
+                      setCreditsDrawerOpen(true)
                     }}
                     onSuspend={() => handleSuspend(account.id, account.isActive)}
                   />
@@ -1102,6 +1186,86 @@ export default function SuperAdminAccounts() {
                         All available HostPinnacle sender IDs are already on this account.
                       </p>
                     )}
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+        )}
+
+        {/* Adjust Credits Modal */}
+        {selectedAccount && (
+          <Dialog open={creditsDrawerOpen} onOpenChange={setCreditsDrawerOpen}>
+            <DialogContent className="max-w-md bg-white border border-slate-200 rounded-2xl shadow-xl">
+              <DialogHeader>
+                <DialogTitle className="text-xl font-semibold text-slate-900">
+                  Adjust Credits — {selectedAccount.name}
+                </DialogTitle>
+                <DialogDescription className="text-slate-600">
+                  Add or remove SMS credits on this user&apos;s account. Credits are per account, not per sender ID.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                  <p className="text-xs text-slate-500 mb-1">Current balance</p>
+                  <p className="text-2xl font-bold text-slate-900">
+                    {selectedAccount.credits.toLocaleString()} <span className="text-sm font-normal text-slate-500">SMS credits</span>
+                  </p>
+                </div>
+
+                <div>
+                  <Label className="text-sm font-medium text-slate-700 mb-2 block">Action</Label>
+                  <Select
+                    value={creditAction}
+                    onValueChange={(v) => setCreditAction(v as 'add_credits' | 'remove_credits')}
+                  >
+                    <SelectTrigger className="border-slate-200">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="add_credits">Add credits</SelectItem>
+                      <SelectItem value="remove_credits">Remove credits</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label className="text-sm font-medium text-slate-700 mb-2 block">Credits amount</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={creditAmount}
+                    onChange={(e) => setCreditAmount(e.target.value)}
+                    placeholder="e.g. 100"
+                    className="border-slate-200 focus:ring-2 focus:ring-emerald-500"
+                  />
+                  <p className="text-xs text-slate-500 mt-1">1 credit ≈ 1 SMS segment (up to 153 characters)</p>
+                </div>
+
+                <div>
+                  <Label className="text-sm font-medium text-slate-700 mb-2 block">Reason (optional)</Label>
+                  <Input
+                    value={creditReason}
+                    onChange={(e) => setCreditReason(e.target.value)}
+                    placeholder="e.g. Offline M-Pesa payment, promotional bonus"
+                    className="border-slate-200 focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200">
+                  <button
+                    onClick={() => setCreditsDrawerOpen(false)}
+                    className="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-xl transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleAdjustCredits}
+                    disabled={creditSubmitting || !creditAmount}
+                    className="px-4 py-2 text-sm font-medium bg-emerald-600 text-white hover:bg-emerald-700 rounded-xl transition-colors disabled:opacity-50"
+                  >
+                    {creditSubmitting ? 'Saving...' : creditAction === 'add_credits' ? 'Add Credits' : 'Remove Credits'}
+                  </button>
                 </div>
               </div>
             </DialogContent>

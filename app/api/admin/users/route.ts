@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
           email: user.email,
           phone: user.phone,
           role: user.role,
-          credits: user.credits,
+          credits: user.creditsBalance ?? 0,
           isActive: user.isActive,
           hpUserLoginName: hpAccount?.hpUserLoginName || null,
           senderIds,

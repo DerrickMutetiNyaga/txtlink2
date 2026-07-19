@@ -10,6 +10,7 @@ import connectDB from '@/lib/db/connect'
 import { User } from '@/lib/db/models'
 import { requireOwner } from '@/lib/auth/middleware'
 import { logAudit } from '@/lib/utils/audit'
+import { adjustUserCredits } from '@/lib/services/credits/adjust-balance'
 
 export async function PUT(
   request: NextRequest,
@@ -85,12 +86,18 @@ export async function POST(
     }
 
     if (action === 'add_credits' || action === 'remove_credits') {
-      const creditChange = action === 'add_credits' ? amount : -amount
-      const updatedUser = await User.findByIdAndUpdate(
-        userObjectId,
-        { $inc: { credits: creditChange } },
-        { new: true }
-      )
+      const creditAmount = Math.trunc(Number(amount))
+      if (!creditAmount || creditAmount <= 0) {
+        return NextResponse.json({ error: 'amount must be a positive number' }, { status: 400 })
+      }
+
+      const result = await adjustUserCredits({
+        userId,
+        creditsDelta: action === 'add_credits' ? creditAmount : -creditAmount,
+        reason,
+        adjustedBy: { userId: owner.userId, email: owner.email },
+        source: 'super_admin',
+      })
 
       await logAudit(
         action === 'add_credits' ? 'ADD_CREDITS' : 'REMOVE_CREDITS',
@@ -100,10 +107,11 @@ export async function POST(
         {
           resourceId: userId,
           changes: {
-            amount: creditChange,
-            previousBalance: user.credits,
-            newBalance: updatedUser?.credits,
+            amount: action === 'add_credits' ? creditAmount : -creditAmount,
+            previousBalance: result.previousBalance,
+            newBalance: result.newBalance,
             reason,
+            transactionId: result.transactionId,
           },
           request,
         }
@@ -111,7 +119,9 @@ export async function POST(
 
       return NextResponse.json({
         success: true,
-        newBalance: updatedUser?.credits,
+        previousBalance: result.previousBalance,
+        newBalance: result.newBalance,
+        creditsDelta: result.creditsDelta,
       })
     }
 

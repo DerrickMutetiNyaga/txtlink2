@@ -49,6 +49,7 @@ interface SenderIdModalProps {
   onRemove: (senderId: string) => void
   onSetDefault: (senderId: string) => void
   onSync: () => void
+  onAdjustCredits: (action: 'add' | 'remove', credits: number, reason?: string) => Promise<void>
   availableSenderIds: HostPinnacleSenderId[]
   loadingSenderIds: boolean
 }
@@ -61,12 +62,17 @@ function SenderIdModal({
   onRemove,
   onSetDefault,
   onSync,
+  onAdjustCredits,
   availableSenderIds,
   loadingSenderIds,
 }: SenderIdModalProps) {
   const [senderName, setSenderName] = useState('')
   const [selectedSenderId, setSelectedSenderId] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [creditAction, setCreditAction] = useState<'add' | 'remove'>('add')
+  const [creditAmount, setCreditAmount] = useState('')
+  const [creditReason, setCreditReason] = useState('')
+  const [creditSubmitting, setCreditSubmitting] = useState(false)
 
   if (!isOpen || !user) return null
 
@@ -94,10 +100,65 @@ function SenderIdModal({
       <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6 m-4">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-2xl font-bold text-slate-900">
-            Manage Sender IDs - {user.name}
+            Manage User — {user.name}
           </h2>
           <Button variant="ghost" size="sm" onClick={onClose}>
             <X size={20} />
+          </Button>
+        </div>
+
+        {/* Manual credits */}
+        <div className="mb-6 p-4 bg-emerald-50 rounded-xl border border-emerald-200">
+          <h3 className="font-semibold text-slate-900 mb-1">SMS Credits</h3>
+          <p className="text-sm text-slate-600 mb-3">
+            Current balance: <strong>{user.credits.toLocaleString()}</strong> credits (this user&apos;s account wallet)
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+            <select
+              value={creditAction}
+              onChange={(e) => setCreditAction(e.target.value as 'add' | 'remove')}
+              className="px-3 py-2 border border-slate-300 rounded-lg bg-white text-sm"
+            >
+              <option value="add">Add credits</option>
+              <option value="remove">Remove credits</option>
+            </select>
+            <input
+              type="number"
+              min={1}
+              step={1}
+              value={creditAmount}
+              onChange={(e) => setCreditAmount(e.target.value)}
+              placeholder="Amount"
+              className="px-3 py-2 border border-slate-300 rounded-lg text-sm"
+            />
+          </div>
+          <input
+            type="text"
+            value={creditReason}
+            onChange={(e) => setCreditReason(e.target.value)}
+            placeholder="Reason (optional)"
+            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm mb-3"
+          />
+          <Button
+            onClick={async () => {
+              const amount = Math.trunc(Number(creditAmount))
+              if (!amount || amount <= 0) {
+                alert('Enter a valid credit amount')
+                return
+              }
+              setCreditSubmitting(true)
+              try {
+                await onAdjustCredits(creditAction, amount, creditReason.trim() || undefined)
+                setCreditAmount('')
+                setCreditReason('')
+              } finally {
+                setCreditSubmitting(false)
+              }
+            }}
+            disabled={creditSubmitting || !creditAmount}
+            className="w-full bg-emerald-600 text-white hover:bg-emerald-700"
+          >
+            {creditSubmitting ? 'Saving...' : creditAction === 'add' ? 'Add Credits' : 'Remove Credits'}
           </Button>
         </div>
 
@@ -454,6 +515,44 @@ export default function AdminUsersPage() {
     }
   }
 
+  const handleAdjustCredits = async (
+    userId: string,
+    action: 'add' | 'remove',
+    credits: number,
+    reason?: string
+  ) => {
+    try {
+      const response = await fetch(`/api/admin/users/${userId}/credits`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
+        },
+        body: JSON.stringify({ action, credits, reason }),
+      })
+
+      const data = await response.json()
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to adjust credits')
+      }
+
+      await fetchUsers()
+      if (selectedUser?.id === userId) {
+        setSelectedUser((prev) =>
+          prev ? { ...prev, credits: data.newBalance } : prev
+        )
+      }
+      alert(
+        action === 'add'
+          ? `Added ${credits} credits. New balance: ${data.newBalance}`
+          : `Removed ${credits} credits. New balance: ${data.newBalance}`
+      )
+    } catch (error: any) {
+      alert(error.message)
+      throw error
+    }
+  }
+
   const handleSetDefault = async (userId: string, senderId: string) => {
     try {
       const response = await fetch(
@@ -603,7 +702,7 @@ export default function AdminUsersPage() {
                       </td>
                       <td className="py-4 px-4">
                         <span className="font-medium text-slate-900">
-                          KSh {user.credits.toLocaleString()}
+                          {user.credits.toLocaleString()} credits
                         </span>
                       </td>
                       <td className="py-4 px-4">
@@ -665,6 +764,11 @@ export default function AdminUsersPage() {
             selectedUser && handleSetDefault(selectedUser.id, senderId)
           }
           onSync={() => selectedUser && handleSyncSenderIds(selectedUser.id)}
+          onAdjustCredits={(action, credits, reason) =>
+            selectedUser
+              ? handleAdjustCredits(selectedUser.id, action, credits, reason)
+              : Promise.resolve()
+          }
           availableSenderIds={availableSenderIds}
           loadingSenderIds={loadingSenderIds}
         />
