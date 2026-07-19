@@ -11,6 +11,7 @@ import { User } from '@/lib/db/models'
 import { requireOwner } from '@/lib/auth/middleware'
 import { logAudit } from '@/lib/utils/audit'
 import { adjustUserCredits } from '@/lib/services/credits/adjust-balance'
+import { convertKesToCredits, getEffectivePricePerCreditKes } from '@/lib/utils/credits'
 
 export async function PUT(
   request: NextRequest,
@@ -76,7 +77,7 @@ export async function POST(
     const resolvedParams = await Promise.resolve(params)
     const userId = resolvedParams.id
 
-    const { action, amount, reason } = await request.json()
+    const { action, amount, amountKes, reason } = await request.json()
     const mongoose = require('mongoose')
     const userObjectId = new mongoose.Types.ObjectId(userId)
 
@@ -86,17 +87,50 @@ export async function POST(
     }
 
     if (action === 'add_credits' || action === 'remove_credits') {
-      const creditAmount = Math.trunc(Number(amount))
-      if (!creditAmount || creditAmount <= 0) {
-        return NextResponse.json({ error: 'amount must be a positive number' }, { status: 400 })
+      let creditsDelta: number
+      let payment: { amountKes: number; pricePerCreditKes: number } | undefined
+
+      if (action === 'add_credits') {
+        const paidKes = Number(amountKes ?? amount)
+        if (!paidKes || paidKes <= 0 || !Number.isFinite(paidKes)) {
+          return NextResponse.json(
+            { error: 'amountKes must be a positive number (KSh paid)' },
+            { status: 400 }
+          )
+        }
+
+        const pricePerCreditKes = getEffectivePricePerCreditKes()
+        const { creditsToAdd } = convertKesToCredits({ paidKes, pricePerCreditKes })
+
+        if (creditsToAdd <= 0) {
+          return NextResponse.json(
+            {
+              error: `KSh ${paidKes} is below the minimum for 1 credit (KSh ${pricePerCreditKes.toFixed(2)} per credit)`,
+            },
+            { status: 400 }
+          )
+        }
+
+        creditsDelta = creditsToAdd
+        payment = { amountKes: paidKes, pricePerCreditKes }
+      } else {
+        const creditAmount = Math.trunc(Number(amount))
+        if (!creditAmount || creditAmount <= 0) {
+          return NextResponse.json(
+            { error: 'amount must be a positive number of credits to remove' },
+            { status: 400 }
+          )
+        }
+        creditsDelta = -creditAmount
       }
 
       const result = await adjustUserCredits({
         userId,
-        creditsDelta: action === 'add_credits' ? creditAmount : -creditAmount,
+        creditsDelta,
         reason,
         adjustedBy: { userId: owner.userId, email: owner.email },
         source: 'super_admin',
+        payment,
       })
 
       await logAudit(
@@ -107,7 +141,11 @@ export async function POST(
         {
           resourceId: userId,
           changes: {
-            amount: action === 'add_credits' ? creditAmount : -creditAmount,
+            creditsDelta: result.creditsDelta,
+            ...(payment && {
+              amountKes: payment.amountKes,
+              pricePerCreditKes: payment.pricePerCreditKes,
+            }),
             previousBalance: result.previousBalance,
             newBalance: result.newBalance,
             reason,
@@ -122,6 +160,10 @@ export async function POST(
         previousBalance: result.previousBalance,
         newBalance: result.newBalance,
         creditsDelta: result.creditsDelta,
+        ...(payment && {
+          amountKes: payment.amountKes,
+          pricePerCreditKes: payment.pricePerCreditKes,
+        }),
       })
     }
 

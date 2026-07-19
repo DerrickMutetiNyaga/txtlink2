@@ -11,7 +11,12 @@ export interface AdjustUserCreditsParams {
   creditsDelta: number
   reason?: string
   adjustedBy: { userId: string; email: string }
-  source: 'super_admin' | 'admin'
+  source: 'super_admin'
+  /** When credits were derived from a KES payment (e.g. manual M-Pesa) */
+  payment?: {
+    amountKes: number
+    pricePerCreditKes: number
+  }
 }
 
 export interface AdjustUserCreditsResult {
@@ -24,7 +29,7 @@ export interface AdjustUserCreditsResult {
 export async function adjustUserCredits(
   params: AdjustUserCreditsParams
 ): Promise<AdjustUserCreditsResult> {
-  const { userId, creditsDelta, reason, adjustedBy, source } = params
+  const { userId, creditsDelta, reason, adjustedBy, source, payment } = params
 
   if (!creditsDelta || !Number.isFinite(creditsDelta) || creditsDelta === 0) {
     throw new Error('Credits amount must be a non-zero number')
@@ -58,12 +63,14 @@ export async function adjustUserCredits(
   const transaction = await Transaction.create({
     userId: userObjectId,
     type: isAdd ? 'top-up' : 'charge',
-    amount: creditsChange,
+    amount: payment?.amountKes ?? creditsChange,
     description:
       reason ||
-      (isAdd
-        ? `Manual credit top-up: +${creditsChange} SMS credits`
-        : `Manual credit adjustment: -${Math.abs(creditsChange)} SMS credits`),
+      (payment
+        ? `Manual M-Pesa top-up: ${creditsChange} SMS credits from KSh ${payment.amountKes.toFixed(2)} @ KSh ${payment.pricePerCreditKes.toFixed(2)}/credit`
+        : isAdd
+          ? `Manual credit top-up: +${creditsChange} SMS credits`
+          : `Manual credit adjustment: -${Math.abs(creditsChange)} SMS credits`),
     reference,
     status: 'completed',
     metadata: {
@@ -74,6 +81,13 @@ export async function adjustUserCredits(
       adjustedByEmail: adjustedBy.email,
       source,
       isManualCreditAdjustment: true,
+      ...(payment && {
+        currency: 'KES',
+        amountKes: payment.amountKes,
+        creditsAdded: creditsChange,
+        pricePerCreditKes: payment.pricePerCreditKes,
+        isManualMpesa: true,
+      }),
     },
   })
 

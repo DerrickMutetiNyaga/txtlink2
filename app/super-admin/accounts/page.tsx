@@ -51,6 +51,13 @@ import {
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Separator } from '@/components/ui/separator'
+import {
+  convertKesToCredits,
+  getEffectivePricePerCreditKes,
+} from '@/lib/utils/credits'
+
+const MODAL_INPUT_CLASS =
+  'border-slate-200 bg-white focus:ring-2 focus:ring-emerald-500 [&:-webkit-autofill]:[-webkit-text-fill-color:#0f172a] [&:-webkit-autofill]:[box-shadow:0_0_0_1000px_#ffffff_inset]'
 
 interface HostPinnacleSenderId {
   id: string
@@ -500,26 +507,36 @@ export default function SuperAdminAccounts() {
 
   const handleAdjustCredits = async () => {
     if (!selectedAccount) return
-    const amount = Math.trunc(Number(creditAmount))
-    if (!amount || amount <= 0) {
-      alert('Enter a valid credit amount')
+
+    const parsed = Number(creditAmount)
+    if (!parsed || parsed <= 0 || !Number.isFinite(parsed)) {
+      alert(creditAction === 'add_credits' ? 'Enter a valid amount in KSh' : 'Enter a valid credit amount')
       return
     }
 
     try {
       setCreditSubmitting(true)
       const token = localStorage.getItem('token')
+      const body =
+        creditAction === 'add_credits'
+          ? {
+              action: creditAction,
+              amountKes: parsed,
+              reason: creditReason.trim() || undefined,
+            }
+          : {
+              action: creditAction,
+              amount: Math.trunc(parsed),
+              reason: creditReason.trim() || undefined,
+            }
+
       const response = await fetch(`/api/super-admin/accounts/${selectedAccount.id}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          action: creditAction,
-          amount,
-          reason: creditReason.trim() || undefined,
-        }),
+        body: JSON.stringify(body),
       })
 
       const data = await response.json()
@@ -541,8 +558,8 @@ export default function SuperAdminAccounts() {
         setCreditReason('')
         alert(
           creditAction === 'add_credits'
-            ? `Added ${amount} credits. New balance: ${data.newBalance}`
-            : `Removed ${amount} credits. New balance: ${data.newBalance}`
+            ? `Added ${data.creditsDelta} credits from KSh ${parsed.toLocaleString()}. New balance: ${data.newBalance}`
+            : `Removed ${Math.abs(data.creditsDelta)} credits. New balance: ${data.newBalance}`
         )
       } else {
         alert(data.error || 'Failed to adjust credits')
@@ -553,6 +570,15 @@ export default function SuperAdminAccounts() {
       setCreditSubmitting(false)
     }
   }
+
+  const pricePerCreditKes = getEffectivePricePerCreditKes()
+  const addCreditsPreview =
+    creditAction === 'add_credits' && creditAmount
+      ? convertKesToCredits({
+          paidKes: Number(creditAmount),
+          pricePerCreditKes,
+        }).creditsToAdd
+      : 0
 
   const handleSuspend = async (accountId: string, currentIsActive: boolean) => {
     try {
@@ -1201,7 +1227,9 @@ export default function SuperAdminAccounts() {
                   Adjust Credits — {selectedAccount.name}
                 </DialogTitle>
                 <DialogDescription className="text-slate-600">
-                  Add or remove SMS credits on this user&apos;s account. Credits are per account, not per sender ID.
+                  {creditAction === 'add_credits'
+                    ? 'Enter the KSh amount the customer paid (e.g. missed M-Pesa). Credits are calculated automatically.'
+                    : 'Remove SMS credits directly from this account.'}
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
@@ -1216,30 +1244,48 @@ export default function SuperAdminAccounts() {
                   <Label className="text-sm font-medium text-slate-700 mb-2 block">Action</Label>
                   <Select
                     value={creditAction}
-                    onValueChange={(v) => setCreditAction(v as 'add_credits' | 'remove_credits')}
+                    onValueChange={(v) => {
+                      setCreditAction(v as 'add_credits' | 'remove_credits')
+                      setCreditAmount('')
+                    }}
                   >
                     <SelectTrigger className="border-slate-200">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="add_credits">Add credits</SelectItem>
+                      <SelectItem value="add_credits">Add credits (from KSh paid)</SelectItem>
                       <SelectItem value="remove_credits">Remove credits</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
                 <div>
-                  <Label className="text-sm font-medium text-slate-700 mb-2 block">Credits amount</Label>
+                  <Label className="text-sm font-medium text-slate-700 mb-2 block">
+                    {creditAction === 'add_credits' ? 'Amount paid (KSh)' : 'Credits to remove'}
+                  </Label>
                   <Input
                     type="number"
-                    min={1}
-                    step={1}
+                    min={creditAction === 'add_credits' ? 1 : 1}
+                    step={creditAction === 'add_credits' ? 'any' : 1}
                     value={creditAmount}
                     onChange={(e) => setCreditAmount(e.target.value)}
-                    placeholder="e.g. 100"
-                    className="border-slate-200 focus:ring-2 focus:ring-emerald-500"
+                    placeholder={creditAction === 'add_credits' ? 'e.g. 300' : 'e.g. 100'}
+                    autoComplete="off"
+                    className={MODAL_INPUT_CLASS}
                   />
-                  <p className="text-xs text-slate-500 mt-1">1 credit ≈ 1 SMS segment (up to 153 characters)</p>
+                  {creditAction === 'add_credits' ? (
+                    <p className="text-xs text-slate-500 mt-1">
+                      KSh {pricePerCreditKes.toFixed(2)} per credit
+                      {addCreditsPreview > 0 && (
+                        <span className="text-emerald-700 font-medium">
+                          {' '}
+                          → {addCreditsPreview.toLocaleString()} SMS credits
+                        </span>
+                      )}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-slate-500 mt-1">1 credit ≈ 1 SMS segment (up to 153 characters)</p>
+                  )}
                 </div>
 
                 <div>
@@ -1247,8 +1293,9 @@ export default function SuperAdminAccounts() {
                   <Input
                     value={creditReason}
                     onChange={(e) => setCreditReason(e.target.value)}
-                    placeholder="e.g. Offline M-Pesa payment, promotional bonus"
-                    className="border-slate-200 focus:ring-2 focus:ring-emerald-500"
+                    placeholder="e.g. M-Pesa not picked up, receipt ABC123"
+                    autoComplete="off"
+                    className={MODAL_INPUT_CLASS}
                   />
                 </div>
 
@@ -1261,10 +1308,20 @@ export default function SuperAdminAccounts() {
                   </button>
                   <button
                     onClick={handleAdjustCredits}
-                    disabled={creditSubmitting || !creditAmount}
+                    disabled={
+                      creditSubmitting ||
+                      !creditAmount ||
+                      (creditAction === 'add_credits' && addCreditsPreview <= 0)
+                    }
                     className="px-4 py-2 text-sm font-medium bg-emerald-600 text-white hover:bg-emerald-700 rounded-xl transition-colors disabled:opacity-50"
                   >
-                    {creditSubmitting ? 'Saving...' : creditAction === 'add_credits' ? 'Add Credits' : 'Remove Credits'}
+                    {creditSubmitting
+                      ? 'Saving...'
+                      : creditAction === 'add_credits'
+                        ? addCreditsPreview > 0
+                          ? `Add ${addCreditsPreview.toLocaleString()} Credits`
+                          : 'Add Credits'
+                        : 'Remove Credits'}
                   </button>
                 </div>
               </div>
