@@ -46,13 +46,32 @@ export async function resolveDlrWebhookBaseUrl(): Promise<{
   )
 }
 
-export async function buildDlrWebhookUrlFromSettings(): Promise<{
+export async function buildDlrWebhookUrlFromSettings(baseUrlOverride?: string): Promise<{
   dlrUrl: string
   hasSecret: boolean
   baseUrl: string
-  source: 'settings' | 'env'
+  source: 'override' | 'settings' | 'env'
 }> {
+  const override = baseUrlOverride?.trim().replace(/\/$/, '')
+  if (override) {
+    const { dlrUrl, hasSecret } = buildDlrWebhookUrl(override)
+    return { dlrUrl, hasSecret, baseUrl: override, source: 'override' }
+  }
+
   const { baseUrl, source } = await resolveDlrWebhookBaseUrl()
   const { dlrUrl, hasSecret } = buildDlrWebhookUrl(baseUrl)
   return { dlrUrl, hasSecret, baseUrl, source }
+}
+
+/** Persist the public app URL used for DLR webhooks. */
+export async function persistDlrWebhookBaseUrl(baseUrl: string): Promise<void> {
+  const normalized = baseUrl.trim().replace(/\/$/, '')
+  if (!normalized) return
+
+  await connectDB()
+  const settings = await SystemSettings.findOne()
+  if (!settings) return
+
+  settings.dlrWebhookBaseUrl = normalized
+  await settings.save()
 }

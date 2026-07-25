@@ -153,6 +153,7 @@ export default function SuperAdminSettingsPage() {
         if (data.dlrUrl) setDlrWebhookUrl(data.dlrUrl)
         if (data.baseUrl && !previewBaseUrl) {
           setDlrWebhookBaseUrl(data.baseUrl)
+          setFormData((prev) => ({ ...prev, dlrWebhookBaseUrl: data.baseUrl }))
           setDlrWebhookSource(data.source || null)
         }
       }
@@ -200,6 +201,9 @@ export default function SuperAdminSettingsPage() {
       setFormData({ ...data, signupDefaultSenderId })
       if (data.dlrWebhookBaseUrl) {
         setDlrWebhookBaseUrl(data.dlrWebhookBaseUrl)
+      } else {
+        // Pre-fill input with env URL so user sees what is currently used
+        fetchDlrWebhookUrl()
       }
     } catch (error) {
       console.error('Error fetching settings:', error)
@@ -616,8 +620,9 @@ export default function SuperAdminSettingsPage() {
                     className="border-[#E5E7EB] bg-white text-[#020617] text-sm"
                   />
                   <p className="text-xs text-[#64748B]">
-                    Overrides the server env URL ({dlrWebhookSource === 'env' ? 'currently from env' : 'save to apply'}).
-                    Use your live domain, not an old Render preview URL.
+                    {dlrWebhookSource === 'env'
+                      ? 'No custom URL saved yet — registration would use the server env URL until you register from here.'
+                      : 'Saved in settings and used for HostPinnacle registration.'}
                   </p>
                   {dlrWebhookUrl && (
                     <div className="pt-2 border-t border-[#E5E7EB]">
@@ -648,19 +653,36 @@ export default function SuperAdminSettingsPage() {
                     size="sm"
                     disabled={dlrRegistering}
                     onClick={async () => {
+                      const baseUrl = (formData.dlrWebhookBaseUrl ?? dlrWebhookBaseUrl ?? '')
+                        .trim()
+                        .replace(/\/$/, '')
+                      if (!baseUrl) {
+                        setDlrRegisterMessage('Enter your public app URL first (e.g. https://txtlink.co.ke)')
+                        return
+                      }
+
                       setDlrRegistering(true)
                       setDlrRegisterMessage(null)
                       try {
                         const token = localStorage.getItem('token')
                         const res = await fetch('/api/super-admin/dlr-webhook/register', {
                           method: 'POST',
-                          headers: token ? { Authorization: `Bearer ${token}` } : {},
+                          headers: {
+                            'Content-Type': 'application/json',
+                            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                          },
+                          body: JSON.stringify({ baseUrl }),
                         })
                         const data = await res.json()
                         if (data.success) {
                           if (data.dlrUrl) setDlrWebhookUrl(data.dlrUrl)
+                          if (data.baseUrl) {
+                            setDlrWebhookBaseUrl(data.baseUrl)
+                            setFormData((prev) => ({ ...prev, dlrWebhookBaseUrl: data.baseUrl }))
+                            setDlrWebhookSource('settings')
+                          }
                           setDlrRegisterMessage(
-                            `${data.message || 'Registered with HostPinnacle.'} URL: ${data.dlrUrl || dlrWebhookUrl || 'see above'}`
+                            `${data.message || 'Registered with HostPinnacle.'} URL: ${data.dlrUrl || ''}`
                           )
                         } else {
                           const detail = [data.error, data.message].filter(Boolean).join(' — ')
@@ -677,7 +699,7 @@ export default function SuperAdminSettingsPage() {
                     {dlrRegistering ? 'Registering…' : 'Install / re-register DLR webhook'}
                   </Button>
                   <span className="text-xs text-[#64748B]">
-                    Save your URL first, then click to register with HostPinnacle.
+                    Uses the URL in the box above (saved automatically when you register).
                   </span>
                 </div>
                 {dlrRegisterMessage && (

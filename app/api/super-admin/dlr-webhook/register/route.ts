@@ -54,7 +54,15 @@ export async function POST(request: NextRequest) {
   try {
     requireOwner(request)
 
-    const result = await registerDlrWebhook()
+    let baseUrl: string | undefined
+    try {
+      const body = await request.json()
+      baseUrl = typeof body?.baseUrl === 'string' ? body.baseUrl : undefined
+    } catch {
+      // No body — use saved/env URL
+    }
+
+    const result = await registerDlrWebhook({ baseUrl, persistBaseUrl: !!baseUrl })
 
     if (!result.success) {
       return NextResponse.json(
