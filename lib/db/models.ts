@@ -646,6 +646,10 @@ export interface ISystemSettings {
   defaultSmsEncoding: 'auto' | 'gsm7' | 'ucs2'
   defaultSenderIdBehavior: string
   defaultAccountCreditLimit: number
+  /** Auto-assign a sender ID when a new user registers */
+  autoAssignSenderIdOnSignup?: boolean
+  /** Sender ID document to assign on signup (shared across new users) */
+  signupDefaultSenderId?: mongoose.Types.ObjectId
   
   // Danger Zone Flags
   smsSendingEnabled: boolean
@@ -703,6 +707,8 @@ const SystemSettingsSchema = new Schema<ISystemSettings>(
     defaultSmsEncoding: { type: String, enum: ['auto', 'gsm7', 'ucs2'], default: 'auto' },
     defaultSenderIdBehavior: { type: String, default: 'require_approval' },
     defaultAccountCreditLimit: { type: Number, default: 0 },
+    autoAssignSenderIdOnSignup: { type: Boolean, default: false },
+    signupDefaultSenderId: { type: Schema.Types.ObjectId, ref: 'SenderId' },
 
     exchangeRateKesPerUsd: { type: Number, default: 130 },
     

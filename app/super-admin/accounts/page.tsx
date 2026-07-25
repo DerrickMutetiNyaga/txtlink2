@@ -1159,6 +1159,10 @@ export default function SuperAdminAccounts() {
                   </button>
                 </div>
 
+                <p className="text-xs text-slate-500 mb-3">
+                  Same sender ID can be added to multiple accounts. Each user keeps their own credits and SMS history.
+                </p>
+
                 <div className="space-y-2 max-h-64 overflow-y-auto">
                   {fetchingSenderIds && allSenderIds.length === 0 ? (
                     <p className="text-sm text-slate-500 py-6 text-center">Fetching sender IDs from HostPinnacle...</p>
@@ -1183,11 +1187,15 @@ export default function SuperAdminAccounts() {
                             <span className="text-sm font-medium text-slate-900">{sid.senderName}</span>
                             <div className="flex items-center gap-2 mt-1 flex-wrap">
                               <span className="text-xs text-slate-500 capitalize">{sid.status}</span>
-                              {formatSharedLabel(sid, selectedAccount.id) && (
+                              {formatSharedLabel(sid, selectedAccount.id) ? (
                                 <span className="text-xs text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded">
                                   {formatSharedLabel(sid, selectedAccount.id)}
                                 </span>
-                              )}
+                              ) : sid.assignedCount && sid.assignedCount > 0 ? (
+                                <span className="text-xs text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded">
+                                  Shared with {sid.assignedCount} account{sid.assignedCount === 1 ? '' : 's'}
+                                </span>
+                              ) : null}
                             </div>
                           </div>
                           <button

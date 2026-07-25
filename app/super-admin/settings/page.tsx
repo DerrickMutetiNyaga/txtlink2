@@ -65,6 +65,8 @@ interface SystemSettings {
   defaultSmsEncoding: 'auto' | 'gsm7' | 'ucs2'
   defaultSenderIdBehavior: string
   defaultAccountCreditLimit: number
+  autoAssignSenderIdOnSignup?: boolean
+  signupDefaultSenderId?: string | { _id: string; senderName?: string; status?: string }
   smsSendingEnabled: boolean
   // M-Pesa Configuration
   mpesaConsumerKey?: string
@@ -118,9 +120,14 @@ export default function SuperAdminSettingsPage() {
     amount: '',
     billRefNumber: '',
   })
+  const [signupSenderIds, setSignupSenderIds] = useState<
+    Array<{ id: string; senderName: string; status: string }>
+  >([])
+  const [loadingSignupSenderIds, setLoadingSignupSenderIds] = useState(false)
 
   useEffect(() => {
     fetchSettings()
+    fetchSignupSenderIds()
   }, [])
 
   const fetchSettings = async () => {
@@ -142,8 +149,13 @@ export default function SuperAdminSettingsPage() {
       }
 
       const result = await response.json()
-      setSettings(result.data)
-      setFormData(result.data)
+      const data = result.data
+      const signupDefaultSenderId =
+        typeof data.signupDefaultSenderId === 'object' && data.signupDefaultSenderId?._id
+          ? data.signupDefaultSenderId._id
+          : data.signupDefaultSenderId || ''
+      setSettings(data)
+      setFormData({ ...data, signupDefaultSenderId })
     } catch (error) {
       console.error('Error fetching settings:', error)
     } finally {
@@ -151,7 +163,36 @@ export default function SuperAdminSettingsPage() {
     }
   }
 
+  const fetchSignupSenderIds = async () => {
+    try {
+      setLoadingSignupSenderIds(true)
+      const token = localStorage.getItem('token')
+      const response = await fetch('/api/super-admin/senderids', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (response.ok) {
+        const data = await response.json()
+        setSignupSenderIds(
+          (data.senderIds || []).map((sid: { id: string; senderName: string; status: string }) => ({
+            id: sid.id,
+            senderName: sid.senderName,
+            status: sid.status,
+          }))
+        )
+      }
+    } catch (error) {
+      console.error('Error fetching sender IDs for signup default:', error)
+    } finally {
+      setLoadingSignupSenderIds(false)
+    }
+  }
+
   const handleSave = async () => {
+    if (formData.autoAssignSenderIdOnSignup && !formData.signupDefaultSenderId) {
+      alert('Select a sender ID for new signups, or turn off auto-assign.')
+      return
+    }
+
     try {
       setSaving(true)
       const token = localStorage.getItem('token')
@@ -869,6 +910,68 @@ export default function SuperAdminSettingsPage() {
                 className="border-[#E5E7EB] bg-white text-[#020617]"
               />
             </div>
+          </div>
+
+          <Separator className="my-6" />
+
+          <div className="space-y-4">
+            <div className="flex items-center justify-between p-4 bg-[#F1F5F9] rounded-lg border border-[#E5E7EB]">
+              <div>
+                <Label className="text-sm font-medium text-[#020617]">Auto-assign sender ID on signup</Label>
+                <p className="text-xs text-[#64748B] mt-1">
+                  New users get the free sender ID below automatically. Same ID can be shared across many accounts.
+                </p>
+              </div>
+              <Switch
+                checked={formData.autoAssignSenderIdOnSignup === true}
+                onCheckedChange={(checked) => updateField('autoAssignSenderIdOnSignup', checked)}
+                variant="default"
+              />
+            </div>
+
+            {formData.autoAssignSenderIdOnSignup && (
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <Label className="text-sm font-medium text-[#020617]">Free sender ID for new signups</Label>
+                  <button
+                    type="button"
+                    onClick={fetchSignupSenderIds}
+                    disabled={loadingSignupSenderIds}
+                    className="text-xs text-emerald-700 hover:text-emerald-800 disabled:opacity-50"
+                  >
+                    {loadingSignupSenderIds ? 'Refreshing...' : 'Refresh list'}
+                  </button>
+                </div>
+                <Select
+                  value={
+                    typeof formData.signupDefaultSenderId === 'string'
+                      ? formData.signupDefaultSenderId
+                      : ''
+                  }
+                  onValueChange={(value) => updateField('signupDefaultSenderId', value)}
+                >
+                  <SelectTrigger className="border-[#E5E7EB] bg-white text-[#020617]">
+                    <SelectValue placeholder="Select sender ID for new users" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {signupSenderIds.length === 0 ? (
+                      <SelectItem value="__none__" disabled>
+                        No sender IDs — fetch from HostPinnacle on Accounts first
+                      </SelectItem>
+                    ) : (
+                      signupSenderIds.map((sid) => (
+                        <SelectItem key={sid.id} value={sid.id}>
+                          {sid.senderName} ({sid.status})
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-[#64748B] mt-2">
+                  Pick once here — you won&apos;t need to manually assign this sender ID for each new signup.
+                </p>
+              </div>
+            )}
           </div>
         </Card>
 

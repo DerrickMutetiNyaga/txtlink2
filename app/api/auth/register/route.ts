@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import connectDB from '@/lib/db/connect'
 import { User } from '@/lib/db/models'
 import bcrypt from 'bcryptjs'
+import { assignSignupDefaultSenderId } from '@/lib/services/senderids/signup-default'
 
 export async function POST(request: NextRequest) {
   try {
@@ -54,10 +55,13 @@ export async function POST(request: NextRequest) {
       email: email.toLowerCase(),
       passwordHash,
       phone: phone || undefined,
-      role: 'user', // Default role
+      role: 'user',
       credits: 0,
+      creditsBalance: 0,
       isActive: true,
     })
+
+    await assignSignupDefaultSenderId(user._id.toString())
 
     // Generate JWT token
     const jwt = require('jsonwebtoken')

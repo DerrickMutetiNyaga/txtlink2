@@ -13,6 +13,7 @@ import {
   resolveIsOwner,
   validateGoogleUserInfo,
 } from '@/lib/auth/google-oauth'
+import { assignSignupDefaultSenderId } from '@/lib/services/senderids/signup-default'
 
 export async function GET(req: NextRequest) {
   let baseUrl = ''
@@ -86,6 +87,7 @@ export async function GET(req: NextRequest) {
           provider: 'google',
           lastLoginAt: new Date(),
         })
+        await assignSignupDefaultSenderId(user._id.toString())
       } catch (createErr) {
         console.error('Google OAuth user creation error:', createErr)
         return NextResponse.redirect(loginRedirectUrl(baseUrl, 'account_creation_failed'))

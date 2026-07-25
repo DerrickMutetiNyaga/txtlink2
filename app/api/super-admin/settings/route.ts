@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
     const user = requireOwner(request)
 
     // Get or create system settings (singleton)
-    let settings = await SystemSettings.findOne()
+    let settings = await SystemSettings.findOne().populate('signupDefaultSenderId', 'senderName status')
     
     if (!settings) {
       // Create default settings
@@ -123,6 +123,8 @@ export async function POST(request: NextRequest) {
       defaultSmsEncoding,
       defaultSenderIdBehavior,
       defaultAccountCreditLimit,
+      autoAssignSenderIdOnSignup,
+      signupDefaultSenderId,
       
       // Danger Zone
       smsSendingEnabled,
@@ -150,7 +152,7 @@ export async function POST(request: NextRequest) {
     } = body
 
     // Get existing settings to track changes
-    let settings = await SystemSettings.findOne()
+    let settings = await SystemSettings.findOne().populate('signupDefaultSenderId', 'senderName status')
     const before = settings ? settings.toObject() : null
 
     // Prepare update object
@@ -189,6 +191,15 @@ export async function POST(request: NextRequest) {
     if (defaultSmsEncoding !== undefined) updateData.defaultSmsEncoding = defaultSmsEncoding
     if (defaultSenderIdBehavior !== undefined) updateData.defaultSenderIdBehavior = defaultSenderIdBehavior
     if (defaultAccountCreditLimit !== undefined) updateData.defaultAccountCreditLimit = defaultAccountCreditLimit
+    if (autoAssignSenderIdOnSignup !== undefined) {
+      updateData.autoAssignSenderIdOnSignup = !!autoAssignSenderIdOnSignup
+    }
+    if (signupDefaultSenderId !== undefined) {
+      updateData.signupDefaultSenderId =
+        signupDefaultSenderId && mongoose.Types.ObjectId.isValid(signupDefaultSenderId)
+          ? new mongoose.Types.ObjectId(signupDefaultSenderId)
+          : null
+    }
     
     if (smsSendingEnabled !== undefined) updateData.smsSendingEnabled = smsSendingEnabled
 

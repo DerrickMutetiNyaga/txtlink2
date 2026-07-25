@@ -13,11 +13,13 @@ import {
   upsertSenderIdFromHostPinnacle,
   getSenderIdAssignmentMap,
 } from '@/lib/services/hostpinnacle/sender-ids'
+import { ensureSharedSenderIdIndexes } from '@/lib/services/senderids/ensure-shared-indexes'
 
 export async function GET(request: NextRequest) {
   try {
     await connectDB()
     requireOwner(request)
+    await ensureSharedSenderIdIndexes()
 
     const creds = await loadMasterHostPinnacleCredentials()
     if (!creds) {
