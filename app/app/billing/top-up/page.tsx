@@ -98,6 +98,9 @@ function TopUpPageContent() {
       })
 
       if (!response.ok) {
+        if (response.status === 404) {
+          setError('Payment record not found. If you already paid, contact support with your M-Pesa message.')
+        }
         return
       }
 
@@ -466,12 +469,12 @@ function TopUpPageContent() {
                 value={amount}
                 onChange={(e) => setAmount(e.target.value ? Number(e.target.value) : '')}
                 placeholder="0"
-                min="100"
+                min="10"
                 max="500000"
                 className="flex-1 px-4 py-3 border border-slate-200 rounded-xl bg-white text-slate-900 text-2xl font-bold placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#059669]/50 focus:border-[#059669]"
               />
             </div>
-            <p className="text-xs text-slate-500 mt-2">Minimum: KSh 100 | Maximum: KSh 500,000</p>
+            <p className="text-xs text-slate-500 mt-2">Minimum: KSh 10 | Maximum: KSh 500,000</p>
           </div>
         </Card>
 
@@ -527,11 +530,22 @@ function TopUpPageContent() {
                       <p className="text-sm font-semibold text-amber-900 mb-1">Payment Pending</p>
                       <p className="text-xs text-amber-700 mb-2">{statusMessage || success}</p>
                       <p className="text-xs text-amber-600">
-                        Please complete the payment on your phone. Your account will be credited automatically once payment is confirmed.
+                        Complete the payment on your phone. Your account will be credited automatically once confirmed.
                       </p>
-                      <div className="mt-2 flex items-center gap-2 text-xs text-amber-600">
-                        <RefreshCw className="w-3 h-3 animate-spin" />
-                        <span>Checking payment status...</span>
+                      <div className="mt-3 flex flex-wrap items-center gap-3">
+                        <div className="flex items-center gap-2 text-xs text-amber-600">
+                          <RefreshCw className="w-3 h-3 animate-spin" />
+                          <span>Checking payment status...</span>
+                        </div>
+                        {checkoutRequestId && (
+                          <button
+                            type="button"
+                            onClick={() => checkPaymentStatus(checkoutRequestId, transactionId)}
+                            className="text-xs font-medium text-amber-800 underline hover:text-amber-900"
+                          >
+                            I&apos;ve paid — check again
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>

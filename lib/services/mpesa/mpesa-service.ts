@@ -348,12 +348,16 @@ export class MpesaService {
       return null
     }
 
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL?.trim().replace(/\/$/, '')
+
     return {
       consumerKey: settings.mpesaConsumerKey || '',
       consumerSecret: settings.mpesaConsumerSecret || '',
       passkey: settings.mpesaPasskey || '',
       shortcode: settings.mpesaShortcode || '',
-      callbackUrl: settings.mpesaCallbackUrl || '',
+      callbackUrl:
+        settings.mpesaCallbackUrl ||
+        (baseUrl ? `${baseUrl}/api/mpesa/stk-callback` : ''),
       environment: settings.mpesaEnvironment || 'sandbox',
     }
   }
