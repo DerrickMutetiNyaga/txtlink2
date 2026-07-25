@@ -128,8 +128,7 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
     { href: '/super-admin/sender-id-ad', label: 'Sender ID Ad', icon: CheckCircle2 },
     { href: '/super-admin/mpesa-transactions', label: 'M-Pesa Transactions', icon: CreditCard },
     { href: '/super-admin/analytics', label: 'Analytics', icon: BarChart3 },
-    { href: '/super-admin/queue-status', label: 'Queue Status', icon: Activity },
-    { href: '/super-admin/system-health', label: 'System Health', icon: HeartPulse },
+    { href: '/super-admin/queue-status', label: 'Queue & Health', icon: HeartPulse },
     { href: '/super-admin/audit', label: 'Audit Logs', icon: FileText },
     { href: '/super-admin/settings', label: 'Settings', icon: Settings },
   ]
@@ -303,7 +302,7 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
                 <div>
                   <p className="text-xs font-semibold text-slate-900 uppercase tracking-wider mb-2">System Status</p>
                   <Link
-                    href="/super-admin/system-health"
+                    href="/super-admin/queue-status?tab=health"
                     className="text-xs text-emerald-700 hover:text-emerald-800 font-medium"
                   >
                     View live health dashboard →

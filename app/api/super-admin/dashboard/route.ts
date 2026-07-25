@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import connectDB from '@/lib/db/connect'
 import { User, SmsMessage, SenderId } from '@/lib/db/models'
 import { requireOwner } from '@/lib/auth/middleware'
+import { checkSystemHealth } from '@/lib/services/system-health/check-system-health'
 
 export async function GET(request: NextRequest) {
   try {
@@ -121,6 +122,12 @@ export async function GET(request: NextRequest) {
       },
     ])
 
+    const includeHealth = request.nextUrl.searchParams.get('health') === '1'
+    let health = undefined
+    if (includeHealth) {
+      health = await checkSystemHealth()
+    }
+
     return NextResponse.json({
       success: true,
       data: {
@@ -139,6 +146,7 @@ export async function GET(request: NextRequest) {
         topCustomers,
         volumeOverTime,
         deliveryOverTime,
+        health,
       },
     })
   } catch (error: any) {

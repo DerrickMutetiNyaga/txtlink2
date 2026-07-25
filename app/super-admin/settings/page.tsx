@@ -444,7 +444,7 @@ export default function SuperAdminSettingsPage() {
           </Button>
         </div>
 
-        <Link href="/super-admin/system-health">
+        <Link href="/super-admin/queue-status?tab=health">
           <Card className="bg-white border border-emerald-200 rounded-xl shadow-sm p-4 hover:bg-emerald-50/50 transition-colors cursor-pointer">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3 min-w-0">

@@ -20,6 +20,8 @@ import {
   Download,
   Activity,
 } from 'lucide-react'
+import Link from 'next/link'
+import { SystemHealthPanel } from '@/components/super-admin/SystemHealthPanel'
 import {
   LineChart,
   Line,
@@ -98,7 +100,7 @@ export default function SuperAdminDashboard() {
     try {
       setRefreshing(true)
       const token = localStorage.getItem('token')
-      const response = await fetch('/api/super-admin/dashboard', {
+      const response = await fetch('/api/super-admin/dashboard?health=1', {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -203,6 +205,21 @@ export default function SuperAdminDashboard() {
             Refresh
           </button>
         </div>
+
+        {data.health && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-slate-900">System Health</h2>
+              <Link
+                href="/super-admin/queue-status?tab=health"
+                className="text-sm text-emerald-700 hover:underline"
+              >
+                Full report →
+              </Link>
+            </div>
+            <SystemHealthPanel compact initialReport={data.health} fetchUrl="/api/super-admin/dashboard?health=1" />
+          </div>
+        )}
 
         {/* KPI Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

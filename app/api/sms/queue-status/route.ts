@@ -10,6 +10,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth/middleware'
 import { requireOwner } from '@/lib/auth/middleware'
 import { advancedSmsQueue } from '@/lib/services/sms/advanced-queue'
+import { checkSystemHealth } from '@/lib/services/system-health/check-system-health'
 import mongoose from 'mongoose'
 
 export async function GET(request: NextRequest) {
@@ -30,12 +31,17 @@ export async function GET(request: NextRequest) {
     const globalStatus = advancedSmsQueue.getStatus()
     
     if (isOwner) {
-      // Super admin gets full status
-      return NextResponse.json({
+      const includeHealth = request.nextUrl.searchParams.get('health') === '1'
+      const payload: Record<string, unknown> = {
         success: true,
         global: globalStatus,
         isOwner: true,
-      })
+      }
+      if (includeHealth) {
+        const health = await checkSystemHealth()
+        payload.health = health
+      }
+      return NextResponse.json(payload)
     } else {
       // Regular user gets their account status
       const userObjectId = new mongoose.Types.ObjectId(user.userId)
