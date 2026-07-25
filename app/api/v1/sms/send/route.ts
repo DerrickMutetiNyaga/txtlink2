@@ -12,8 +12,10 @@ import connectDB from '@/lib/db/connect'
 import { User, SenderId, UserSenderId, SmsMessage, ApiKey } from '@/lib/db/models'
 import { resolveHostPinnacleCredentials } from '@/lib/services/hostpinnacle/credentials'
 import { hostPinnacleClient } from '@/lib/services/hostpinnacle/client'
+import { extractHostPinnacleSendIds, primaryStatusLookupId } from '@/lib/services/hostpinnacle/send-ids'
 import { calculateSegments153, getEffectivePricePerCreditKes } from '@/lib/utils/credits'
 import { initialNextCheckAt } from '@/lib/services/sms-status/build-synchronizer'
+import { syncSmsMessageById } from '@/lib/services/sms-status/sync-user-pending'
 import { maskPhone } from '@/lib/utils/log-sanitize'
 import {
   normalizeOutgoingSmsPayload,
@@ -478,16 +480,24 @@ export async function POST(request: NextRequest) {
               refunded: true,
             })
           } else {
-            const transactionId = hpResult.data?.transactionId || hpResult.data?.transactionid || hpResult.data?.id
-            
+            const hpIds = extractHostPinnacleSendIds(hpResult.data)
+            const statusLookupId = primaryStatusLookupId(hpIds)
+
             await SmsMessage.findByIdAndUpdate(smsMessage._id, {
-              hpTransactionId: transactionId,
-              externalMsgId: transactionId,
+              externalMsgId: hpIds.messageId || statusLookupId,
+              hpTransactionId: hpIds.transactionId || statusLookupId,
               status: 'sent',
               providerStatus: 'SUBMITTED',
               sentAt: new Date(),
               nextCheckAt: initialNextCheckAt(),
             })
+
+            const smsId = smsMessage._id?.toString()
+            if (smsId) {
+              void syncSmsMessageById(smsId).catch((err) =>
+                console.warn('Post-send status sync failed:', err)
+              )
+            }
           }
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : String(error)

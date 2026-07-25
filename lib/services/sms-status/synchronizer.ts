@@ -121,7 +121,7 @@ export class SmsStatusSynchronizer {
 
     // Without a provider message ID there is nothing to look up yet
     // (the async send may not have recorded it). Retry later.
-    if (!message.providerMessageId) {
+    if (!message.externalMsgId && !message.hpTransactionId && !message.providerMessageId) {
       await this.repository.reschedule({
         messageId: message._id,
         status: 'retrying',
@@ -132,7 +132,36 @@ export class SmsStatusSynchronizer {
       return 'rescheduled'
     }
 
-    const lookup = await this.client.getMessageStatus(message.providerMessageId)
+    const lookupIds = [
+      ...new Set(
+        [message.externalMsgId, message.hpTransactionId, message.providerMessageId].filter(
+          Boolean
+        ) as string[]
+      ),
+    ]
+
+    let lookup: Awaited<ReturnType<HostPinnacleStatusClient['getMessageStatus']>> | null = null
+    for (const id of lookupIds) {
+      const attempt = await this.client.getMessageStatus(id)
+      if (attempt.ok && attempt.result) {
+        lookup = attempt
+        break
+      }
+      if (attempt.ok && !lookup) {
+        lookup = attempt
+      } else if (!lookup) {
+        lookup = attempt
+      }
+    }
+
+    if (!lookup) {
+      await this.repository.release({
+        messageId: message._id,
+        nextCheckAt: this.scheduler.nextCheckAt(message.statusCheckAttempts, now),
+        providerError: 'No lookup IDs available',
+      })
+      return 'errors'
+    }
 
     if (!lookup.ok) {
       // Provider unreachable / rate limited / circuit open: release the lease
@@ -200,7 +229,9 @@ export class SmsStatusSynchronizer {
       _id: doc._id as unknown as mongoose.Types.ObjectId,
       userId: doc.userId,
       status: doc.status,
-      providerMessageId,
+      externalMsgId: doc.externalMsgId || null,
+      hpTransactionId: doc.hpTransactionId || null,
+      providerMessageId: doc.externalMsgId || doc.hpTransactionId || providerMessageId,
       statusCheckAttempts: doc.statusCheckAttempts ?? 0,
       segments: doc.segments ?? 1,
       refunded: doc.refunded ?? false,
@@ -211,6 +242,41 @@ export class SmsStatusSynchronizer {
     }
 
     const outcome = await this.applyStatusResult(message, result, new Date())
+    return { applied: true, status: result.status }
+  }
+
+  /** Apply status when the DB row is already matched (e.g. DLR found message by phone). */
+  async applyStatusToMessageId(
+    messageId: string,
+    providerStatusRaw: string,
+    cause?: string
+  ): Promise<{ applied: boolean; status?: string }> {
+    const { SmsMessage } = await import('@/lib/db/models')
+    const doc = await SmsMessage.findById(messageId).lean()
+    if (!doc) return { applied: false }
+
+    const result = mapProviderStatus(providerStatusRaw, cause)
+    if (isFinalStatus(doc.status) && !result.isFinal) {
+      return { applied: false, status: doc.status }
+    }
+
+    const message: ClaimedMessage = {
+      _id: doc._id as unknown as mongoose.Types.ObjectId,
+      userId: doc.userId as mongoose.Types.ObjectId,
+      status: doc.status,
+      externalMsgId: doc.externalMsgId || null,
+      hpTransactionId: doc.hpTransactionId || null,
+      providerMessageId: doc.externalMsgId || doc.hpTransactionId || null,
+      statusCheckAttempts: doc.statusCheckAttempts ?? 0,
+      segments: doc.segments ?? 1,
+      refunded: doc.refunded ?? false,
+      sentAt: doc.sentAt ?? null,
+      createdAt: doc.createdAt,
+      toNumbers: doc.toNumbers ?? [],
+      senderName: doc.senderName ?? '',
+    }
+
+    await this.applyStatusResult(message, result, new Date())
     return { applied: true, status: result.status }
   }
 

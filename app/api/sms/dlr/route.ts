@@ -70,6 +70,15 @@ export async function POST(request: NextRequest) {
 
     data = normalizePayload(data)
 
+    const messageId =
+      data.messageId ??
+      data.Messageid ??
+      data.messageid ??
+      data.MessageId ??
+      data.uuid ??
+      data.UUID ??
+      data.msgid
+
     const transactionId =
       data.transactionId ??
       data.Transactionid ??
@@ -82,7 +91,8 @@ export async function POST(request: NextRequest) {
       data.status ??
       data.Status ??
       data.delivery_status ??
-      data.dlrstatus
+      data.dlrstatus ??
+      data.DLRStatus
 
     const deliveredTime = data.deliveredTime ?? data.DeliveredTime
     const errorCode = data.errorCode ?? data.ErrorCode
@@ -99,13 +109,25 @@ export async function POST(request: NextRequest) {
       console.warn('WebhookLog create failed:', logErr)
     }
 
-    if (!transactionId) {
-      console.log('DLR received but no transaction ID found in payload (keys:', Object.keys(data).join(','), ')')
+    if (!transactionId && !messageId) {
+      console.log('DLR received but no transaction/message ID in payload (keys:', Object.keys(data).join(','), ')')
       return ok()
     }
 
-    // Try to find the message by transaction ID
-    let smsMessage = await SmsMessage.findOne({ hpTransactionId: String(transactionId) })
+    const idCandidates = [
+      messageId ? String(messageId) : null,
+      transactionId ? String(transactionId) : null,
+    ].filter(Boolean) as string[]
+
+    let smsMessage =
+      idCandidates.length > 0
+        ? await SmsMessage.findOne({
+            $or: [
+              { hpTransactionId: { $in: idCandidates } },
+              { externalMsgId: { $in: idCandidates } },
+            ],
+          })
+        : null
 
     // If not found, try alternative lookups
     if (!smsMessage) {
@@ -146,11 +168,18 @@ export async function POST(request: NextRequest) {
         ).catch(() => {})
         return ok()
       } else {
-        // Found by phone number - update it with the transaction ID for future lookups
         await SmsMessage.findByIdAndUpdate(smsMessage._id, {
-          hpTransactionId: String(transactionId),
+          ...(messageId ? { externalMsgId: String(messageId) } : {}),
+          ...(transactionId ? { hpTransactionId: String(transactionId) } : {}),
         }).catch(() => {})
       }
+    }
+
+    if (smsMessage && messageId && transactionId) {
+      await SmsMessage.findByIdAndUpdate(smsMessage._id, {
+        externalMsgId: String(messageId),
+        hpTransactionId: String(transactionId),
+      }).catch(() => {})
     }
 
     // Derive the raw provider status string from the DLR payload.
@@ -172,11 +201,32 @@ export async function POST(request: NextRequest) {
     // used by the background worker and admin manual sync (refund rules,
     // finalization, and rescheduling live in exactly one place).
     const { synchronizer } = await getSharedSynchronizer()
-    const applyResult = await synchronizer.applyProviderStatus(
-      String(transactionId),
-      providerStatusRaw,
-      cause ? String(cause) : undefined
-    )
+
+    const applyIds = [
+      messageId ? String(messageId) : null,
+      smsMessage.externalMsgId,
+      smsMessage.hpTransactionId,
+      transactionId ? String(transactionId) : null,
+    ].filter(Boolean) as string[]
+
+    let applyResult: { applied: boolean; status?: string } = { applied: false, status: 'sent' }
+    for (const id of [...new Set(applyIds)]) {
+      applyResult = await synchronizer.applyProviderStatus(
+        id,
+        providerStatusRaw,
+        cause ? String(cause) : undefined
+      )
+      if (applyResult.applied) break
+    }
+
+    if (!applyResult.applied) {
+      applyResult = await synchronizer.applyStatusToMessageId(
+        String(smsMessage._id),
+        providerStatusRaw,
+        cause ? String(cause) : undefined
+      )
+    }
+
     const mappedStatus = applyResult.status || 'sent'
 
     // Preserve the provider's exact delivery timestamp when supplied

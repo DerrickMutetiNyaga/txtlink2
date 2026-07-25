@@ -34,7 +34,7 @@ export interface SmsStatusConfig {
   logLevel: 'debug' | 'info' | 'warn' | 'error'
 }
 
-const DEFAULT_RETRY_INTERVALS = [30, 120, 300, 900, 1800, 3600, 10800, 21600, 43200, 86400]
+const DEFAULT_RETRY_INTERVALS = [10, 30, 60, 120, 300, 900, 1800, 3600, 10800, 21600, 43200, 86400]
 
 function intFromEnv(name: string, fallback: number, min = 1): number {
   const raw = process.env[name]

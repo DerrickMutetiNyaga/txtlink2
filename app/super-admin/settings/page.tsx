@@ -40,6 +40,8 @@ import {
   Eye,
   EyeOff,
   Phone,
+  Copy,
+  Link2,
 } from 'lucide-react'
 
 interface SystemSettings {
@@ -115,6 +117,9 @@ export default function SuperAdminSettingsPage() {
   const [dlrTestResult, setDlrTestResult] = useState<{ success: true; transactionId: string } | { success: false; error: string } | null>(null)
   const [dlrDeliveryStatus, setDlrDeliveryStatus] = useState<'sent' | 'delivered' | 'failed' | null>(null)
   const [dlrCheckLoading, setDlrCheckLoading] = useState(false)
+  const [dlrWebhookUrl, setDlrWebhookUrl] = useState<string | null>(null)
+  const [dlrRegistering, setDlrRegistering] = useState(false)
+  const [dlrRegisterMessage, setDlrRegisterMessage] = useState<string | null>(null)
   const [simulationData, setSimulationData] = useState({
     phoneNumber: '',
     amount: '',
@@ -128,7 +133,23 @@ export default function SuperAdminSettingsPage() {
   useEffect(() => {
     fetchSettings()
     fetchSignupSenderIds()
+    fetchDlrWebhookUrl()
   }, [])
+
+  const fetchDlrWebhookUrl = async () => {
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch('/api/super-admin/dlr-webhook/register', {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
+      const data = await res.json()
+      if (data.success && data.dlrUrl) {
+        setDlrWebhookUrl(data.dlrUrl)
+      }
+    } catch {
+      // Non-blocking — URL preview only
+    }
+  }
 
   const fetchSettings = async () => {
     try {
@@ -557,33 +578,82 @@ export default function SuperAdminSettingsPage() {
                   variant="default"
                 />
               </div>
-              <div className="mt-3 flex items-center gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={async () => {
-                    try {
-                      const token = localStorage.getItem('token')
-                      const res = await fetch('/api/super-admin/dlr-webhook/register', {
-                        method: 'POST',
-                        headers: token ? { Authorization: `Bearer ${token}` } : {},
-                      })
-                      const data = await res.json()
-                      if (data.success) {
-                        alert('DLR webhook registered with HostPinnacle. Delivery status will now be updated from their side.')
-                      } else {
-                        alert(data.error || 'Registration failed')
+              <div className="mt-3 space-y-3">
+                {dlrWebhookUrl && (
+                  <div className="p-3 rounded-lg border border-[#E5E7EB] bg-white">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Link2 className="w-3.5 h-3.5 text-[#64748B]" />
+                      <Label className="text-xs font-medium text-[#64748B]">DLR webhook URL</Label>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <code className="text-xs text-[#020617] break-all">{dlrWebhookUrl}</code>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2"
+                        onClick={() => {
+                          navigator.clipboard.writeText(dlrWebhookUrl)
+                          setDlrRegisterMessage('URL copied to clipboard')
+                          setTimeout(() => setDlrRegisterMessage(null), 2000)
+                        }}
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={dlrRegistering}
+                    onClick={async () => {
+                      setDlrRegistering(true)
+                      setDlrRegisterMessage(null)
+                      try {
+                        const token = localStorage.getItem('token')
+                        const res = await fetch('/api/super-admin/dlr-webhook/register', {
+                          method: 'POST',
+                          headers: token ? { Authorization: `Bearer ${token}` } : {},
+                        })
+                        const data = await res.json()
+                        if (data.success) {
+                          if (data.dlrUrl) setDlrWebhookUrl(data.dlrUrl)
+                          setDlrRegisterMessage(
+                            `Registered with HostPinnacle. DLR URL: ${data.dlrUrl || dlrWebhookUrl || 'see above'}`
+                          )
+                        } else {
+                          setDlrRegisterMessage(data.error || 'Registration failed')
+                        }
+                      } catch (e: unknown) {
+                        setDlrRegisterMessage(e instanceof Error ? e.message : 'Request failed')
+                      } finally {
+                        setDlrRegistering(false)
                       }
-                    } catch (e: any) {
-                      alert(e.message || 'Request failed')
-                    }
-                  }}
-                  className="border-[#E5E7EB]"
-                >
-                  Register DLR URL with HostPinnacle
-                </Button>
-                <span className="text-xs text-[#64748B]">One-time: tell HostPinnacle to send delivery reports to this app</span>
+                    }}
+                    className="border-[#E5E7EB]"
+                  >
+                    {dlrRegistering ? 'Registering…' : 'Install / re-register DLR webhook'}
+                  </Button>
+                  <span className="text-xs text-[#64748B]">
+                    Safe to run again when testing if HostPinnacle fixed webhooks. Polling still works as backup.
+                  </span>
+                </div>
+                {dlrRegisterMessage && (
+                  <p
+                    className={`text-xs ${
+                      dlrRegisterMessage.startsWith('Registered')
+                        ? 'text-emerald-700'
+                        : dlrRegisterMessage === 'URL copied to clipboard'
+                          ? 'text-[#64748B]'
+                          : 'text-red-600'
+                    }`}
+                  >
+                    {dlrRegisterMessage}
+                  </p>
+                )}
               </div>
               {/* Manual Status Sync */}
               <div className="mt-4 p-4 rounded-lg border border-[#E5E7EB] bg-[#FAFAFA]">

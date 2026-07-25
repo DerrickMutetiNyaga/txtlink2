@@ -13,6 +13,8 @@
 import { SmsMessage } from '@/lib/db/models'
 import { hostPinnacleClient } from '@/lib/services/hostpinnacle/client'
 import { initialNextCheckAt } from '@/lib/services/sms-status/build-synchronizer'
+import { extractHostPinnacleSendIds, primaryStatusLookupId } from '@/lib/services/hostpinnacle/send-ids'
+import { syncSmsMessageById } from '@/lib/services/sms-status/sync-user-pending'
 import mongoose from 'mongoose'
 
 interface QueueConfig {
@@ -264,25 +266,21 @@ class AdvancedSMSQueue {
         return
       }
 
-      // Extract transaction ID from response
-      const transactionId = sendResult.data?.transactionId || 
-                           sendResult.data?.response?.transactionId ||
-                           sendResult.data?.uuid ||
-                           sendResult.data?.msgid
+      const hpIds = extractHostPinnacleSendIds(sendResult.data)
+      const statusLookupId = primaryStatusLookupId(hpIds)
 
-      // Update message with transaction ID and mark as sent.
-      // Delivery status is handled exclusively by the background worker,
-      // which picks this message up at nextCheckAt.
       await SmsMessage.findByIdAndUpdate(item.messageId, {
         status: 'sent',
-        hpTransactionId: transactionId,
-        externalMsgId: transactionId,
+        externalMsgId: hpIds.messageId || statusLookupId,
+        hpTransactionId: hpIds.transactionId || statusLookupId,
         sentAt: new Date(),
         providerStatus: 'SUBMITTED',
         nextCheckAt: initialNextCheckAt(),
       }).catch(err => {
         console.error(`Failed to update message ${item.messageId}:`, err)
       })
+
+      void syncSmsMessageById(String(item.messageId)).catch(() => {})
 
     } catch (error: any) {
       console.error(`Error processing message ${item.messageId}:`, error)

@@ -8,9 +8,11 @@ import connectDB from '@/lib/db/connect'
 import { User, SenderId, UserSenderId, SmsMessage } from '@/lib/db/models'
 import { resolveHostPinnacleCredentials } from '@/lib/services/hostpinnacle/credentials'
 import { hostPinnacleClient } from '@/lib/services/hostpinnacle/client'
+import { extractHostPinnacleSendIds, primaryStatusLookupId } from '@/lib/services/hostpinnacle/send-ids'
 import { requireAuth } from '@/lib/auth/middleware'
 import { calculateSegments153, getEffectivePricePerCreditKes } from '@/lib/utils/credits'
 import { initialNextCheckAt } from '@/lib/services/sms-status/build-synchronizer'
+import { syncSmsMessageById } from '@/lib/services/sms-status/sync-user-pending'
 import { buildMessageBodyFields, logSmsMessageCreateDebug } from '@/lib/services/sms/message-body'
 import { maskPhone } from '@/lib/utils/log-sanitize'
 
@@ -304,24 +306,34 @@ export async function POST(request: NextRequest) {
             })
           } else {
             // Update SMS message with transaction ID
-            const transactionId = hpResult.data?.transactionId || hpResult.data?.transactionid || hpResult.data?.id
+            const hpIds = extractHostPinnacleSendIds(hpResult.data)
+            const messageId = hpIds.messageId
+            const transactionId = hpIds.transactionId
+            const statusLookupId = primaryStatusLookupId(hpIds)
 
             console.log('SMS sent successfully:', {
               smsMessageId: smsMessage._id,
+              messageId,
               transactionId,
               recipient: maskPhone(formattedPhone),
             })
 
-            // The background worker takes over from here: it will check
-            // delivery status at nextCheckAt using the shared retry schedule.
             await SmsMessage.findByIdAndUpdate(smsMessage._id, {
-              hpTransactionId: transactionId,
-              externalMsgId: transactionId,
+              externalMsgId: messageId || statusLookupId,
+              hpTransactionId: transactionId || statusLookupId,
               status: 'sent',
               providerStatus: 'SUBMITTED',
               sentAt: new Date(),
               nextCheckAt: initialNextCheckAt(),
             })
+
+            // Poll HostPinnacle for delivery status (webhooks often don't fire).
+            const smsId = smsMessage._id?.toString()
+            if (smsId) {
+              void syncSmsMessageById(smsId).catch((err) =>
+                console.warn('Post-send status sync failed:', err)
+              )
+            }
           }
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : String(error)

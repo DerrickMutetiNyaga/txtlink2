@@ -326,10 +326,31 @@ export default function SMSHistoryPage() {
     fetchSMSHistory(true)
   }, [page, limit, statusFilter, senderIdFilter, campaignFilter, countryFilter, debouncedSearch, fromDate, toDate])
 
-  // NOTE: No automatic status polling here by design.
-  // Delivery statuses are kept up to date in MongoDB by the dedicated Render
-  // background worker; this page simply displays stored data. Users can
-  // refresh manually with the Refresh button or by changing filters.
+  // Poll HostPinnacle via history API when messages are still "Sent".
+
+  const hasPendingOnPage = useMemo(
+    () =>
+      smsHistory.some((sms) =>
+        ['sent', 'queued', 'processing', 'retrying'].includes(sms.status)
+      ),
+    [smsHistory]
+  )
+
+  useEffect(() => {
+    if (!hasPendingOnPage) return
+
+    let cancelled = false
+    const run = async () => {
+      if (!cancelled) await fetchSMSHistory(false)
+    }
+
+    run()
+    const interval = setInterval(run, 5000)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
+  }, [hasPendingOnPage, fetchSMSHistory])
 
   const getStatusBadge = (sms: SMSMessage) => {
     if (sms.status === 'delivered' && sms.deliveryMethod === 'android_phone_gateway') {
@@ -525,7 +546,7 @@ export default function SMSHistoryPage() {
               View, search, and track delivery status for all SMS messages.
             </p>
             <p className="text-xs text-[#64748B] mt-1 hidden lg:block">
-              Delivered/Failed status is updated by HostPinnacle delivery reports (DLR)—so you can see if each message actually reached the recipient.
+              Status is checked directly with HostPinnacle every few seconds until delivered or failed (no webhook required).
             </p>
           </div>
 

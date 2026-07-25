@@ -6,6 +6,7 @@ import mongoose from 'mongoose'
 import { parseSmsHistoryQuery } from '@/lib/services/sms-history/query'
 import { formatSmsHistoryRow } from '@/lib/services/sms-history/format'
 import { FAILED_LIKE_STATUSES } from '@/lib/services/sms-history/constants'
+import { syncUserPendingMessages } from '@/lib/services/sms-status/sync-user-pending'
 
 function readQueryParams(request: NextRequest, userId: mongoose.Types.ObjectId) {
   const { searchParams } = new URL(request.url)
@@ -29,6 +30,10 @@ export async function GET(request: NextRequest) {
     const user = requireAuth(request)
     const userId = new mongoose.Types.ObjectId(user.userId)
     const params = readQueryParams(request, userId)
+
+    // HostPinnacle webhooks are unreliable — poll their status API on every load.
+    await syncUserPendingMessages(user.userId, 50)
+
     const { filter, page, limit, skip } = parseSmsHistoryQuery(params)
 
     const [messages, total, senderIds, statsAgg, failureReasons, totalMessages] = await Promise.all([

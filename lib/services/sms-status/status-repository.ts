@@ -14,6 +14,10 @@ export interface ClaimedMessage {
   _id: mongoose.Types.ObjectId
   userId: mongoose.Types.ObjectId
   status: SmsStatus
+  /** HostPinnacle Message ID (uuid) — preferred for status API */
+  externalMsgId: string | null
+  /** HostPinnacle Transaction ID — used by DLR webhooks */
+  hpTransactionId: string | null
   providerMessageId: string | null
   statusCheckAttempts: number
   segments: number
@@ -25,11 +29,15 @@ export interface ClaimedMessage {
 }
 
 function toClaimedMessage(doc: any): ClaimedMessage {
+  const externalMsgId = doc.externalMsgId || null
+  const hpTransactionId = doc.hpTransactionId || null
   return {
     _id: doc._id,
     userId: doc.userId,
     status: doc.status,
-    providerMessageId: doc.externalMsgId || doc.hpTransactionId || null,
+    externalMsgId,
+    hpTransactionId,
+    providerMessageId: externalMsgId || hpTransactionId || null,
     statusCheckAttempts: doc.statusCheckAttempts ?? 0,
     segments: doc.segments ?? 1,
     refunded: doc.refunded ?? false,

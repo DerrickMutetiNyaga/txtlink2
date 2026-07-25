@@ -1,56 +1,66 @@
 /**
  * Register DLR Webhook with HostPinnacle
- * POST /api/super-admin/dlr-webhook/register
+ * GET  /api/super-admin/dlr-webhook/register — preview configured DLR URL
+ * POST /api/super-admin/dlr-webhook/register — register / re-register with HostPinnacle
  *
- * One-time setup: tells HostPinnacle to send delivery reports to this app's /api/sms/dlr.
- * Only super-admin (owner) can call this.
+ * Safe to call POST multiple times when testing if HostPinnacle fixed webhook delivery.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { requireOwner } from '@/lib/auth/middleware'
-import { hostPinnacleClient } from '@/lib/services/hostpinnacle/client'
+import { buildDlrWebhookUrl } from '@/lib/services/hostpinnacle/dlr-webhook-url'
+import { registerDlrWebhook } from '@/lib/services/hostpinnacle/register-dlr-webhook'
+
+export async function GET(request: NextRequest) {
+  try {
+    requireOwner(request)
+
+    const { dlrUrl, hasSecret } = buildDlrWebhookUrl()
+
+    return NextResponse.json({
+      success: true,
+      dlrUrl,
+      hasSecret,
+      endpoint: '/api/sms/dlr',
+    })
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : 'Internal server error'
+    if (message === 'Forbidden' || message === 'Unauthorized') {
+      return NextResponse.json({ error: message }, { status: 403 })
+    }
+    return NextResponse.json({ success: false, error: message }, { status: 400 })
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
     requireOwner(request)
 
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL
-    if (!baseUrl) {
-      return NextResponse.json(
-        { success: false, error: 'NEXT_PUBLIC_BASE_URL is not set. Set it to your app URL (e.g. https://yourdomain.com).' },
-        { status: 400 }
-      )
-    }
-
-    const secret = process.env.WEBHOOK_SECRET
-    const dlrUrl = secret
-      ? `${baseUrl.replace(/\/$/, '')}/api/sms/dlr?secret=${encodeURIComponent(secret)}`
-      : `${baseUrl.replace(/\/$/, '')}/api/sms/dlr`
-
-    const result = await hostPinnacleClient.createWebhook({
-      smsWebhook: dlrUrl,
-      smsWebhookRate: 10,
-    })
+    const result = await registerDlrWebhook()
 
     if (!result.success) {
       return NextResponse.json(
-        { success: false, error: result.error || 'HostPinnacle webhook registration failed', message: result.message },
+        {
+          success: false,
+          error: result.error || 'HostPinnacle webhook registration failed',
+          message: result.message,
+          dlrUrl: result.dlrUrl,
+        },
         { status: 502 }
       )
     }
 
     return NextResponse.json({
       success: true,
-      message: 'DLR webhook registered with HostPinnacle.',
-      dlrUrl,
+      message: result.message || 'DLR webhook registered with HostPinnacle.',
+      dlrUrl: result.dlrUrl,
+      hasSecret: result.hasSecret,
     })
-  } catch (e: any) {
-    if (e.message === 'Forbidden' || e.message === 'Unauthorized') {
-      return NextResponse.json({ error: e.message }, { status: 403 })
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : 'Internal server error'
+    if (message === 'Forbidden' || message === 'Unauthorized') {
+      return NextResponse.json({ error: message }, { status: 403 })
     }
-    return NextResponse.json(
-      { success: false, error: e.message || 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ success: false, error: message }, { status: 500 })
   }
 }

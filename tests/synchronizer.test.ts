@@ -20,6 +20,8 @@ function makeMessage(overrides: Partial<ClaimedMessage> = {}): ClaimedMessage {
     _id: new mongoose.Types.ObjectId(),
     userId: new mongoose.Types.ObjectId(),
     status: 'sent',
+    externalMsgId: 'uuid-123',
+    hpTransactionId: '7963869269082784834',
     providerMessageId: 'uuid-123',
     statusCheckAttempts: 1,
     segments: 2,
@@ -183,7 +185,7 @@ describe('SmsStatusSynchronizer.syncClaimedMessage', () => {
 
   it('reschedules messages that have no provider message ID yet', async () => {
     const outcome = await fakes.synchronizer.syncClaimedMessage(
-      makeMessage({ providerMessageId: null })
+      makeMessage({ providerMessageId: null, externalMsgId: null, hpTransactionId: null })
     )
     expect(outcome).toBe('rescheduled')
     expect(fakes.client.getMessageStatus).not.toHaveBeenCalled()
