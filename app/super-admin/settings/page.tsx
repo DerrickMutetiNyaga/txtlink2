@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
+import Link from 'next/link'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -42,6 +43,8 @@ import {
   Phone,
   Copy,
   Link2,
+  HeartPulse,
+  ChevronRight,
 } from 'lucide-react'
 
 interface SystemSettings {
@@ -440,6 +443,25 @@ export default function SuperAdminSettingsPage() {
             )}
           </Button>
         </div>
+
+        <Link href="/super-admin/system-health">
+          <Card className="bg-white border border-emerald-200 rounded-xl shadow-sm p-4 hover:bg-emerald-50/50 transition-colors cursor-pointer">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="p-2 rounded-lg bg-emerald-100 shrink-0">
+                  <HeartPulse className="w-5 h-5 text-emerald-700" />
+                </div>
+                <div className="min-w-0">
+                  <p className="font-medium text-[#020617]">System Health</p>
+                  <p className="text-sm text-[#64748B] truncate">
+                    Check database, SMS gateway, webhooks, queue, and M-Pesa status
+                  </p>
+                </div>
+              </div>
+              <ChevronRight className="w-5 h-5 text-emerald-600 shrink-0" />
+            </div>
+          </Card>
+        </Link>
 
         {/* Warning Banner */}
         <Card className="bg-white border-[#E5E7EB] rounded-xl shadow-sm border-l-4 border-l-amber-500 p-4">
