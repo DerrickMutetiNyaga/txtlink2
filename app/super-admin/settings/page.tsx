@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -119,6 +119,7 @@ export default function SuperAdminSettingsPage() {
   const [dlrDeliveryStatus, setDlrDeliveryStatus] = useState<'sent' | 'delivered' | 'failed' | null>(null)
   const [dlrCheckLoading, setDlrCheckLoading] = useState(false)
   const [dlrWebhookUrl, setDlrWebhookUrl] = useState<string | null>(null)
+  const [dlrSecretQuery, setDlrSecretQuery] = useState('')
   const [dlrWebhookBaseUrl, setDlrWebhookBaseUrl] = useState<string>('')
   const [dlrWebhookSource, setDlrWebhookSource] = useState<string | null>(null)
   const [dlrRegistering, setDlrRegistering] = useState(false)
@@ -150,7 +151,11 @@ export default function SuperAdminSettingsPage() {
       })
       const data = await res.json()
       if (data.success) {
-        if (data.dlrUrl) setDlrWebhookUrl(data.dlrUrl)
+        if (data.dlrUrl) {
+          setDlrWebhookUrl(data.dlrUrl)
+          const secretIdx = data.dlrUrl.indexOf('?secret=')
+          setDlrSecretQuery(secretIdx >= 0 ? data.dlrUrl.substring(secretIdx) : '')
+        }
         if (data.baseUrl && !previewBaseUrl) {
           setDlrWebhookBaseUrl(data.baseUrl)
           setFormData((prev) => ({ ...prev, dlrWebhookBaseUrl: data.baseUrl }))
@@ -172,6 +177,21 @@ export default function SuperAdminSettingsPage() {
 
     return () => clearTimeout(timer)
   }, [formData.dlrWebhookBaseUrl])
+
+  const effectiveDlrBaseUrl = (formData.dlrWebhookBaseUrl ?? dlrWebhookBaseUrl ?? '')
+    .trim()
+    .replace(/\/$/, '')
+
+  /** Always derived from the input box — never stale server/env URL. */
+  const computedDlrWebhookUrl = useMemo(() => {
+    if (!effectiveDlrBaseUrl) return dlrWebhookUrl
+    return `${effectiveDlrBaseUrl}/api/sms/dlr${dlrSecretQuery}`
+  }, [effectiveDlrBaseUrl, dlrSecretQuery, dlrWebhookUrl])
+
+  const dlrPreviewMismatch =
+    !!effectiveDlrBaseUrl &&
+    !!dlrWebhookUrl &&
+    !dlrWebhookUrl.startsWith(effectiveDlrBaseUrl)
 
   const fetchSettings = async () => {
     try {
@@ -620,22 +640,24 @@ export default function SuperAdminSettingsPage() {
                     className="border-[#E5E7EB] bg-white text-[#020617] text-sm"
                   />
                   <p className="text-xs text-[#64748B]">
-                    {dlrWebhookSource === 'env'
-                      ? 'No custom URL saved yet — registration would use the server env URL until you register from here.'
-                      : 'Saved in settings and used for HostPinnacle registration.'}
+                    {dlrWebhookSource === 'settings'
+                      ? 'Saved in settings and used for HostPinnacle registration.'
+                      : 'Enter your live domain below — the preview updates as you type.'}
                   </p>
-                  {dlrWebhookUrl && (
+                  {computedDlrWebhookUrl && (
                     <div className="pt-2 border-t border-[#E5E7EB]">
-                      <Label className="text-xs font-medium text-[#64748B] mb-1 block">Full DLR webhook URL</Label>
+                      <Label className="text-xs font-medium text-[#64748B] mb-1 block">
+                        Full DLR webhook URL (will be registered)
+                      </Label>
                       <div className="flex flex-wrap items-center gap-2">
-                        <code className="text-xs text-[#020617] break-all">{dlrWebhookUrl}</code>
+                        <code className="text-xs text-[#020617] break-all">{computedDlrWebhookUrl}</code>
                         <Button
                           type="button"
                           variant="ghost"
                           size="sm"
                           className="h-7 px-2"
                           onClick={() => {
-                            navigator.clipboard.writeText(dlrWebhookUrl)
+                            navigator.clipboard.writeText(computedDlrWebhookUrl)
                             setDlrRegisterMessage('URL copied to clipboard')
                             setTimeout(() => setDlrRegisterMessage(null), 2000)
                           }}
@@ -643,6 +665,11 @@ export default function SuperAdminSettingsPage() {
                           <Copy className="w-3.5 h-3.5" />
                         </Button>
                       </div>
+                      {dlrPreviewMismatch && (
+                        <p className="text-xs text-amber-700 mt-2">
+                          Preview updated to match your input. Click register to push this URL to HostPinnacle.
+                        </p>
+                      )}
                     </div>
                   )}
                 </div>
@@ -653,10 +680,7 @@ export default function SuperAdminSettingsPage() {
                     size="sm"
                     disabled={dlrRegistering}
                     onClick={async () => {
-                      const baseUrl = (formData.dlrWebhookBaseUrl ?? dlrWebhookBaseUrl ?? '')
-                        .trim()
-                        .replace(/\/$/, '')
-                      if (!baseUrl) {
+                      if (!effectiveDlrBaseUrl) {
                         setDlrRegisterMessage('Enter your public app URL first (e.g. https://txtlink.co.ke)')
                         return
                       }
@@ -665,24 +689,29 @@ export default function SuperAdminSettingsPage() {
                       setDlrRegisterMessage(null)
                       try {
                         const token = localStorage.getItem('token')
-                        const res = await fetch('/api/super-admin/dlr-webhook/register', {
+                        const registerUrl = `/api/super-admin/dlr-webhook/register?baseUrl=${encodeURIComponent(effectiveDlrBaseUrl)}`
+                        const res = await fetch(registerUrl, {
                           method: 'POST',
                           headers: {
                             'Content-Type': 'application/json',
                             ...(token ? { Authorization: `Bearer ${token}` } : {}),
                           },
-                          body: JSON.stringify({ baseUrl }),
+                          body: JSON.stringify({ baseUrl: effectiveDlrBaseUrl }),
                         })
                         const data = await res.json()
                         if (data.success) {
-                          if (data.dlrUrl) setDlrWebhookUrl(data.dlrUrl)
+                          if (data.dlrUrl) {
+                            setDlrWebhookUrl(data.dlrUrl)
+                            const secretIdx = data.dlrUrl.indexOf('?secret=')
+                            setDlrSecretQuery(secretIdx >= 0 ? data.dlrUrl.substring(secretIdx) : '')
+                          }
                           if (data.baseUrl) {
                             setDlrWebhookBaseUrl(data.baseUrl)
                             setFormData((prev) => ({ ...prev, dlrWebhookBaseUrl: data.baseUrl }))
                             setDlrWebhookSource('settings')
                           }
                           setDlrRegisterMessage(
-                            `${data.message || 'Registered with HostPinnacle.'} URL: ${data.dlrUrl || ''}`
+                            `${data.message || 'Registered with HostPinnacle.'} URL: ${data.dlrUrl || computedDlrWebhookUrl || ''}`
                           )
                         } else {
                           const detail = [data.error, data.message].filter(Boolean).join(' — ')

@@ -55,12 +55,14 @@ export async function POST(request: NextRequest) {
     requireOwner(request)
 
     let baseUrl: string | undefined
+    const baseUrlFromQuery = request.nextUrl.searchParams.get('baseUrl')?.trim()
     try {
       const body = await request.json()
       baseUrl = typeof body?.baseUrl === 'string' ? body.baseUrl : undefined
     } catch {
-      // No body — use saved/env URL
+      // No JSON body — may still have query param
     }
+    baseUrl = (baseUrl || baseUrlFromQuery)?.replace(/\/$/, '')
 
     const result = await registerDlrWebhook({ baseUrl, persistBaseUrl: !!baseUrl })
 
