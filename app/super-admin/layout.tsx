@@ -22,6 +22,7 @@ import {
   ChevronDown,
   CreditCard,
   Activity,
+  HeartPulse,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -128,6 +129,7 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
     { href: '/super-admin/mpesa-transactions', label: 'M-Pesa Transactions', icon: CreditCard },
     { href: '/super-admin/analytics', label: 'Analytics', icon: BarChart3 },
     { href: '/super-admin/queue-status', label: 'Queue Status', icon: Activity },
+    { href: '/super-admin/system-health', label: 'System Health', icon: HeartPulse },
     { href: '/super-admin/audit', label: 'Audit Logs', icon: FileText },
     { href: '/super-admin/settings', label: 'Settings', icon: Settings },
   ]
@@ -300,22 +302,12 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
               <div className="p-4 border-t border-slate-200/70 space-y-3">
                 <div>
                   <p className="text-xs font-semibold text-slate-900 uppercase tracking-wider mb-2">System Status</p>
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-slate-600">API</span>
-                      <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
-                        <CheckCircle2 className="w-3 h-3 mr-1" />
-                        OK
-                      </Badge>
-                    </div>
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-slate-600">Webhook</span>
-                      <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
-                        <CheckCircle2 className="w-3 h-3 mr-1" />
-                        OK
-                      </Badge>
-                    </div>
-                  </div>
+                  <Link
+                    href="/super-admin/system-health"
+                    className="text-xs text-emerald-700 hover:text-emerald-800 font-medium"
+                  >
+                    View live health dashboard →
+                  </Link>
                 </div>
                 <Separator />
                 <p className="text-xs text-slate-500 text-center">© TXTLINK</p>
