@@ -56,6 +56,7 @@ interface SystemSettings {
   defaultProviderCostPerPart: number
   retryPolicy: number
   deliveryReportWebhookEnabled: boolean
+  dlrWebhookBaseUrl?: string
   globalDefaultPricePerPart: number
   globalProviderCostPerPart: number
   defaultChargeOnFailure: boolean
@@ -118,6 +119,8 @@ export default function SuperAdminSettingsPage() {
   const [dlrDeliveryStatus, setDlrDeliveryStatus] = useState<'sent' | 'delivered' | 'failed' | null>(null)
   const [dlrCheckLoading, setDlrCheckLoading] = useState(false)
   const [dlrWebhookUrl, setDlrWebhookUrl] = useState<string | null>(null)
+  const [dlrWebhookBaseUrl, setDlrWebhookBaseUrl] = useState<string>('')
+  const [dlrWebhookSource, setDlrWebhookSource] = useState<string | null>(null)
   const [dlrRegistering, setDlrRegistering] = useState(false)
   const [dlrRegisterMessage, setDlrRegisterMessage] = useState<string | null>(null)
   const [simulationData, setSimulationData] = useState({
@@ -136,20 +139,38 @@ export default function SuperAdminSettingsPage() {
     fetchDlrWebhookUrl()
   }, [])
 
-  const fetchDlrWebhookUrl = async () => {
+  const fetchDlrWebhookUrl = async (previewBaseUrl?: string) => {
     try {
       const token = localStorage.getItem('token')
-      const res = await fetch('/api/super-admin/dlr-webhook/register', {
+      const query = previewBaseUrl
+        ? `?previewBaseUrl=${encodeURIComponent(previewBaseUrl.replace(/\/$/, ''))}`
+        : ''
+      const res = await fetch(`/api/super-admin/dlr-webhook/register${query}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       })
       const data = await res.json()
-      if (data.success && data.dlrUrl) {
-        setDlrWebhookUrl(data.dlrUrl)
+      if (data.success) {
+        if (data.dlrUrl) setDlrWebhookUrl(data.dlrUrl)
+        if (data.baseUrl && !previewBaseUrl) {
+          setDlrWebhookBaseUrl(data.baseUrl)
+          setDlrWebhookSource(data.source || null)
+        }
       }
     } catch {
       // Non-blocking — URL preview only
     }
   }
+
+  useEffect(() => {
+    const base = formData.dlrWebhookBaseUrl?.trim().replace(/\/$/, '')
+    if (!base) return
+
+    const timer = setTimeout(() => {
+      fetchDlrWebhookUrl(base)
+    }, 400)
+
+    return () => clearTimeout(timer)
+  }, [formData.dlrWebhookBaseUrl])
 
   const fetchSettings = async () => {
     try {
@@ -177,6 +198,9 @@ export default function SuperAdminSettingsPage() {
           : data.signupDefaultSenderId || ''
       setSettings(data)
       setFormData({ ...data, signupDefaultSenderId })
+      if (data.dlrWebhookBaseUrl) {
+        setDlrWebhookBaseUrl(data.dlrWebhookBaseUrl)
+      }
     } catch (error) {
       console.error('Error fetching settings:', error)
     } finally {
@@ -235,6 +259,7 @@ export default function SuperAdminSettingsPage() {
       const result = await response.json()
       setSettings(result.data)
       setFormData(result.data)
+      await fetchDlrWebhookUrl()
       alert('Settings saved successfully')
     } catch (error) {
       console.error('Error saving settings:', error)
@@ -579,30 +604,43 @@ export default function SuperAdminSettingsPage() {
                 />
               </div>
               <div className="mt-3 space-y-3">
-                {dlrWebhookUrl && (
-                  <div className="p-3 rounded-lg border border-[#E5E7EB] bg-white">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Link2 className="w-3.5 h-3.5 text-[#64748B]" />
-                      <Label className="text-xs font-medium text-[#64748B]">DLR webhook URL</Label>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <code className="text-xs text-[#020617] break-all">{dlrWebhookUrl}</code>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 px-2"
-                        onClick={() => {
-                          navigator.clipboard.writeText(dlrWebhookUrl)
-                          setDlrRegisterMessage('URL copied to clipboard')
-                          setTimeout(() => setDlrRegisterMessage(null), 2000)
-                        }}
-                      >
-                        <Copy className="w-3.5 h-3.5" />
-                      </Button>
-                    </div>
+                <div className="p-3 rounded-lg border border-[#E5E7EB] bg-white space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Link2 className="w-3.5 h-3.5 text-[#64748B]" />
+                    <Label className="text-xs font-medium text-[#64748B]">Public app URL (for DLR webhooks)</Label>
                   </div>
-                )}
+                  <Input
+                    value={formData.dlrWebhookBaseUrl ?? dlrWebhookBaseUrl ?? ''}
+                    onChange={(e) => updateField('dlrWebhookBaseUrl', e.target.value.replace(/\/$/, ''))}
+                    placeholder="https://txtlink.co.ke"
+                    className="border-[#E5E7EB] bg-white text-[#020617] text-sm"
+                  />
+                  <p className="text-xs text-[#64748B]">
+                    Overrides the server env URL ({dlrWebhookSource === 'env' ? 'currently from env' : 'save to apply'}).
+                    Use your live domain, not an old Render preview URL.
+                  </p>
+                  {dlrWebhookUrl && (
+                    <div className="pt-2 border-t border-[#E5E7EB]">
+                      <Label className="text-xs font-medium text-[#64748B] mb-1 block">Full DLR webhook URL</Label>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <code className="text-xs text-[#020617] break-all">{dlrWebhookUrl}</code>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2"
+                          onClick={() => {
+                            navigator.clipboard.writeText(dlrWebhookUrl)
+                            setDlrRegisterMessage('URL copied to clipboard')
+                            setTimeout(() => setDlrRegisterMessage(null), 2000)
+                          }}
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <Button
                     type="button"
@@ -638,7 +676,7 @@ export default function SuperAdminSettingsPage() {
                     {dlrRegistering ? 'Registering…' : 'Install / re-register DLR webhook'}
                   </Button>
                   <span className="text-xs text-[#64748B]">
-                    Safe to run again when testing if HostPinnacle fixed webhooks. Polling still works as backup.
+                    Save your URL first, then click to register with HostPinnacle.
                   </span>
                 </div>
                 {dlrRegisterMessage && (

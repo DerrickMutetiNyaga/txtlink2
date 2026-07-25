@@ -1,26 +1,44 @@
 /**
  * Register DLR Webhook with HostPinnacle
  * GET  /api/super-admin/dlr-webhook/register — preview configured DLR URL
+ *       ?previewBaseUrl=https://example.com — live preview without saving
  * POST /api/super-admin/dlr-webhook/register — register / re-register with HostPinnacle
- *
- * Safe to call POST multiple times when testing if HostPinnacle fixed webhook delivery.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { requireOwner } from '@/lib/auth/middleware'
-import { buildDlrWebhookUrl } from '@/lib/services/hostpinnacle/dlr-webhook-url'
+import {
+  buildDlrWebhookUrl,
+  buildDlrWebhookUrlFromSettings,
+} from '@/lib/services/hostpinnacle/dlr-webhook-url'
 import { registerDlrWebhook } from '@/lib/services/hostpinnacle/register-dlr-webhook'
 
 export async function GET(request: NextRequest) {
   try {
     requireOwner(request)
 
-    const { dlrUrl, hasSecret } = buildDlrWebhookUrl()
+    const previewBase = request.nextUrl.searchParams.get('previewBaseUrl')?.trim()
+    if (previewBase) {
+      const baseUrl = previewBase.replace(/\/$/, '')
+      const { dlrUrl, hasSecret } = buildDlrWebhookUrl(baseUrl)
+      return NextResponse.json({
+        success: true,
+        dlrUrl,
+        hasSecret,
+        baseUrl,
+        source: 'preview',
+        endpoint: '/api/sms/dlr',
+      })
+    }
+
+    const { dlrUrl, hasSecret, baseUrl, source } = await buildDlrWebhookUrlFromSettings()
 
     return NextResponse.json({
       success: true,
       dlrUrl,
       hasSecret,
+      baseUrl,
+      source,
       endpoint: '/api/sms/dlr',
     })
   } catch (e: unknown) {
@@ -45,6 +63,7 @@ export async function POST(request: NextRequest) {
           error: result.error || 'HostPinnacle webhook registration failed',
           message: result.message,
           dlrUrl: result.dlrUrl,
+          baseUrl: result.baseUrl,
         },
         { status: 502 }
       )
@@ -55,6 +74,7 @@ export async function POST(request: NextRequest) {
       message: result.message || 'DLR webhook registered with HostPinnacle.',
       dlrUrl: result.dlrUrl,
       hasSecret: result.hasSecret,
+      baseUrl: result.baseUrl,
     })
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'Internal server error'

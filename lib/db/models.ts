@@ -628,6 +628,8 @@ export interface ISystemSettings {
   defaultProviderCostPerPart: number
   retryPolicy: number // 0-3
   deliveryReportWebhookEnabled: boolean
+  /** Public app URL for DLR/M-Pesa callbacks (overrides NEXT_PUBLIC_BASE_URL) */
+  dlrWebhookBaseUrl?: string
   
   // Pricing & Cost Controls
   globalDefaultPricePerPart: number
@@ -693,6 +695,7 @@ const SystemSettingsSchema = new Schema<ISystemSettings>(
     defaultProviderCostPerPart: { type: Number, default: 1.5 },
     retryPolicy: { type: Number, default: 1, min: 0, max: 3 },
     deliveryReportWebhookEnabled: { type: Boolean, default: true },
+    dlrWebhookBaseUrl: { type: String, trim: true },
     
     globalDefaultPricePerPart: { type: Number, default: 2.0 },
     globalProviderCostPerPart: { type: Number, default: 1.5 },

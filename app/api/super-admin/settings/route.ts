@@ -106,6 +106,7 @@ export async function POST(request: NextRequest) {
       defaultProviderCostPerPart,
       retryPolicy,
       deliveryReportWebhookEnabled,
+      dlrWebhookBaseUrl,
       
       // Pricing & Cost Controls
       globalDefaultPricePerPart,
@@ -177,6 +178,9 @@ export async function POST(request: NextRequest) {
     if (defaultProviderCostPerPart !== undefined) updateData.defaultProviderCostPerPart = defaultProviderCostPerPart
     if (retryPolicy !== undefined) updateData.retryPolicy = Math.max(0, Math.min(3, retryPolicy))
     if (deliveryReportWebhookEnabled !== undefined) updateData.deliveryReportWebhookEnabled = deliveryReportWebhookEnabled
+    if (dlrWebhookBaseUrl !== undefined) {
+      updateData.dlrWebhookBaseUrl = dlrWebhookBaseUrl.trim().replace(/\/$/, '') || null
+    }
     
     if (globalDefaultPricePerPart !== undefined) updateData.globalDefaultPricePerPart = globalDefaultPricePerPart
     if (globalProviderCostPerPart !== undefined) updateData.globalProviderCostPerPart = globalProviderCostPerPart

@@ -1,12 +1,13 @@
 import connectDB from '@/lib/db/connect'
 import { hostPinnacleClient } from '@/lib/services/hostpinnacle/client'
 import { loadMasterHostPinnacleCredentials } from '@/lib/services/hostpinnacle/credentials'
-import { buildDlrWebhookUrl } from '@/lib/services/hostpinnacle/dlr-webhook-url'
+import { buildDlrWebhookUrlFromSettings } from '@/lib/services/hostpinnacle/dlr-webhook-url'
 
 export interface RegisterDlrWebhookResult {
   success: boolean
   dlrUrl: string
   hasSecret: boolean
+  baseUrl?: string
   message?: string
   error?: string
 }
@@ -16,7 +17,7 @@ export interface RegisterDlrWebhookResult {
  * Safe to run multiple times — overwrites the previous webhook URL on their side.
  */
 export async function registerDlrWebhook(): Promise<RegisterDlrWebhookResult> {
-  const { dlrUrl, hasSecret } = buildDlrWebhookUrl()
+  const { dlrUrl, hasSecret, baseUrl } = await buildDlrWebhookUrlFromSettings()
 
   await connectDB()
   const creds = await loadMasterHostPinnacleCredentials()
@@ -53,6 +54,7 @@ export async function registerDlrWebhook(): Promise<RegisterDlrWebhookResult> {
     success: true,
     dlrUrl,
     hasSecret,
+    baseUrl,
     message: result.message || 'DLR webhook registered with HostPinnacle.',
   }
 }
