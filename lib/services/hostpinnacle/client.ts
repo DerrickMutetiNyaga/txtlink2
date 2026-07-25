@@ -86,6 +86,7 @@ interface HostPinnacleResponse {
   data?: any
   error?: string
   message?: string
+  httpStatus?: number
 }
 
 function normStatus(value: unknown): string {
@@ -106,7 +107,7 @@ function isErrorStatus(value: unknown): boolean {
 function extractProviderMessage(obj: any): string | undefined {
   if (!obj || typeof obj !== 'object') return undefined
 
-  for (const key of ['reason', 'Reason', 'msg', 'message', 'error', 'description', 'Description']) {
+  for (const key of ['reason', 'Reason', 'msg', 'Msg', 'message', 'Message', 'error', 'description', 'Description']) {
     const value = obj[key]
     if (typeof value === 'string' && value.trim() && normStatus(value) !== 'success') {
       return value.trim()
@@ -119,6 +120,15 @@ function extractProviderMessage(obj: any): string | undefined {
   }
 
   return undefined
+}
+
+function extractAnyProviderMessage(data: any): string | undefined {
+  if (!data || typeof data !== 'object') return undefined
+  return (
+    extractProviderMessage(data) ||
+    extractProviderMessage(data.response) ||
+    undefined
+  )
 }
 
 function applyHostPinnacleAuth(
@@ -152,11 +162,14 @@ function applyHostPinnacleAuth(
 function parseHostPinnacleResponse(
   endpoint: string,
   data: any,
-  httpOk: boolean
+  httpOk: boolean,
+  httpStatus?: number
 ): HostPinnacleResponse {
   if (!httpOk) {
-    const message = extractProviderMessage(data) || `HTTP error`
-    return { success: false, error: message, message }
+    const message =
+      extractAnyProviderMessage(data) ||
+      (httpStatus ? `HostPinnacle returned HTTP ${httpStatus}` : 'HTTP error')
+    return { success: false, error: message, message, httpStatus }
   }
 
   // Nested { response: { status, msg, ... } } — sender ID and admin APIs
@@ -255,14 +268,15 @@ async function requestForm(
     }
 
     if (!response.ok) {
-      const parsed = parseHostPinnacleResponse(endpoint, data, false)
+      const parsed = parseHostPinnacleResponse(endpoint, data, false, response.status)
       return {
         ...parsed,
         error: parsed.error || `HTTP ${response.status}`,
+        httpStatus: response.status,
       }
     }
 
-    return parseHostPinnacleResponse(endpoint, data, true)
+    return parseHostPinnacleResponse(endpoint, data, true, response.status)
   } catch (error: any) {
     if (error.name === 'AbortError' || error.message?.includes('timeout') || error.message?.includes('aborted')) {
       return {
@@ -490,6 +504,49 @@ export async function createWebhook(params: {
   return requestForm('/SMSApi/webhook/create', body, params.options)
 }
 
+/**
+ * Update an existing DLR webhook URL (use when create fails because one already exists).
+ */
+export async function updateWebhook(params: {
+  smsWebhook: string
+  smsWebhookRate?: number
+  options?: HostPinnacleRequestOptions
+}): Promise<HostPinnacleResponse> {
+  const body: Record<string, string | number> = {
+    smswebhook: params.smsWebhook,
+    smswebhookrate: params.smsWebhookRate || 10,
+    output: 'json',
+  }
+
+  return requestForm('/SMSApi/webhook/update', body, params.options)
+}
+
+/** Create webhook, falling back to update when HostPinnacle already has one registered. */
+export async function registerWebhook(params: {
+  smsWebhook: string
+  smsWebhookRate?: number
+  options?: HostPinnacleRequestOptions
+}): Promise<HostPinnacleResponse & { action?: 'create' | 'update' }> {
+  const createResult = await createWebhook(params)
+  if (createResult.success) {
+    return { ...createResult, action: 'create' }
+  }
+
+  const updateResult = await updateWebhook(params)
+  if (updateResult.success) {
+    return { ...updateResult, action: 'update' }
+  }
+
+  const createMsg = createResult.error || createResult.message || 'create failed'
+  const updateMsg = updateResult.error || updateResult.message || 'update failed'
+  return {
+    success: false,
+    error: `Create: ${createMsg}. Update: ${updateMsg}`,
+    message: updateResult.message || createResult.message,
+    httpStatus: updateResult.httpStatus ?? createResult.httpStatus,
+  }
+}
+
 export const hostPinnacleClient = {
   createSubUser,
   addCredits,
@@ -498,5 +555,7 @@ export const hostPinnacleClient = {
   sendSms,
   readSmsStatus,
   createWebhook,
+  updateWebhook,
+  registerWebhook,
 }
 

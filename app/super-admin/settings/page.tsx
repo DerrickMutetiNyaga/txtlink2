@@ -660,10 +660,11 @@ export default function SuperAdminSettingsPage() {
                         if (data.success) {
                           if (data.dlrUrl) setDlrWebhookUrl(data.dlrUrl)
                           setDlrRegisterMessage(
-                            `Registered with HostPinnacle. DLR URL: ${data.dlrUrl || dlrWebhookUrl || 'see above'}`
+                            `${data.message || 'Registered with HostPinnacle.'} URL: ${data.dlrUrl || dlrWebhookUrl || 'see above'}`
                           )
                         } else {
-                          setDlrRegisterMessage(data.error || 'Registration failed')
+                          const detail = [data.error, data.message].filter(Boolean).join(' — ')
+                          setDlrRegisterMessage(detail || 'Registration failed')
                         }
                       } catch (e: unknown) {
                         setDlrRegisterMessage(e instanceof Error ? e.message : 'Request failed')
@@ -682,7 +683,8 @@ export default function SuperAdminSettingsPage() {
                 {dlrRegisterMessage && (
                   <p
                     className={`text-xs ${
-                      dlrRegisterMessage.startsWith('Registered')
+                      dlrRegisterMessage.startsWith('Registered') ||
+                      dlrRegisterMessage.startsWith('DLR webhook')
                         ? 'text-emerald-700'
                         : dlrRegisterMessage === 'URL copied to clipboard'
                           ? 'text-[#64748B]'

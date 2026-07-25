@@ -30,7 +30,7 @@ export async function registerDlrWebhook(): Promise<RegisterDlrWebhookResult> {
     }
   }
 
-  const result = await hostPinnacleClient.createWebhook({
+  const result = await hostPinnacleClient.registerWebhook({
     smsWebhook: dlrUrl,
     smsWebhookRate: 10,
     options: {
@@ -55,6 +55,9 @@ export async function registerDlrWebhook(): Promise<RegisterDlrWebhookResult> {
     dlrUrl,
     hasSecret,
     baseUrl,
-    message: result.message || 'DLR webhook registered with HostPinnacle.',
+    message:
+      result.action === 'update'
+        ? 'DLR webhook updated with HostPinnacle.'
+        : result.message || 'DLR webhook registered with HostPinnacle.',
   }
 }
