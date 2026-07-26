@@ -25,6 +25,7 @@ import {
 } from '@/lib/services/sms/message-body'
 import bcrypt from 'bcryptjs'
 import mongoose from 'mongoose'
+import { parseLenientJson } from '@/lib/utils/parse-lenient-json'
 
 // Format phone number to E.164
 function formatPhoneNumber(phone: string): string {
@@ -172,13 +173,25 @@ export async function POST(request: NextRequest) {
   try {
     await connectDB()
     
-    // Parse request body first
+    // Parse request body first (tolerate raw newlines in message from AT Gateway, etc.)
     let body: any
     try {
-      body = await request.json()
+      const raw = await request.text()
+      body = parseLenientJson(raw)
+      if (!body || typeof body !== 'object' || Array.isArray(body)) {
+        return NextResponse.json(
+          { error: 'Invalid JSON in request body' },
+          { status: 400 }
+        )
+      }
     } catch (error) {
       return NextResponse.json(
-        { error: 'Invalid JSON in request body' },
+        {
+          error: 'Invalid JSON in request body',
+          message:
+            'Request body must be valid JSON. If your message has line breaks, keep them — TXTLINK will accept them — or send the message as one line.',
+          hint: 'Use Content-Type: application/json with a JSON object body',
+        },
         { status: 400 }
       )
     }
