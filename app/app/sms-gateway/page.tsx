@@ -22,7 +22,6 @@ import {
   Link2,
   Activity,
   Send,
-  RotateCw,
   CheckCircle2,
   ChevronRight,
   ChevronLeft,
@@ -784,8 +783,8 @@ export default function SmsGatewayPage() {
 
   const fallbackSteps = [
     { icon: Send, text: 'Provider sends SMS' },
-    { icon: RotateCw, text: 'If not delivered after 7 min, provider retries once' },
-    { icon: Smartphone, text: 'If retry fails, phone gateway queues the SMS' },
+    { icon: Smartphone, text: 'If failed → phone gateway immediately' },
+    { icon: Smartphone, text: 'If still undelivered after 3 min → phone gateway' },
     { icon: Activity, text: 'Android app sends when online' },
     { icon: CheckCircle2, text: 'Delivered via Phone updates history' },
   ]

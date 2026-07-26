@@ -7,13 +7,19 @@ export function isProviderRetryEnabled(): boolean {
 }
 
 export function getFallbackStaleMinutes(): number {
-  const n = parseInt(process.env.SMS_FALLBACK_STALE_MINUTES || '7', 10)
-  return Number.isFinite(n) && n > 0 ? n : 7
+  const n = parseInt(process.env.SMS_FALLBACK_STALE_MINUTES || '3', 10)
+  return Number.isFinite(n) && n > 0 ? n : 3
 }
 
 export function getProviderRetryWaitMinutes(): number {
-  const n = parseInt(process.env.SMS_PROVIDER_RETRY_WAIT_MINUTES || '7', 10)
-  return Number.isFinite(n) && n > 0 ? n : 7
+  const n = parseInt(process.env.SMS_PROVIDER_RETRY_WAIT_MINUTES || '3', 10)
+  return Number.isFinite(n) && n > 0 ? n : 3
+}
+
+/** Minutes without delivery before queuing the Android phone gateway. */
+export function getPhoneFallbackAfterMinutes(): number {
+  const n = parseInt(process.env.SMS_PHONE_FALLBACK_AFTER_MINUTES || '3', 10)
+  return Number.isFinite(n) && n > 0 ? n : 3
 }
 
 export function getCronSecret(): string | undefined {

@@ -1,11 +1,17 @@
 import connectDB from '@/lib/db/connect'
-import { SmsMessage, SmsFallbackJob, ISmsMessage, ISmsFallbackJob } from '@/lib/db/models'
+import { SmsMessage, SmsFallbackJob, ISmsMessage } from '@/lib/db/models'
 import { loadSmsStatusConfig } from '@/lib/config/sms-status-config'
 import { createStatusClient } from '@/lib/services/sms-status/client-factory'
 import { createLogger } from '@/lib/worker/logger'
-import { normalizeKenyanPhone } from '@/lib/utils/phone'
 import { maskPhone } from '@/lib/utils/log-sanitize'
-import { isSmsFallbackEnabled, getProviderRetryWaitMinutes, FALLBACK_PHONE_STATUSES } from './config'
+import {
+  isSmsFallbackEnabled,
+  getProviderRetryWaitMinutes,
+  getPhoneFallbackAfterMinutes,
+  FALLBACK_PHONE_STATUSES,
+  FAILED_ORIGINAL_STATUSES,
+  SMS_PENDING_FOR_FALLBACK,
+} from './config'
 import { shouldSkipFallbackProcessing, minutesAgo, cancelFallbackJobIfDelivered } from './helpers'
 import { isPhoneDeliveredFallbackStatus } from './phone-status'
 import {
@@ -13,8 +19,18 @@ import {
   isRetrySentPending,
   isSmsDelivered,
   getAgeMinutes,
+  getSmsAgeDate,
+  isFailedState,
+  isSentPendingProviderState,
+  normalizeSmsStatus,
 } from './status-normalize'
 import { createOrUpdatePhoneFallbackJob } from './create-fallback-job'
+import {
+  addSampleMatch,
+  createScanDebugStats,
+  type FallbackScanDebugStats,
+} from './scan-debug'
+
 async function checkRetryDeliveryStatus(sms: ISmsMessage & { _id: unknown }): Promise<void> {
   if (!sms.providerRetrySmsId || !isRetrySentPending(sms.providerRetryStatus)) return
 
@@ -51,21 +67,49 @@ async function queuePhoneFallback(sms: ISmsMessage & { _id: unknown }): Promise<
   return result.ok
 }
 
-function buildPhoneFallbackCandidateFilter(): Record<string, unknown> {
+function buildPhoneFallbackCandidateFilter(phoneCutoff: Date): Record<string, unknown> {
+  const blockedFallbackStatuses = [
+    ...FALLBACK_PHONE_STATUSES,
+    'cancelled',
+    'delivered_via_phone',
+    'sent_via_phone',
+    'phone_requires_topup',
+  ]
+
   return {
-    providerRetryAttempted: true,
     status: { $ne: 'delivered' },
     deliveryStatus: { $ne: 'delivered' },
-    fallbackStatus: {
-      $nin: [...FALLBACK_PHONE_STATUSES, 'cancelled', 'delivered_via_phone', 'sent_via_phone'],
-    },
+    deliveredAt: null,
+    fallbackStatus: { $nin: blockedFallbackStatuses },
     fallbackQueued: { $ne: true },
+    $or: [
+      // Failed anywhere → phone immediately (no age wait)
+      {
+        status: { $in: [...FAILED_ORIGINAL_STATUSES] },
+      },
+      {
+        deliveryStatus: { $in: [...FAILED_ORIGINAL_STATUSES] },
+      },
+      {
+        providerRetryStatus: { $in: [...FAILED_ORIGINAL_STATUSES, 'timeout'] },
+      },
+      // Still pending/sent and older than N minutes → phone
+      {
+        $or: [{ sentAt: { $lte: phoneCutoff } }, { createdAt: { $lte: phoneCutoff } }],
+        status: { $in: [...SMS_PENDING_FOR_FALLBACK] },
+      },
+      // Legacy path: provider retry already attempted
+      {
+        providerRetryAttempted: true,
+      },
+    ],
   }
 }
 
 export function evaluatePhoneFallbackEligibility(
   sms: ISmsMessage,
-  waitCutoff: Date
+  waitCutoff: Date,
+  phoneCutoff: Date
 ): { eligible: boolean; reason?: string } {
   if (shouldSkipFallbackProcessing(sms)) {
     return { eligible: false }
@@ -73,15 +117,25 @@ export function evaluatePhoneFallbackEligibility(
   if (isPhoneDeliveredFallbackStatus(sms.fallbackStatus)) {
     return { eligible: false }
   }
-  if (sms.providerRetryAttempted !== true) {
+  if (isSmsDelivered(sms)) {
     return { eligible: false }
   }
 
-  if (isRetryFailedState(sms.providerRetryStatus)) {
-    return { eligible: true, reason: 'provider_retry_failed' }
+  const normalized = normalizeSmsStatus(sms)
+
+  // Failed (original or retry) → phone gateway immediately
+  if (isFailedState(normalized) || isRetryFailedState(sms.providerRetryStatus)) {
+    return { eligible: true, reason: 'failed_immediate_phone' }
   }
 
-  if (isRetrySentPending(sms.providerRetryStatus)) {
+  // Still pending/sent and not delivered within N minutes → phone gateway
+  const ageDate = getSmsAgeDate(sms)
+  if (ageDate && ageDate <= phoneCutoff && isSentPendingProviderState(normalized)) {
+    return { eligible: true, reason: 'undelivered_after_phone_fallback_minutes' }
+  }
+
+  // Provider retry still "sent" past wait window → phone
+  if (sms.providerRetryAttempted === true && isRetrySentPending(sms.providerRetryStatus)) {
     const retrySentAt = sms.providerRetrySentAt || sms.providerRetryAttemptedAt
     if (retrySentAt && retrySentAt <= waitCutoff && !sms.providerRetryDeliveredAt) {
       return { eligible: true, reason: 'provider_retry_stale_sent' }
@@ -99,16 +153,18 @@ export async function scanRetryResultsAndQueuePhoneFallback(
   await connectDB()
 
   const waitMinutes = getProviderRetryWaitMinutes()
+  const phoneMinutes = getPhoneFallbackAfterMinutes()
   const waitCutoff = minutesAgo(waitMinutes)
+  const phoneCutoff = minutesAgo(phoneMinutes)
 
-  const retriedMessages = await SmsMessage.find(buildPhoneFallbackCandidateFilter())
-    .sort({ providerRetryAttemptedAt: 1 })
+  const candidates = await SmsMessage.find(buildPhoneFallbackCandidateFilter(phoneCutoff))
+    .sort({ createdAt: 1 })
     .limit(200)
     .lean()
 
   let queued = 0
 
-  for (const raw of retriedMessages) {
+  for (const raw of candidates) {
     const sms = raw as ISmsMessage & { _id: unknown }
     debug.scanned++
 
@@ -118,7 +174,9 @@ export async function scanRetryResultsAndQueuePhoneFallback(
       continue
     }
 
-    await checkRetryDeliveryStatus(sms)
+    if (sms.providerRetryAttempted && sms.providerRetrySmsId) {
+      await checkRetryDeliveryStatus(sms)
+    }
 
     const refreshed = await SmsMessage.findById(sms._id).lean()
     if (!refreshed) continue
@@ -130,7 +188,7 @@ export async function scanRetryResultsAndQueuePhoneFallback(
       continue
     }
 
-    const eligibility = evaluatePhoneFallbackEligibility(msg, waitCutoff)
+    const eligibility = evaluatePhoneFallbackEligibility(msg, waitCutoff, phoneCutoff)
     if (!eligibility.eligible) continue
 
     debug.eligibleForPhoneFallback++
@@ -139,7 +197,7 @@ export async function scanRetryResultsAndQueuePhoneFallback(
       phone: maskPhone(msg.toNumbers[0] || ''),
       status: msg.status,
       deliveryStatus: msg.deliveryStatus || null,
-      ageMinutes: getAgeMinutes(msg.providerRetrySentAt || msg.providerRetryAttemptedAt),
+      ageMinutes: getAgeMinutes(getSmsAgeDate(msg) || msg.providerRetrySentAt || msg.providerRetryAttemptedAt),
       providerRetryAttempted: Boolean(msg.providerRetryAttempted),
       fallbackStatus: msg.fallbackStatus || null,
       reason: eligibility.reason || 'eligible_for_phone',

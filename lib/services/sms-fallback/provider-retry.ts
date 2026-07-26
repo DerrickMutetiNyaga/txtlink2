@@ -63,12 +63,13 @@ export function evaluateProviderRetryEligibility(
 
   const normalized = normalizeSmsStatus(sms)
 
+  // Hard failures go straight to phone gateway (see queue-phone), not another provider send.
   if (isFailedState(normalized)) {
-    return { eligible: true, reason: 'failed_status' }
+    return { eligible: false, skipReason: 'failed_uses_phone_immediately' }
   }
 
   if (isStaleSentPending(sms, staleCutoff)) {
-    return { eligible: true, reason: 'sent_older_than_7_minutes' }
+    return { eligible: true, reason: 'sent_older_than_stale_minutes' }
   }
 
   if (failureReasonMatchesKeywords(sms)) {
