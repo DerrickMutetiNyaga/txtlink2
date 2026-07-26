@@ -25,7 +25,7 @@ import {
 } from '@/lib/services/sms/message-body'
 import bcrypt from 'bcryptjs'
 import mongoose from 'mongoose'
-import { parseLenientJson } from '@/lib/utils/parse-lenient-json'
+import { parseSmsSendRequest } from '@/lib/utils/parse-sms-send-body'
 
 // Format phone number to E.164
 function formatPhoneNumber(phone: string): string {
@@ -173,24 +173,17 @@ export async function POST(request: NextRequest) {
   try {
     await connectDB()
     
-    // Parse request body first (tolerate raw newlines in message from AT Gateway, etc.)
+    // Parse body: JSON (lenient newlines) or form-urlencoded (AT Gateway-safe for multi-line SMS)
     let body: any
     try {
-      const raw = await request.text()
-      body = parseLenientJson(raw)
-      if (!body || typeof body !== 'object' || Array.isArray(body)) {
-        return NextResponse.json(
-          { error: 'Invalid JSON in request body' },
-          { status: 400 }
-        )
-      }
+      body = await parseSmsSendRequest(request)
     } catch (error) {
       return NextResponse.json(
         {
-          error: 'Invalid JSON in request body',
+          error: 'Invalid request body',
           message:
-            'Request body must be valid JSON. If your message has line breaks, keep them — TXTLINK will accept them — or send the message as one line.',
-          hint: 'Use Content-Type: application/json with a JSON object body',
+            'Send JSON or application/x-www-form-urlencoded. For AT Gateway multi-line SMS, prefer form fields (to, message, senderIdName) instead of JSON.',
+          hint: 'Content-Type: application/x-www-form-urlencoded with to=TO&message=MESSAGE&senderIdName=ICONIC_FBR',
         },
         { status: 400 }
       )
