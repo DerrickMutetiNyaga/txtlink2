@@ -414,6 +414,17 @@ SmsMessageSchema.index({ userId: 1, createdAt: -1 })
 SmsMessageSchema.index({ createdAt: -1 })
 // Lease expiry scans / ops visibility into locked messages
 SmsMessageSchema.index({ statusCheckLockedUntil: 1 }, { sparse: true })
+// Phone-fallback surge scan: undelivered / not-yet-queued messages by age
+SmsMessageSchema.index(
+  { fallbackQueued: 1, status: 1, createdAt: 1 },
+  {
+    name: 'phone_fallback_scan',
+    partialFilterExpression: {
+      fallbackQueued: { $ne: true },
+      deliveredAt: null,
+    },
+  }
+)
 
 // Pricing Rule Model
 export interface IPricingRule {

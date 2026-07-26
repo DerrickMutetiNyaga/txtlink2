@@ -67,6 +67,34 @@ export async function createOrUpdatePhoneFallbackJob(
 
   const originalSmsId = String(sms._id)
   const now = new Date()
+
+  // Atomic claim — safe under concurrent surge processing / overlapping cron runs
+  const claimFilter: Record<string, unknown> = {
+    _id: sms._id,
+    status: { $ne: 'delivered' },
+    deliveryStatus: { $ne: 'delivered' },
+    deliveredAt: null,
+  }
+  if (!options?.resetExisting) {
+    claimFilter.fallbackQueued = { $ne: true }
+  }
+
+  const claimed = await SmsMessage.findOneAndUpdate(
+    claimFilter,
+    {
+      $set: {
+        fallbackQueued: true,
+        fallbackStatus: 'queued_for_phone',
+        fallbackQueuedAt: now,
+      },
+    },
+    { new: true }
+  )
+
+  if (!claimed) {
+    return { ok: false, error: 'Already queued, delivered, or claimed' }
+  }
+
   const jobPayload = {
     status: 'pending' as const,
     phoneStatus: 'pending' as const,
@@ -92,7 +120,10 @@ export async function createOrUpdatePhoneFallbackJob(
     ['pending', 'sending', 'delivered', 'sent'].includes(existing.status) &&
     !options?.resetExisting
   ) {
-    return { ok: false, error: 'Fallback job already active' }
+    await SmsMessage.findByIdAndUpdate(sms._id, {
+      fallbackJobId: String(existing._id),
+    })
+    return { ok: true, jobId: String(existing._id) }
   }
 
   const job = existing
@@ -111,12 +142,16 @@ export async function createOrUpdatePhoneFallbackJob(
         attempts: 0,
       })
 
-  if (!job) return { ok: false, error: 'Failed to create fallback job' }
+  if (!job) {
+    // Release claim if job creation failed so a later scan can retry
+    await SmsMessage.findByIdAndUpdate(sms._id, {
+      $unset: { fallbackQueuedAt: 1, fallbackJobId: 1 },
+      $set: { fallbackQueued: false, fallbackStatus: null },
+    })
+    return { ok: false, error: 'Failed to create fallback job' }
+  }
 
   await SmsMessage.findByIdAndUpdate(sms._id, {
-    fallbackQueued: true,
-    fallbackStatus: 'queued_for_phone',
-    fallbackQueuedAt: now,
     fallbackJobId: String(job._id),
   })
 

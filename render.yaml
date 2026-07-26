@@ -72,6 +72,8 @@ services:
         value: "10"
       - key: WORKER_CONCURRENCY
         value: "10"
+      - key: BATCH_SIZE
+        value: "500"
       - key: CLAIM_LEASE_SECONDS
         value: "120"
       - key: CIRCUIT_BREAKER_FAILURE_THRESHOLD

@@ -8,10 +8,14 @@ import { maskPhone } from '@/lib/utils/log-sanitize'
 import {
   isProviderRetryEnabled,
   getFallbackStaleMinutes,
+  getFallbackScanBatchSize,
+  getFallbackScanConcurrency,
+  getFallbackScanMaxRounds,
   DLR_RETRY_KEYWORDS,
   FALLBACK_PHONE_STATUSES,
 } from './config'
 import { shouldSkipProviderRetry, minutesAgo } from './helpers'
+import { mapPool } from './concurrency'
 import { resolveSmsMessageBody } from '@/lib/services/sms/message-body'
 import {
   normalizeSmsStatus,
@@ -299,38 +303,50 @@ export async function scanAndRetryUndeliveredSms(
 
   const staleMinutes = getFallbackStaleMinutes()
   const staleCutoff = minutesAgo(staleMinutes)
+  const batchSize = getFallbackScanBatchSize()
+  const concurrency = getFallbackScanConcurrency()
+  const maxRounds = getFallbackScanMaxRounds()
 
-  const candidates = await SmsMessage.find(buildProviderRetryCandidateFilter(staleCutoff))
-    .sort({ createdAt: 1 })
-    .limit(200)
-    .lean()
+  let totalRetried = 0
 
-  let retried = 0
-  for (const raw of candidates) {
-    const sms = raw as ISmsMessage & { _id: unknown }
-    const eligibility = evaluateProviderRetryEligibility(sms, staleCutoff)
-    recordCandidateDebug(debug, sms, eligibility)
+  for (let round = 0; round < maxRounds; round++) {
+    const candidates = await SmsMessage.find(buildProviderRetryCandidateFilter(staleCutoff))
+      .sort({ createdAt: 1 })
+      .limit(batchSize)
+      .lean()
 
-    if (!eligibility.eligible) continue
+    if (candidates.length === 0) break
 
-    const existingJob = await SmsFallbackJob.findOne({
-      originalSmsId: String(sms._id),
-    }).lean()
-    if (
-      existingJob &&
-      ['pending', 'sending', 'delivered', 'sent'].includes(existingJob.status)
-    ) {
-      continue
-    }
+    const results = await mapPool(
+      candidates as Array<ISmsMessage & { _id: unknown }>,
+      concurrency,
+      async (sms) => {
+        const eligibility = evaluateProviderRetryEligibility(sms, staleCutoff)
+        recordCandidateDebug(debug, sms, eligibility)
+        if (!eligibility.eligible) return false
 
-    const ok = await retrySingleMessage(sms)
-    if (ok) {
-      retried++
-      debug.retriedProvider++
-    }
+        const existingJob = await SmsFallbackJob.findOne({
+          originalSmsId: String(sms._id),
+        }).lean()
+        if (
+          existingJob &&
+          ['pending', 'sending', 'delivered', 'sent'].includes(existingJob.status)
+        ) {
+          return false
+        }
+
+        return retrySingleMessage(sms)
+      }
+    )
+
+    const retried = results.filter(Boolean).length
+    totalRetried += retried
+    debug.retriedProvider += retried
+
+    if (candidates.length < batchSize) break
   }
 
-  return retried
+  return totalRetried
 }
 
 export async function retryProviderForMessage(

@@ -4,6 +4,8 @@ import {
   getGatewayLatestActivity,
   getGatewayOnlineThresholdMs,
 } from '@/lib/services/sms-gateway/status'
+import { getFallbackScanBatchSize, getFallbackScanConcurrency } from './config'
+import { mapPool } from './concurrency'
 
 export const GATEWAY_SENDING_TIMEOUT_MS = 5 * 60 * 1000
 export const GATEWAY_MAX_SEND_ATTEMPTS = 3
@@ -27,34 +29,32 @@ export async function resetStaleSendingJobs(): Promise<number> {
 
   const cutoff = new Date(Date.now() - GATEWAY_SENDING_TIMEOUT_MS)
   const now = new Date()
+  const batchSize = getFallbackScanBatchSize()
+  const concurrency = getFallbackScanConcurrency()
 
   const stuckJobs = await SmsFallbackJob.find({
     status: 'sending',
     sendingAt: { $lte: cutoff },
   })
-    .limit(100)
+    .limit(batchSize)
     .lean()
 
-  let affected = 0
+  if (stuckJobs.length === 0) return 0
 
-  for (const job of stuckJobs) {
+  const results = await mapPool(stuckJobs, concurrency, async (job) => {
     const device = await SmsGatewayDevice.findOne({ userId: job.userId }).lean()
     const offline = isDeviceOffline(device)
 
     if (offline && (job.attempts || 0) < GATEWAY_MAX_SEND_ATTEMPTS) {
-      await SmsFallbackJob.findByIdAndUpdate(
-        job._id,
-        {
-          $set: {
-            status: 'pending',
-            phoneStatus: 'pending',
-            resetReason: 'gateway_offline',
-          },
-          $unset: { sendingAt: 1, lockedAt: 1, lockedBy: 1 },
-        }
-      )
-      affected++
-      continue
+      await SmsFallbackJob.findByIdAndUpdate(job._id, {
+        $set: {
+          status: 'pending',
+          phoneStatus: 'pending',
+          resetReason: 'gateway_offline',
+        },
+        $unset: { sendingAt: 1, lockedAt: 1, lockedBy: 1 },
+      })
+      return true
     }
 
     await SmsFallbackJob.findByIdAndUpdate(job._id, {
@@ -75,8 +75,8 @@ export async function resetStaleSendingJobs(): Promise<number> {
         fallbackFailureCode: 'SENDING_TIMEOUT',
       })
     }
-    affected++
-  }
+    return true
+  })
 
-  return affected
+  return results.filter(Boolean).length
 }

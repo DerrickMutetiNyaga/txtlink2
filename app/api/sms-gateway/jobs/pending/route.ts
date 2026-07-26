@@ -45,7 +45,8 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url)
-    const limit = Math.min(parseInt(searchParams.get('limit') || '5', 10) || 5, 50)
+    // Higher default so a connected phone can drain a surge faster
+    const limit = Math.min(parseInt(searchParams.get('limit') || '25', 10) || 25, 100)
     const userId = auth.device.userId
 
     await SmsFallbackJob.updateMany(

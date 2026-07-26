@@ -21,6 +21,25 @@ export function getCronSecret(): string | undefined {
   return process.env.CRON_SECRET?.trim() || undefined
 }
 
+/** Reuses worker BATCH_SIZE — how many SMS to claim per fallback scan round. */
+export function getFallbackScanBatchSize(): number {
+  const n = parseInt(process.env.BATCH_SIZE || '500', 10)
+  if (!Number.isFinite(n)) return 500
+  return Math.min(Math.max(n, 50), 2000)
+}
+
+/** Reuses WORKER_CONCURRENCY — parallel status pings / phone queue ops per round. */
+export function getFallbackScanConcurrency(): number {
+  const n = parseInt(process.env.WORKER_CONCURRENCY || '10', 10)
+  if (!Number.isFinite(n)) return 10
+  return Math.min(Math.max(n, 2), 50)
+}
+
+/** Max drain rounds per cron invoke so a surge can clear in one scan. */
+export function getFallbackScanMaxRounds(): number {
+  return 10
+}
+
 export const FALLBACK_PHONE_STATUSES = [
   'queued_for_phone',
   'sending_via_phone',
