@@ -7,7 +7,7 @@ import { maskPhone } from '@/lib/utils/log-sanitize'
 import {
   isSmsFallbackEnabled,
   getProviderRetryWaitMinutes,
-  getPhoneFallbackAfterMinutes,
+  getFallbackStaleMinutes,
   FALLBACK_PHONE_STATUSES,
   FAILED_ORIGINAL_STATUSES,
   SMS_PENDING_FOR_FALLBACK,
@@ -25,11 +25,30 @@ import {
   normalizeSmsStatus,
 } from './status-normalize'
 import { createOrUpdatePhoneFallbackJob } from './create-fallback-job'
+import { syncSmsMessageById } from '@/lib/services/sms-status/sync-user-pending'
 import {
   addSampleMatch,
   createScanDebugStats,
   type FallbackScanDebugStats,
 } from './scan-debug'
+
+/**
+ * If DLR never arrived, ping HostPinnacle status API for the original SMS
+ * and update MongoDB before deciding on phone fallback.
+ */
+async function pingOriginalDeliveryStatus(sms: ISmsMessage & { _id: unknown }): Promise<void> {
+  if (isSmsDelivered(sms) || isFailedState(normalizeSmsStatus(sms))) return
+  if (!sms.externalMsgId && !sms.hpTransactionId) return
+
+  try {
+    await syncSmsMessageById(String(sms._id))
+  } catch (error) {
+    console.warn('Fallback status ping failed', {
+      smsId: String(sms._id),
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
+}
 
 async function checkRetryDeliveryStatus(sms: ISmsMessage & { _id: unknown }): Promise<void> {
   if (!sms.providerRetrySmsId || !isRetrySentPending(sms.providerRetryStatus)) return
@@ -153,9 +172,9 @@ export async function scanRetryResultsAndQueuePhoneFallback(
   await connectDB()
 
   const waitMinutes = getProviderRetryWaitMinutes()
-  const phoneMinutes = getPhoneFallbackAfterMinutes()
+  const staleMinutes = getFallbackStaleMinutes()
   const waitCutoff = minutesAgo(waitMinutes)
-  const phoneCutoff = minutesAgo(phoneMinutes)
+  const phoneCutoff = minutesAgo(staleMinutes)
 
   const candidates = await SmsMessage.find(buildPhoneFallbackCandidateFilter(phoneCutoff))
     .sort({ createdAt: 1 })
@@ -173,6 +192,9 @@ export async function scanRetryResultsAndQueuePhoneFallback(
       await cancelFallbackJobIfDelivered(String(sms._id))
       continue
     }
+
+    // No DLR yet? Ping HostPinnacle for the real status before phone fallback.
+    await pingOriginalDeliveryStatus(sms)
 
     if (sms.providerRetryAttempted && sms.providerRetrySmsId) {
       await checkRetryDeliveryStatus(sms)

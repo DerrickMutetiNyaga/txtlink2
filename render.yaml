@@ -39,8 +39,6 @@ services:
         value: "3"
       - key: SMS_PROVIDER_RETRY_WAIT_MINUTES
         value: "3"
-      - key: SMS_PHONE_FALLBACK_AFTER_MINUTES
-        value: "3"
       - key: CRON_SECRET
         sync: false
       - key: NEXT_PUBLIC_BASE_URL
