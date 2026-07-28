@@ -53,6 +53,11 @@ import Link from 'next/link'
 import SenderIdAdBanner from '@/components/sender-id-ad/SenderIdAdBanner'
 import { SmsRetryDesk } from '@/components/sms-history/SmsRetryDesk'
 import { cn } from '@/lib/utils'
+import {
+  connectSmsHistoryLive,
+  liveRowMatchesFilters,
+  type SmsHistoryLiveMessage,
+} from '@/lib/services/sms-history/live-client'
 
 // Message type
 interface SMSMessage {
@@ -232,6 +237,10 @@ export default function SMSHistoryPage() {
     'Test',
   ])
   const [isAutoRefreshing, setIsAutoRefreshing] = useState(false)
+  const [liveState, setLiveState] = useState<'connecting' | 'live' | 'disconnected' | 'error'>(
+    'connecting'
+  )
+  const [unseenNewCount, setUnseenNewCount] = useState(0)
 
   const buildQueryParams = useCallback(() => {
     const params = new URLSearchParams({
@@ -260,7 +269,7 @@ export default function SMSHistoryPage() {
     )
   }, [statusFilter, senderIdFilter, campaignFilter, countryFilter, searchQuery, fromDate, toDate])
 
-  // Fetch SMS history function (manual / filter changes only — no background full reloads)
+  // Fetch SMS history function (manual / filter changes — live SSE patches rows after load)
   const fetchSMSHistory = useCallback(async (showLoading = true) => {
     try {
       if (showLoading) setLoading(true)
@@ -277,6 +286,7 @@ export default function SMSHistoryPage() {
       if (response.ok) {
         const data = await response.json()
         setSmsHistory(data.data || data.messages || [])
+        setUnseenNewCount(0)
         setPagination(
           data.pagination || {
             page,
@@ -387,52 +397,106 @@ export default function SMSHistoryPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- fetch when filter inputs change
   }, [page, limit, statusFilter, senderIdFilter, campaignFilter, countryFilter, debouncedSearch, fromDate, toDate])
 
-  // Per-message status sync for pending rows only — never reload the whole table
-  const pendingIdsKey = useMemo(
-    () =>
-      smsHistory
-        .filter((sms) => ['sent', 'queued', 'processing', 'retrying'].includes(sms.status))
-        .map((sms) => sms.id)
-        .join(','),
-    [smsHistory]
+  const applyLiveUpsert = useCallback(
+    (payload: { op: 'insert' | 'update'; message: SmsHistoryLiveMessage }) => {
+      const row = payload.message as SMSMessage
+      const filters = {
+        status: statusFilter,
+        senderId: senderIdFilter,
+        campaign: campaignFilter,
+        country: countryFilter,
+        search: debouncedSearch,
+        fromDate,
+        toDate,
+      }
+
+      if (payload.op === 'update') {
+        setSmsHistory((prev) => {
+          const idx = prev.findIndex((m) => m.id === row.id)
+          if (idx === -1) return prev
+          if (!liveRowMatchesFilters(payload.message, filters)) {
+            const next = prev.filter((m) => m.id !== row.id)
+            setPagination((p) => ({
+              ...p,
+              total: Math.max(0, p.total - 1),
+            }))
+            return next
+          }
+          const next = [...prev]
+          next[idx] = { ...next[idx], ...row }
+          return next
+        })
+        setSelectedSms((prev) => (prev?.id === row.id ? { ...prev, ...row } : prev))
+        return
+      }
+
+      // insert
+      if (!liveRowMatchesFilters(payload.message, filters)) return
+
+      if (page !== 1) {
+        setUnseenNewCount((n) => n + 1)
+        setPagination((p) => ({ ...p, total: p.total + 1 }))
+        return
+      }
+
+      setSmsHistory((prev) => {
+        if (prev.some((m) => m.id === row.id)) {
+          return prev.map((m) => (m.id === row.id ? { ...m, ...row } : m))
+        }
+        return [row, ...prev].slice(0, limit)
+      })
+      setPagination((p) => ({
+        ...p,
+        total: p.total + 1,
+        totalPages: Math.max(1, Math.ceil((p.total + 1) / limit)),
+        hasNext: p.total + 1 > limit,
+      }))
+      setDeliveryStats((stats) => {
+        const pendingLike = ['sent', 'queued', 'processing', 'retrying', 'pending'].includes(row.status)
+        return {
+          delivered: {
+            count: stats.delivered.count + (row.status === 'delivered' ? 1 : 0),
+            percentage: stats.delivered.percentage,
+          },
+          failed: {
+            count: stats.failed.count + (row.status === 'failed' ? 1 : 0),
+            percentage: stats.failed.percentage,
+          },
+          pending: {
+            count: stats.pending.count + (pendingLike ? 1 : 0),
+            percentage: stats.pending.percentage,
+          },
+        }
+      })
+      if (row.senderId) {
+        setAvailableSenderIds((ids) => (ids.includes(row.senderId) ? ids : [...ids, row.senderId]))
+      }
+    },
+    [
+      statusFilter,
+      senderIdFilter,
+      campaignFilter,
+      countryFilter,
+      debouncedSearch,
+      fromDate,
+      toDate,
+      page,
+      limit,
+    ]
   )
 
+  // Realtime SSE: new SMS + delivery status changes (MongoDB change streams)
   useEffect(() => {
-    if (!pendingIdsKey) return
-
-    const ids = pendingIdsKey.split(',').filter(Boolean)
-    let cancelled = false
-
-    const syncPendingRows = async () => {
-      try {
-        const token = localStorage.getItem('token')
-        const response = await fetch('/api/user/sms/history/sync-pending', {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ ids }),
-        })
-        if (!response.ok || cancelled) return
-        const data = await response.json()
-        if (!cancelled && Array.isArray(data.updates) && data.updates.length > 0) {
-          applyMessagePatches(data.updates)
+    const disconnect = connectSmsHistoryLive(() => localStorage.getItem('token'), {
+      onConnectionChange: setLiveState,
+      onEvent: (event) => {
+        if (event.type === 'sms.upsert') {
+          applyLiveUpsert({ op: event.op, message: event.message })
         }
-      } catch (err) {
-        console.warn('Pending status sync failed:', err)
-      }
-    }
-
-    // First sync shortly after pending appear, then every 12s — patch only
-    const initial = setTimeout(syncPendingRows, 1500)
-    const interval = setInterval(syncPendingRows, 12000)
-    return () => {
-      cancelled = true
-      clearTimeout(initial)
-      clearInterval(interval)
-    }
-  }, [pendingIdsKey, applyMessagePatches])
+      },
+    })
+    return disconnect
+  }, [applyLiveUpsert])
 
   const getStatusBadge = (sms: SMSMessage) => {
     if (sms.status === 'delivered' && sms.deliveryMethod === 'android_phone_gateway') {
@@ -663,9 +727,33 @@ export default function SMSHistoryPage() {
             <p className="text-sm text-[#64748B] mt-1 hidden md:block">
               View, search, and track delivery status for all SMS messages.
             </p>
-            <p className="text-xs text-[#64748B] mt-1 hidden lg:block">
-              Delivery updates apply per message for pending SMS — the list does not auto-reload.
+            <p className="text-xs text-[#64748B] mt-1 hidden lg:flex lg:items-center lg:gap-2">
+              <span
+                className={cn(
+                  'inline-flex h-2 w-2 rounded-full',
+                  liveState === 'live'
+                    ? 'bg-emerald-500'
+                    : liveState === 'connecting'
+                      ? 'bg-amber-400 animate-pulse'
+                      : 'bg-slate-400'
+                )}
+                aria-hidden
+              />
+              {liveState === 'live'
+                ? 'Live — new SMS and delivery updates appear automatically.'
+                : liveState === 'connecting'
+                  ? 'Connecting live updates…'
+                  : 'Live updates paused — use Refresh, or wait for reconnect.'}
             </p>
+            {unseenNewCount > 0 && (
+              <button
+                type="button"
+                onClick={() => setPage(1)}
+                className="mt-2 text-xs font-medium text-[#2F9B73] hover:text-[#267D5E] underline-offset-2 hover:underline"
+              >
+                {unseenNewCount} new SMS available — show latest
+              </button>
+            )}
           </div>
 
           {/* Search + desktop title row spacer / mobile stacked controls */}
