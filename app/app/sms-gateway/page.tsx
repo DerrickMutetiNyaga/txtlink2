@@ -193,6 +193,8 @@ export default function SmsGatewayPage() {
   const [testMessage, setTestMessage] = useState('TXTLINK test — phone gateway connection OK.')
   const [creatingTest, setCreatingTest] = useState(false)
   const [clearingTestJobs, setClearingTestJobs] = useState(false)
+  const [clearingEntireQueue, setClearingEntireQueue] = useState(false)
+  const [markingAllCompleted, setMarkingAllCompleted] = useState(false)
   const [jobActionId, setJobActionId] = useState<string | null>(null)
   const [clearingAlert, setClearingAlert] = useState(false)
   const [resumingGateway, setResumingGateway] = useState(false)
@@ -649,6 +651,104 @@ export default function SmsGatewayPage() {
       })
     } finally {
       setClearingTestJobs(false)
+    }
+  }
+
+  const handleClearEntireQueue = async () => {
+    if (
+      !confirm(
+        'Clear the ENTIRE phone fallback queue?\n\nThis permanently deletes ALL jobs — pending, active, completed, failed, and test — so you can start fresh. This cannot be undone.'
+      )
+    ) {
+      return
+    }
+    if (
+      !confirm(
+        'Final confirmation: permanently wipe every phone fallback job in this queue?'
+      )
+    ) {
+      return
+    }
+    setClearingEntireQueue(true)
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch('/api/user/sms-gateway/clear-queue', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ markCompleted: false }),
+      })
+      const data = await response.json()
+      if (response.ok) {
+        toast({ title: 'Queue cleared', description: data.message })
+        setQueuePage(1)
+        await fetchStatus()
+      } else {
+        toast({
+          title: 'Error',
+          description: data.error || 'Failed to clear queue.',
+          variant: 'destructive',
+        })
+      }
+    } catch {
+      toast({
+        title: 'Error',
+        description: 'Failed to clear queue.',
+        variant: 'destructive',
+      })
+    } finally {
+      setClearingEntireQueue(false)
+    }
+  }
+
+  const handleMarkAllCompleted = async () => {
+    if (
+      !confirm(
+        'Mark ALL pending/failed SMS as completed and clear the entire phone fallback queue?\n\nThis applies to every job and undelivered message — not just this page. This cannot be undone.'
+      )
+    ) {
+      return
+    }
+    if (
+      !confirm(
+        'Final confirmation: mark everything completed and wipe the phone fallback queue?'
+      )
+    ) {
+      return
+    }
+    setMarkingAllCompleted(true)
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch('/api/user/sms/history/mark-completed', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ view: 'all', clearQueue: true }),
+      })
+      const data = await response.json()
+      if (response.ok) {
+        toast({ title: 'Marked as completed', description: data.message })
+        setQueuePage(1)
+        await fetchStatus()
+      } else {
+        toast({
+          title: 'Error',
+          description: data.error || 'Failed to mark completed.',
+          variant: 'destructive',
+        })
+      }
+    } catch {
+      toast({
+        title: 'Error',
+        description: 'Failed to mark completed.',
+        variant: 'destructive',
+      })
+    } finally {
+      setMarkingAllCompleted(false)
     }
   }
 
@@ -1165,9 +1265,27 @@ export default function SmsGatewayPage() {
                     variant="outline"
                     className={BTN.secondary}
                     onClick={handleClearCompletedTestJobs}
-                    disabled={clearingTestJobs}
+                    disabled={clearingTestJobs || clearingEntireQueue || markingAllCompleted}
                   >
                     {clearingTestJobs ? 'Clearing…' : 'Clear Completed Test Jobs'}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className={BTN.danger}
+                    onClick={handleClearEntireQueue}
+                    disabled={clearingEntireQueue || clearingTestJobs || markingAllCompleted}
+                  >
+                    <Trash2 size={16} className="mr-2" />
+                    {clearingEntireQueue ? 'Clearing…' : 'Clear Entire Queue'}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className={BTN.secondary}
+                    onClick={handleMarkAllCompleted}
+                    disabled={markingAllCompleted || clearingEntireQueue || clearingTestJobs}
+                  >
+                    <CheckCircle2 size={16} className="mr-2" />
+                    {markingAllCompleted ? 'Marking…' : 'Mark All Completed'}
                   </Button>
                   <Button className={BTN.primary} onClick={() => setShowTestModal(true)}>
                     <FlaskConical size={16} className="mr-2" />

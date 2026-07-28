@@ -1,5 +1,6 @@
 import { ISmsMessage } from '@/lib/db/models'
 import { deriveCampaignLabel } from './constants'
+import { MANUAL_COMPLETED_CAUSE } from './actionable'
 import {
   getDisplayMessageText,
   REDACTED_MESSAGE_LABEL,
@@ -26,6 +27,9 @@ export function getDisplayStatus(msg: ISmsMessage): string {
   if (msg.fallbackStatus === 'retry_waiting_delivery') return 'Retry Waiting Delivery'
   if (msg.fallbackStatus === 'phone_requires_topup') return 'Phone Needs Reload'
   if (msg.fallbackStatus === 'phone_failed') return 'Phone Failed'
+  if (msg.status === 'delivered' && msg.deliveryCause === MANUAL_COMPLETED_CAUSE) {
+    return 'Completed'
+  }
   if (msg.status === 'delivered') return 'Delivered'
   if (msg.status === 'failed') return 'Failed'
   if (msg.status === 'sent') return 'Sent'

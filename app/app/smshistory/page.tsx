@@ -260,7 +260,7 @@ export default function SMSHistoryPage() {
     )
   }, [statusFilter, senderIdFilter, campaignFilter, countryFilter, searchQuery, fromDate, toDate])
 
-  // Fetch SMS history function
+  // Fetch SMS history function (manual / filter changes only — no background full reloads)
   const fetchSMSHistory = useCallback(async (showLoading = true) => {
     try {
       if (showLoading) setLoading(true)
@@ -313,6 +313,65 @@ export default function SMSHistoryPage() {
     }
   }, [buildQueryParams, page, limit, toast])
 
+  const applyMessagePatches = useCallback((updates: Array<Partial<SMSMessage> & { id: string }>) => {
+    if (!updates.length) return
+
+    const byId = new Map(updates.map((u) => [u.id, u]))
+
+    setSmsHistory((prev) => {
+      let deliveredDelta = 0
+      let failedDelta = 0
+      let pendingDelta = 0
+
+      const next = prev.map((row) => {
+        const patch = byId.get(row.id)
+        if (!patch) return row
+
+        const wasPending = ['sent', 'queued', 'processing', 'retrying', 'pending'].includes(row.status)
+        const wasFailed = row.status === 'failed'
+        const wasDelivered = row.status === 'delivered'
+        const nextStatus = patch.status || row.status
+        const nowPending = ['sent', 'queued', 'processing', 'retrying', 'pending'].includes(nextStatus)
+        const nowFailed = nextStatus === 'failed'
+        const nowDelivered = nextStatus === 'delivered'
+
+        if (wasPending && !nowPending) pendingDelta -= 1
+        if (!wasPending && nowPending) pendingDelta += 1
+        if (wasFailed && !nowFailed) failedDelta -= 1
+        if (!wasFailed && nowFailed) failedDelta += 1
+        if (wasDelivered && !nowDelivered) deliveredDelta -= 1
+        if (!wasDelivered && nowDelivered) deliveredDelta += 1
+
+        return { ...row, ...patch }
+      })
+
+      if (deliveredDelta || failedDelta || pendingDelta) {
+        setDeliveryStats((stats) => ({
+          delivered: {
+            count: Math.max(0, stats.delivered.count + deliveredDelta),
+            percentage: stats.delivered.percentage,
+          },
+          failed: {
+            count: Math.max(0, stats.failed.count + failedDelta),
+            percentage: stats.failed.percentage,
+          },
+          pending: {
+            count: Math.max(0, stats.pending.count + pendingDelta),
+            percentage: stats.pending.percentage,
+          },
+        }))
+      }
+
+      return next
+    })
+
+    setSelectedSms((prev) => {
+      if (!prev) return prev
+      const patch = byId.get(prev.id)
+      return patch ? { ...prev, ...patch } : prev
+    })
+  }, [])
+
   // Debounce search input
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -322,36 +381,58 @@ export default function SMSHistoryPage() {
     return () => clearTimeout(timer)
   }, [searchQuery])
 
-  // Initial fetch and when filters change
+  // Initial fetch and when filters change only
   useEffect(() => {
     fetchSMSHistory(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fetch when filter inputs change
   }, [page, limit, statusFilter, senderIdFilter, campaignFilter, countryFilter, debouncedSearch, fromDate, toDate])
 
-  // Poll HostPinnacle via history API when messages are still "Sent".
-
-  const hasPendingOnPage = useMemo(
+  // Per-message status sync for pending rows only — never reload the whole table
+  const pendingIdsKey = useMemo(
     () =>
-      smsHistory.some((sms) =>
-        ['sent', 'queued', 'processing', 'retrying'].includes(sms.status)
-      ),
+      smsHistory
+        .filter((sms) => ['sent', 'queued', 'processing', 'retrying'].includes(sms.status))
+        .map((sms) => sms.id)
+        .join(','),
     [smsHistory]
   )
 
   useEffect(() => {
-    if (!hasPendingOnPage) return
+    if (!pendingIdsKey) return
 
+    const ids = pendingIdsKey.split(',').filter(Boolean)
     let cancelled = false
-    const run = async () => {
-      if (!cancelled) await fetchSMSHistory(false)
+
+    const syncPendingRows = async () => {
+      try {
+        const token = localStorage.getItem('token')
+        const response = await fetch('/api/user/sms/history/sync-pending', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ ids }),
+        })
+        if (!response.ok || cancelled) return
+        const data = await response.json()
+        if (!cancelled && Array.isArray(data.updates) && data.updates.length > 0) {
+          applyMessagePatches(data.updates)
+        }
+      } catch (err) {
+        console.warn('Pending status sync failed:', err)
+      }
     }
 
-    run()
-    const interval = setInterval(run, 5000)
+    // First sync shortly after pending appear, then every 12s — patch only
+    const initial = setTimeout(syncPendingRows, 1500)
+    const interval = setInterval(syncPendingRows, 12000)
     return () => {
       cancelled = true
+      clearTimeout(initial)
       clearInterval(interval)
     }
-  }, [hasPendingOnPage, fetchSMSHistory])
+  }, [pendingIdsKey, applyMessagePatches])
 
   const getStatusBadge = (sms: SMSMessage) => {
     if (sms.status === 'delivered' && sms.deliveryMethod === 'android_phone_gateway') {
@@ -479,7 +560,43 @@ export default function SMSHistoryPage() {
     const data = await response.json()
     if (response.ok) {
       toast({ title: 'Success', description: data.message })
-      fetchSMSHistory(false)
+      // Patch only this message via a targeted sync/read — no full table reload
+      try {
+        const syncRes = await fetch('/api/user/sms/history/sync-pending', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ ids: [messageId] }),
+        })
+        if (syncRes.ok) {
+          const syncData = await syncRes.json()
+          if (Array.isArray(syncData.updates) && syncData.updates.length > 0) {
+            applyMessagePatches(syncData.updates)
+          }
+        }
+      } catch {
+        // optimistic local status hint if sync fails
+        applyMessagePatches([
+          {
+            id: messageId,
+            status: action === 'retry-provider' ? 'retrying' : 'queued',
+            displayStatus:
+              action === 'retry-provider'
+                ? 'Retrying Provider'
+                : action === 'cancel'
+                  ? 'Cancelled Fallback'
+                  : 'Queued for Phone',
+            fallbackStatus:
+              action === 'retry-provider'
+                ? 'retrying_provider'
+                : action === 'cancel'
+                  ? 'cancelled'
+                  : 'queued_for_phone',
+          },
+        ])
+      }
     } else {
       toast({
         title: 'Error',
@@ -547,7 +664,7 @@ export default function SMSHistoryPage() {
               View, search, and track delivery status for all SMS messages.
             </p>
             <p className="text-xs text-[#64748B] mt-1 hidden lg:block">
-              Status is checked directly with HostPinnacle every few seconds until delivered or failed (no webhook required).
+              Delivery updates apply per message for pending SMS — the list does not auto-reload.
             </p>
           </div>
 
@@ -765,7 +882,7 @@ export default function SMSHistoryPage() {
           </DialogContent>
         </Dialog>
 
-        <SmsRetryDesk onChanged={() => fetchSMSHistory(false)} />
+        <SmsRetryDesk onMessagePatched={applyMessagePatches} />
 
         {/* Main Content - 2-column layout */}
         <div className="grid grid-cols-12 gap-6">

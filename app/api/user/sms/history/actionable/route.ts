@@ -4,13 +4,14 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import connectDB from '@/lib/db/connect'
-import { SmsMessage, SMS_PENDING_STATUSES } from '@/lib/db/models'
+import { SmsMessage } from '@/lib/db/models'
 import { requireAuth } from '@/lib/auth/middleware'
 import mongoose from 'mongoose'
 import { formatSmsHistoryRow } from '@/lib/services/sms-history/format'
-import { FAILED_LIKE_STATUSES } from '@/lib/services/sms-history/constants'
-
-const PHONE_ATTENTION_STATUSES = ['phone_failed', 'phone_requires_topup'] as const
+import {
+  buildActionableSmsFilter,
+  normalizeActionableView,
+} from '@/lib/services/sms-history/actionable'
 
 export async function GET(request: NextRequest) {
   try {
@@ -19,53 +20,19 @@ export async function GET(request: NextRequest) {
     const userId = new mongoose.Types.ObjectId(user.userId)
 
     const { searchParams } = new URL(request.url)
-    const view = (searchParams.get('view') || 'all').toLowerCase()
+    const view = normalizeActionableView(searchParams.get('view'))
     const limitRaw = parseInt(searchParams.get('limit') || '50', 10)
     const limit = Math.min(Math.max(Number.isFinite(limitRaw) ? limitRaw : 50, 1), 100)
 
-    const query =
-      view === 'pending'
-        ? {
-            userId,
-            deliveryMethod: { $ne: 'android_phone_gateway' },
-            status: { $in: [...SMS_PENDING_STATUSES] },
-          }
-        : view === 'failed'
-          ? {
-              userId,
-              deliveryMethod: { $ne: 'android_phone_gateway' },
-              status: { $ne: 'delivered' },
-              $or: [
-                { status: { $in: [...FAILED_LIKE_STATUSES] } },
-                { fallbackStatus: { $in: [...PHONE_ATTENTION_STATUSES] } },
-              ],
-            }
-          : {
-              userId,
-              deliveryMethod: { $ne: 'android_phone_gateway' },
-              $or: [
-                { status: { $in: [...SMS_PENDING_STATUSES] } },
-                { status: { $in: [...FAILED_LIKE_STATUSES] } },
-                { fallbackStatus: { $in: [...PHONE_ATTENTION_STATUSES] } },
-              ],
-            }
+    const query = buildActionableSmsFilter(userId, view)
+
+    const pendingFilter = buildActionableSmsFilter(userId, 'pending')
+    const failedFilter = buildActionableSmsFilter(userId, 'failed')
 
     const [messages, pendingCount, failedCount] = await Promise.all([
       SmsMessage.find(query).sort({ createdAt: -1 }).limit(limit).lean(),
-      SmsMessage.countDocuments({
-        userId,
-        deliveryMethod: { $ne: 'android_phone_gateway' },
-        status: { $in: [...SMS_PENDING_STATUSES] },
-      }),
-      SmsMessage.countDocuments({
-        userId,
-        deliveryMethod: { $ne: 'android_phone_gateway' },
-        status: { $ne: 'delivered' },
-        $or: [
-          { status: { $in: [...FAILED_LIKE_STATUSES] } },
-          { fallbackStatus: { $in: [...PHONE_ATTENTION_STATUSES] } },
-        ],
-      }),
+      SmsMessage.countDocuments(pendingFilter),
+      SmsMessage.countDocuments(failedFilter),
     ])
 
     const data = messages.map((msg) =>

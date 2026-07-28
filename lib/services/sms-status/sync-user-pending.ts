@@ -1,11 +1,13 @@
 /**
  * On-demand delivery status sync for a user's pending messages via HostPinnacle.
+ * Prefer syncing specific message IDs so the UI can patch rows without reloading history.
  */
 
 import mongoose from 'mongoose'
-import { SmsMessage, SMS_PENDING_STATUSES } from '@/lib/db/models'
+import { SmsMessage, SMS_PENDING_STATUSES, type ISmsMessage } from '@/lib/db/models'
 import { getSharedSynchronizer } from './build-synchronizer'
 import type { ClaimedMessage } from './status-repository'
+import { formatSmsHistoryRow, type FormattedSmsHistoryRow } from '@/lib/services/sms-history/format'
 
 function toClaimedMessage(doc: Record<string, unknown>): ClaimedMessage {
   return {
@@ -25,46 +27,93 @@ function toClaimedMessage(doc: Record<string, unknown>): ClaimedMessage {
   }
 }
 
+export type SyncPendingResult = {
+  checked: number
+  finalized: number
+  updates: FormattedSmsHistoryRow[]
+}
+
+async function loadFormattedByIds(
+  userId: mongoose.Types.ObjectId,
+  ids: string[]
+): Promise<FormattedSmsHistoryRow[]> {
+  if (ids.length === 0) return []
+  const objectIds = ids
+    .filter((id) => mongoose.Types.ObjectId.isValid(id))
+    .map((id) => new mongoose.Types.ObjectId(id))
+  if (objectIds.length === 0) return []
+
+  const docs = await SmsMessage.find({ userId, _id: { $in: objectIds } }).lean()
+  return docs.map((msg) => formatSmsHistoryRow(msg as ISmsMessage & { _id: unknown }))
+}
+
 export async function syncUserPendingMessages(
   userId: string,
-  limit = 25
-): Promise<{ checked: number; finalized: number }> {
+  limit = 25,
+  messageIds?: string[]
+): Promise<SyncPendingResult> {
+  const userObjectId = new mongoose.Types.ObjectId(userId)
   const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-  const docs = await SmsMessage.find({
-    userId: new mongoose.Types.ObjectId(userId),
-    status: { $in: [...SMS_PENDING_STATUSES] },
-    createdAt: { $gte: since },
-  })
-    .sort({ createdAt: -1 })
-    .limit(Math.min(Math.max(limit, 1), 50))
-    .lean()
+
+  let docs: Record<string, unknown>[]
+
+  if (messageIds && messageIds.length > 0) {
+    const objectIds = messageIds
+      .filter((id) => mongoose.Types.ObjectId.isValid(id))
+      .map((id) => new mongoose.Types.ObjectId(id))
+    docs = (await SmsMessage.find({
+      _id: { $in: objectIds },
+      userId: userObjectId,
+      status: { $in: [...SMS_PENDING_STATUSES] },
+    }).lean()) as Record<string, unknown>[]
+  } else {
+    docs = (await SmsMessage.find({
+      userId: userObjectId,
+      status: { $in: [...SMS_PENDING_STATUSES] },
+      createdAt: { $gte: since },
+    })
+      .sort({ createdAt: -1 })
+      .limit(Math.min(Math.max(limit, 1), 50))
+      .lean()) as Record<string, unknown>[]
+  }
 
   if (docs.length === 0) {
-    return { checked: 0, finalized: 0 }
+    // Still return current rows for requested IDs (may already be final)
+    const updates = messageIds?.length
+      ? await loadFormattedByIds(userObjectId, messageIds)
+      : []
+    return { checked: 0, finalized: 0, updates }
   }
 
   const { synchronizer } = await getSharedSynchronizer()
   let checked = 0
   let finalized = 0
+  const touchedIds: string[] = []
 
   for (const doc of docs) {
+    const id = String(doc._id)
+    touchedIds.push(id)
     if (!doc.externalMsgId && !doc.hpTransactionId) continue
 
     checked++
     try {
-      const outcome = await synchronizer.syncClaimedMessage(
-        toClaimedMessage(doc as Record<string, unknown>)
-      )
+      const outcome = await synchronizer.syncClaimedMessage(toClaimedMessage(doc))
       if (outcome === 'finalized') finalized++
     } catch (error) {
       console.error('syncUserPendingMessages failed:', {
-        messageId: doc._id?.toString(),
+        messageId: id,
         error,
       })
     }
   }
 
-  return { checked, finalized }
+  const idsToReturn =
+    messageIds && messageIds.length > 0
+      ? Array.from(new Set([...messageIds, ...touchedIds]))
+      : touchedIds
+
+  const updates = await loadFormattedByIds(userObjectId, idsToReturn)
+  return { checked, finalized, updates }
 }
 
 /** Poll HostPinnacle immediately for one message (webhook-free delivery tracking). */

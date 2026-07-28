@@ -13,12 +13,14 @@ import { useToast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
 import {
   AlertTriangle,
+  CheckCircle2,
   ChevronDown,
   Clock,
   Loader2,
   Phone,
   Radio,
   RefreshCw,
+  Trash2,
   XCircle,
 } from 'lucide-react'
 
@@ -68,6 +70,14 @@ function isFailedSms(sms: ActionableSms) {
   )
 }
 
+function stillActionable(sms: ActionableSms) {
+  if (sms.status === 'delivered') return false
+  if (sms.fallbackStatus === 'delivered_via_phone' || sms.fallbackStatus === 'sent_via_phone') {
+    return false
+  }
+  return isPendingSms(sms) || isFailedSms(sms) || Boolean(sms.fallbackStatus)
+}
+
 function canRetryViaSenderId(sms: ActionableSms) {
   if (sms.status === 'delivered') return false
   if (sms.providerRetryAttempted) return false
@@ -99,11 +109,22 @@ function statusTone(sms: ActionableSms) {
   return 'bg-slate-50 text-slate-700 border-slate-100'
 }
 
-type Props = {
-  onChanged?: () => void
+function recount(list: ActionableSms[]) {
+  let pending = 0
+  let failed = 0
+  for (const sms of list) {
+    if (isFailedSms(sms)) failed++
+    else if (isPendingSms(sms) || stillActionable(sms)) pending++
+  }
+  return { pending, failed, total: pending + failed }
 }
 
-export function SmsRetryDesk({ onChanged }: Props) {
+type Props = {
+  /** Patch a single history row — never reload the whole table */
+  onMessagePatched?: (updates: Array<Partial<ActionableSms> & { id: string }>) => void
+}
+
+export function SmsRetryDesk({ onMessagePatched }: Props) {
   const { toast } = useToast()
   const [open, setOpen] = useState(true)
   const [view, setView] = useState<ViewFilter>('all')
@@ -112,6 +133,29 @@ export function SmsRetryDesk({ onChanged }: Props) {
   const [counts, setCounts] = useState({ pending: 0, failed: 0, total: 0 })
   const [busyId, setBusyId] = useState<string | null>(null)
   const [busyAction, setBusyAction] = useState<ActionKind | null>(null)
+  const [markingCompleted, setMarkingCompleted] = useState(false)
+  const [clearingQueue, setClearingQueue] = useState(false)
+
+  const applyLocalPatches = useCallback(
+    (updates: Array<Partial<ActionableSms> & { id: string }>) => {
+      if (!updates.length) return
+      const byId = new Map(updates.map((u) => [u.id, u]))
+
+      setItems((prev) => {
+        const next = prev
+          .map((row) => {
+            const patch = byId.get(row.id)
+            return patch ? { ...row, ...patch } : row
+          })
+          .filter(stillActionable)
+        setCounts(recount(next))
+        return next
+      })
+
+      onMessagePatched?.(updates)
+    },
+    [onMessagePatched]
+  )
 
   const fetchActionable = useCallback(async (showSpinner = true) => {
     try {
@@ -138,14 +182,59 @@ export function SmsRetryDesk({ onChanged }: Props) {
     }
   }, [view, toast])
 
+  // Load once when filter changes — not on a timer for the whole list
   useEffect(() => {
     fetchActionable(true)
   }, [fetchActionable])
 
-  // Auto-expand when there is work to do
   useEffect(() => {
     if (counts.total > 0) setOpen(true)
   }, [counts.total])
+
+  // Only sync pending rows in this desk (for resend status) — patch in place
+  const pendingIdsKey = useMemo(
+    () =>
+      items
+        .filter((sms) => isPendingSms(sms))
+        .map((sms) => sms.id)
+        .join(','),
+    [items]
+  )
+
+  useEffect(() => {
+    if (!pendingIdsKey) return
+    const ids = pendingIdsKey.split(',').filter(Boolean)
+    let cancelled = false
+
+    const syncRows = async () => {
+      try {
+        const token = localStorage.getItem('token')
+        const response = await fetch('/api/user/sms/history/sync-pending', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ ids }),
+        })
+        if (!response.ok || cancelled) return
+        const data = await response.json()
+        if (!cancelled && Array.isArray(data.updates) && data.updates.length > 0) {
+          applyLocalPatches(data.updates)
+        }
+      } catch {
+        // ignore background sync errors
+      }
+    }
+
+    const initial = setTimeout(syncRows, 2000)
+    const interval = setInterval(syncRows, 15000)
+    return () => {
+      cancelled = true
+      clearTimeout(initial)
+      clearInterval(interval)
+    }
+  }, [pendingIdsKey, applyLocalPatches])
 
   const summaryLabel = useMemo(() => {
     if (counts.total === 0) return 'No pending or failed SMS'
@@ -172,8 +261,39 @@ export function SmsRetryDesk({ onChanged }: Props) {
         title: action === 'retry-provider' ? 'Retrying via Sender ID' : 'Queued for phone gateway',
         description: data.message || 'Retry started.',
       })
-      await fetchActionable(false)
-      onChanged?.()
+
+      // Optimistic per-message patch — no section reload
+      const optimistic: Partial<ActionableSms> & { id: string } = {
+        id: sms.id,
+        status: action === 'retry-provider' ? 'retrying' : 'queued',
+        displayStatus:
+          action === 'retry-provider' ? 'Retrying Provider' : 'Queued for Phone',
+        fallbackStatus:
+          action === 'retry-provider' ? 'retrying_provider' : 'queued_for_phone',
+        providerRetryAttempted:
+          action === 'retry-provider' ? true : sms.providerRetryAttempted,
+      }
+      applyLocalPatches([optimistic])
+
+      // Confirm with a targeted sync for this id only
+      try {
+        const syncRes = await fetch('/api/user/sms/history/sync-pending', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ ids: [sms.id] }),
+        })
+        if (syncRes.ok) {
+          const syncData = await syncRes.json()
+          if (Array.isArray(syncData.updates) && syncData.updates.length > 0) {
+            applyLocalPatches(syncData.updates)
+          }
+        }
+      } catch {
+        // keep optimistic patch
+      }
     } catch (err) {
       toast({
         title: 'Retry failed',
@@ -183,6 +303,100 @@ export function SmsRetryDesk({ onChanged }: Props) {
     } finally {
       setBusyId(null)
       setBusyAction(null)
+    }
+  }
+
+  const handleMarkAllCompleted = async () => {
+    if (
+      !confirm(
+        'Mark ALL pending/failed SMS as completed and clear the entire phone fallback queue?\n\nThis applies to every undelivered message — not just what is visible here. This cannot be undone.'
+      )
+    ) {
+      return
+    }
+    if (!confirm('Final confirmation: mark everything completed and start fresh?')) {
+      return
+    }
+
+    setMarkingCompleted(true)
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch('/api/user/sms/history/mark-completed', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ view: 'all', clearQueue: true }),
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to mark completed')
+      }
+
+      const markedIds: string[] = Array.isArray(data.ids) ? data.ids : items.map((s) => s.id)
+      const patches = markedIds.map((id) => ({
+        id,
+        status: 'delivered',
+        displayStatus: 'Completed',
+        fallbackStatus: 'cancelled',
+      }))
+      applyLocalPatches(patches)
+
+      toast({
+        title: 'Marked as completed',
+        description: data.message || `Marked ${data.markedCount ?? markedIds.length} SMS as completed.`,
+      })
+
+      await fetchActionable(true)
+    } catch (err) {
+      toast({
+        title: 'Could not mark completed',
+        description: err instanceof Error ? err.message : 'Try again.',
+        variant: 'destructive',
+      })
+    } finally {
+      setMarkingCompleted(false)
+    }
+  }
+
+  const handleClearEntireQueue = async () => {
+    if (
+      !confirm(
+        'Clear the ENTIRE phone fallback queue?\n\nThis permanently deletes ALL phone gateway jobs for your account. Pending/failed SMS in history are left as-is unless you also use Mark All Completed.'
+      )
+    ) {
+      return
+    }
+    if (!confirm('Final confirmation: wipe every phone fallback job?')) {
+      return
+    }
+
+    setClearingQueue(true)
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch('/api/user/sms-gateway/clear-queue', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ markCompleted: false }),
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to clear queue')
+      }
+      toast({ title: 'Queue cleared', description: data.message })
+      await fetchActionable(true)
+    } catch (err) {
+      toast({
+        title: 'Could not clear queue',
+        description: err instanceof Error ? err.message : 'Try again.',
+        variant: 'destructive',
+      })
+    } finally {
+      setClearingQueue(false)
     }
   }
 
@@ -243,8 +457,40 @@ export function SmsRetryDesk({ onChanged }: Props) {
               type="button"
               variant="secondary"
               size="sm"
+              onClick={handleClearEntireQueue}
+              disabled={loading || markingCompleted || clearingQueue}
+              className="h-10 rounded-xl border border-red-200 bg-white px-3 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+              title="Delete all phone fallback queue jobs"
+            >
+              {clearingQueue ? (
+                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+              ) : (
+                <Trash2 className="mr-1.5 h-4 w-4" />
+              )}
+              {clearingQueue ? 'Clearing…' : 'Clear Queue'}
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={handleMarkAllCompleted}
+              disabled={loading || markingCompleted || clearingQueue || counts.total === 0}
+              className="h-10 rounded-xl border border-emerald-200 bg-white px-3 text-xs font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
+              title="Mark all pending/failed SMS as completed and clear phone fallback queue"
+            >
+              {markingCompleted ? (
+                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+              ) : (
+                <CheckCircle2 className="mr-1.5 h-4 w-4" />
+              )}
+              {markingCompleted ? 'Marking…' : 'Mark All Completed'}
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
               onClick={() => fetchActionable(true)}
-              disabled={loading}
+              disabled={loading || markingCompleted || clearingQueue}
               className="h-10 rounded-xl border border-[#E2E8F0] bg-white px-3 text-[#2F9B73] hover:bg-[#ECFDF5]"
             >
               <RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} />
