@@ -3,7 +3,9 @@ import { SmsFallbackJob, User } from '@/lib/db/models'
 
 export const MAX_FALLBACK_JOB_RETENTION_DAYS = 3
 export const DEFAULT_FALLBACK_JOB_RETENTION_DAYS = 3
-export const FALLBACK_QUEUE_PAGE_SIZE = 5
+export const FALLBACK_QUEUE_PAGE_SIZE = 100
+export const FALLBACK_QUEUE_DEFAULT_PAGE_SIZE = 25
+export const FALLBACK_QUEUE_PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const
 
 export const DELETABLE_FALLBACK_JOB_STATUSES = [
   'delivered',

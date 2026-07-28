@@ -187,10 +187,6 @@ export function SmsRetryDesk({ onMessagePatched }: Props) {
     fetchActionable(true)
   }, [fetchActionable])
 
-  useEffect(() => {
-    if (counts.total > 0) setOpen(true)
-  }, [counts.total])
-
   // Only sync pending rows in this desk (for resend status) — patch in place
   const pendingIdsKey = useMemo(
     () =>

@@ -8,6 +8,7 @@ import {
 } from '@/lib/services/sms-fallback/phone-status'
 import {
   cleanupOldFallbackJobsForUser,
+  FALLBACK_QUEUE_DEFAULT_PAGE_SIZE,
   FALLBACK_QUEUE_PAGE_SIZE,
   resolveUserFallbackRetentionDays,
 } from '@/lib/services/sms-fallback/job-cleanup'
@@ -22,9 +23,13 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const filter = searchParams.get('filter') || 'active'
     const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1)
+    const requestedLimit = parseInt(
+      searchParams.get('limit') || String(FALLBACK_QUEUE_DEFAULT_PAGE_SIZE),
+      10
+    )
     const limit = Math.min(
       FALLBACK_QUEUE_PAGE_SIZE,
-      Math.max(1, parseInt(searchParams.get('limit') || String(FALLBACK_QUEUE_PAGE_SIZE), 10) || FALLBACK_QUEUE_PAGE_SIZE)
+      Math.max(1, Number.isFinite(requestedLimit) ? requestedLimit : FALLBACK_QUEUE_DEFAULT_PAGE_SIZE)
     )
 
     const retentionDays = await resolveUserFallbackRetentionDays(userId)

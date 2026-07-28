@@ -179,9 +179,10 @@ export default function SmsGatewayPage() {
   const [fallbackJobs, setFallbackJobs] = useState<FallbackJobRow[]>([])
   const [queueFilter, setQueueFilter] = useState<'active' | 'completed' | 'all'>('active')
   const [queuePage, setQueuePage] = useState(1)
+  const [queueLimit, setQueueLimit] = useState(25)
   const [queuePagination, setQueuePagination] = useState<QueuePagination>({
     page: 1,
-    limit: 5,
+    limit: 25,
     total: 0,
     totalPages: 1,
     hasNext: false,
@@ -218,7 +219,7 @@ export default function SmsGatewayPage() {
         fetch('/api/user/sms-gateway', {
           headers: { Authorization: `Bearer ${token}` },
         }),
-        fetch(`/api/user/sms-fallback?filter=${queueFilter}&page=${queuePage}&limit=5`, {
+        fetch(`/api/user/sms-fallback?filter=${queueFilter}&page=${queuePage}&limit=${queueLimit}`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
       ])
@@ -241,7 +242,7 @@ export default function SmsGatewayPage() {
     } finally {
       setLoading(false)
     }
-  }, [queueFilter, queuePage])
+  }, [queueFilter, queuePage, queueLimit])
 
   useEffect(() => {
     fetchStatus()
@@ -1294,15 +1295,34 @@ export default function SmsGatewayPage() {
                 </div>
               </div>
 
-              <p className="text-xs text-[#64748B] mb-4">
-                Showing up to 5 jobs per page. Completed jobs auto-delete after{' '}
-                <strong className="text-[#0F172A]">{fallbackRetentionDays}</strong> day
-                {fallbackRetentionDays === 1 ? '' : 's'} (max 3 days). Change in{' '}
-                <a href="/app/settings" className="text-[#2F9B73] hover:underline">
-                  Settings → Preferences
-                </a>
-                .
-              </p>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                <p className="text-xs text-[#64748B]">
+                  Showing up to {queueLimit} jobs per page. Completed jobs auto-delete after{' '}
+                  <strong className="text-[#0F172A]">{fallbackRetentionDays}</strong> day
+                  {fallbackRetentionDays === 1 ? '' : 's'} (max 3 days). Change in{' '}
+                  <a href="/app/settings" className="text-[#2F9B73] hover:underline">
+                    Settings → Preferences
+                  </a>
+                  .
+                </p>
+                <label className="flex items-center gap-2 text-xs text-[#64748B] shrink-0">
+                  <span>Per page</span>
+                  <select
+                    value={queueLimit}
+                    onChange={(e) => {
+                      setQueueLimit(Number(e.target.value))
+                      setQueuePage(1)
+                    }}
+                    className="h-8 rounded-lg border border-[#E2E8F0] bg-white px-2 text-sm text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#2F9B73]/20 focus:border-[#2F9B73]"
+                  >
+                    {[10, 25, 50, 100].map((n) => (
+                      <option key={n} value={n}>
+                        {n}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
 
               {fallbackJobs.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-[#E2E8F0] bg-[#F8FAFC] py-10 px-6 text-center">
@@ -1429,7 +1449,7 @@ export default function SmsGatewayPage() {
                   </table>
                 </div>
 
-                {queuePagination.totalPages > 1 && (
+                {(queuePagination.totalPages > 1 || queuePagination.total > queueLimit) && (
                   <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4 pt-4 border-t border-[#E2E8F0]">
                     <p className="text-xs text-[#64748B]">
                       Page {queuePagination.page} of {queuePagination.totalPages} ·{' '}
