@@ -14,12 +14,13 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const { messageId } = await context.params
     const userId = new mongoose.Types.ObjectId(user.userId)
 
-    const result = await retryProviderForMessage(messageId, userId)
+    // User-initiated retry from SMS History — allow failed messages via Sender ID
+    const result = await retryProviderForMessage(messageId, userId, { forceManual: true })
     if (!result.success) {
       return NextResponse.json({ error: result.error }, { status: 400 })
     }
 
-    return NextResponse.json({ success: true, message: 'Provider retry triggered' })
+    return NextResponse.json({ success: true, message: 'Retrying via Sender ID (provider)' })
   } catch (error: any) {
     if (error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

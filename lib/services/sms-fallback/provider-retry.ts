@@ -351,7 +351,8 @@ export async function scanAndRetryUndeliveredSms(
 
 export async function retryProviderForMessage(
   messageId: string,
-  userId: mongoose.Types.ObjectId
+  userId: mongoose.Types.ObjectId,
+  options?: { forceManual?: boolean }
 ): Promise<{ success: boolean; error?: string }> {
   await connectDB()
 
@@ -367,10 +368,14 @@ export async function retryProviderForMessage(
     return { success: false, error: 'Message not eligible for retry' }
   }
 
-  const staleCutoff = minutesAgo(getFallbackStaleMinutes())
-  const eligibility = evaluateProviderRetryEligibility(sms as ISmsMessage, staleCutoff)
-  if (!eligibility.eligible) {
-    return { success: false, error: 'Message not eligible for retry' }
+  // Manual UI retries may re-send failed SMS via the same Sender ID even when
+  // the automatic scanner would prefer phone fallback immediately.
+  if (!options?.forceManual) {
+    const staleCutoff = minutesAgo(getFallbackStaleMinutes())
+    const eligibility = evaluateProviderRetryEligibility(sms as ISmsMessage, staleCutoff)
+    if (!eligibility.eligible) {
+      return { success: false, error: 'Message not eligible for retry' }
+    }
   }
 
   const ok = await retrySingleMessage(sms as ISmsMessage & { _id: unknown })

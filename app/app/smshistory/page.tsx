@@ -51,6 +51,7 @@ import {
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import Link from 'next/link'
 import SenderIdAdBanner from '@/components/sender-id-ad/SenderIdAdBanner'
+import { SmsRetryDesk } from '@/components/sms-history/SmsRetryDesk'
 import { cn } from '@/lib/utils'
 
 // Message type
@@ -763,6 +764,8 @@ export default function SMSHistoryPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        <SmsRetryDesk onChanged={() => fetchSMSHistory(false)} />
 
         {/* Main Content - 2-column layout */}
         <div className="grid grid-cols-12 gap-6">
