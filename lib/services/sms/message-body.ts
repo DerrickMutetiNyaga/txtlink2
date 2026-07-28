@@ -92,6 +92,22 @@ export function normalizeOutgoingSmsPayload(
   return { ok: true, message, usedField }
 }
 
+/**
+ * Convert literal escape sequences ("\n", "\r\n", "\t" typed as two characters)
+ * into real control characters. Hotspot/AT gateway panels can only render
+ * multi-line SMS inside a JSON payload template by writing "\n" literally in
+ * their message template; depending on how the gateway forwards the payload,
+ * those sequences may reach us undecoded (e.g. double-escaped or via form body).
+ */
+export function decodeEscapedNewlines(message: string): string {
+  if (!message.includes('\\')) return message
+  return message
+    .replace(/\\r\\n/g, '\n')
+    .replace(/\\n/g, '\n')
+    .replace(/\\r/g, '\n')
+    .replace(/\\t/g, '\t')
+}
+
 /** @deprecated Use normalizeOutgoingSmsPayload */
 export function extractMessageFromRequest(body: Record<string, unknown>): string | null {
   const result = normalizeOutgoingSmsPayload(body)

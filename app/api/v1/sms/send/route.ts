@@ -22,6 +22,7 @@ import {
   buildMessageBodyFields,
   buildMetadataFromSms,
   logSmsMessageCreateDebug,
+  decodeEscapedNewlines,
 } from '@/lib/services/sms/message-body'
 import bcrypt from 'bcryptjs'
 import mongoose from 'mongoose'
@@ -237,7 +238,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const actualMessage = normalizedPayload.message
+    const actualMessage = decodeEscapedNewlines(normalizedPayload.message)
     const messageFields = buildMessageBodyFields(actualMessage)
 
     const smsSource = isApiKeyAuth
