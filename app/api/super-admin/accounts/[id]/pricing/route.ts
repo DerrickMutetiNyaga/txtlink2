@@ -23,10 +23,15 @@ export async function POST(
     const { mode, pricePerSms, pricePerPart, pricePerBlock, pricePerCharacter, charsPerBlock, chargeFailed, refundOnFail, samePriceForEncodings, roundPartialBlocks, minimumChargePerMessage, gsm7Part1, gsm7PartN, ucs2Part1, ucs2PartN, ucs2CharsPerBlock, ucs2PricePerBlock, ucs2PricePerCharacter } = await request.json()
 
     const hasValidPrice =
-      (mode === 'per_sms' && pricePerSms) ||
-      (mode === 'per_part' && pricePerPart) ||
-      (mode === 'per_char_block' && pricePerBlock && charsPerBlock) ||
-      (mode === 'per_character' && pricePerCharacter)
+      (mode === 'per_sms' && Number.isFinite(Number(pricePerSms)) && Number(pricePerSms) >= 0) ||
+      (mode === 'per_part' && Number.isFinite(Number(pricePerPart)) && Number(pricePerPart) >= 0) ||
+      (mode === 'per_char_block' &&
+        Number.isFinite(Number(pricePerBlock)) &&
+        Number(pricePerBlock) >= 0 &&
+        Number(charsPerBlock) > 0) ||
+      (mode === 'per_character' &&
+        Number.isFinite(Number(pricePerCharacter)) &&
+        Number(pricePerCharacter) >= 0)
 
     if (!mode || !hasValidPrice) {
       return NextResponse.json(

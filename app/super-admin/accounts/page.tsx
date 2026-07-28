@@ -55,6 +55,11 @@ import {
   convertKesToCredits,
   getEffectivePricePerCreditKes,
 } from '@/lib/utils/credits'
+import {
+  PricingRuleEditorDialog,
+  getDefaultPricingRule,
+  type EditablePricingRule,
+} from '@/components/super-admin/pricing-rule-form'
 
 const MODAL_INPUT_CLASS =
   'border-slate-200 bg-white focus:ring-2 focus:ring-emerald-500 [&:-webkit-autofill]:[-webkit-text-fill-color:#0f172a] [&:-webkit-autofill]:[box-shadow:0_0_0_1000px_#ffffff_inset]'
@@ -86,16 +91,8 @@ interface Account {
     status: string
     isDefault: boolean
   }>
-  pricing: {
-    mode: string
-    pricePerSms?: number
-    pricePerPart?: number
-  } | null
-  globalPricing: {
-    mode: string
-    pricePerSms?: number
-    pricePerPart?: number
-  } | null
+  pricing: EditablePricingRule | null
+  globalPricing: EditablePricingRule | null
   createdAt?: string
   lastActivity?: string
 }
@@ -204,6 +201,8 @@ export default function SuperAdminAccounts() {
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null)
   const [senderIdDrawerOpen, setSenderIdDrawerOpen] = useState(false)
   const [pricingDrawerOpen, setPricingDrawerOpen] = useState(false)
+  const [editingPricingRule, setEditingPricingRule] = useState<EditablePricingRule | null>(null)
+  const [pricingSubmitting, setPricingSubmitting] = useState(false)
   const [transferDialogOpen, setTransferDialogOpen] = useState(false)
   const [allSenderIds, setAllSenderIds] = useState<HostPinnacleSenderId[]>([])
   const [fetchingSenderIds, setFetchingSenderIds] = useState(false)
@@ -571,6 +570,106 @@ export default function SuperAdminAccounts() {
     }
   }
 
+  const openPricingOverride = (account: Account) => {
+    setSelectedAccount(account)
+    const existing = account.pricing
+    const global = account.globalPricing
+    if (existing) {
+      setEditingPricingRule({
+        ...existing,
+        scope: 'user',
+        userId: account.id,
+      })
+    } else if (global) {
+      setEditingPricingRule({
+        ...global,
+        _id: undefined,
+        scope: 'user',
+        userId: account.id,
+      })
+    } else {
+      setEditingPricingRule(getDefaultPricingRule('user', account.id))
+    }
+    setPricingDrawerOpen(true)
+  }
+
+  const handleSavePricingOverride = async () => {
+    if (!selectedAccount || !editingPricingRule) return
+
+    try {
+      setPricingSubmitting(true)
+      const token = localStorage.getItem('token')
+      const response = await fetch(`/api/super-admin/accounts/${selectedAccount.id}/pricing`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          mode: editingPricingRule.mode,
+          pricePerSms: editingPricingRule.pricePerSms,
+          pricePerPart: editingPricingRule.pricePerPart,
+          pricePerBlock: editingPricingRule.pricePerBlock,
+          pricePerCharacter: editingPricingRule.pricePerCharacter,
+          charsPerBlock: editingPricingRule.charsPerBlock,
+          chargeFailed: editingPricingRule.chargeFailed,
+          refundOnFail: editingPricingRule.refundOnFail,
+          samePriceForEncodings: editingPricingRule.samePriceForEncodings,
+          roundPartialBlocks: editingPricingRule.roundPartialBlocks,
+          minimumChargePerMessage: editingPricingRule.minimumChargePerMessage,
+          gsm7Part1: editingPricingRule.gsm7Part1,
+          gsm7PartN: editingPricingRule.gsm7PartN,
+          ucs2Part1: editingPricingRule.ucs2Part1,
+          ucs2PartN: editingPricingRule.ucs2PartN,
+          ucs2CharsPerBlock: editingPricingRule.ucs2CharsPerBlock,
+          ucs2PricePerBlock: editingPricingRule.ucs2PricePerBlock,
+          ucs2PricePerCharacter: editingPricingRule.ucs2PricePerCharacter,
+        }),
+      })
+
+      const data = await response.json()
+      if (response.ok) {
+        await fetchAccounts()
+        setPricingDrawerOpen(false)
+        setEditingPricingRule(null)
+        alert('Pricing override saved')
+      } else {
+        alert(data.error || 'Failed to save pricing override')
+      }
+    } catch {
+      alert('Failed to save pricing override')
+    } finally {
+      setPricingSubmitting(false)
+    }
+  }
+
+  const handleRemovePricingOverride = async () => {
+    if (!selectedAccount) return
+    if (!confirm('Remove custom pricing for this account? It will use global pricing.')) return
+
+    try {
+      setPricingSubmitting(true)
+      const token = localStorage.getItem('token')
+      const response = await fetch(`/api/super-admin/accounts/${selectedAccount.id}/pricing`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const data = await response.json()
+      if (response.ok) {
+        await fetchAccounts()
+        setPricingDrawerOpen(false)
+        setEditingPricingRule(null)
+        alert('Pricing override removed')
+      } else {
+        alert(data.error || 'Failed to remove pricing override')
+      }
+    } catch {
+      alert('Failed to remove pricing override')
+    } finally {
+      setPricingSubmitting(false)
+    }
+  }
+
   const pricePerCreditKes = getEffectivePricePerCreditKes()
   const addCreditsPreview =
     creditAction === 'add_credits' && creditAmount
@@ -903,10 +1002,7 @@ export default function SuperAdminAccounts() {
                             setSelectedAccount(account)
                             setSenderIdDrawerOpen(true)
                           }}
-                          onPricingOverride={() => {
-                            setSelectedAccount(account)
-                            setPricingDrawerOpen(true)
-                          }}
+                          onPricingOverride={() => openPricingOverride(account)}
                           onAdjustCredits={() => {
                             setSelectedAccount(account)
                             setCreditAction('add_credits')
@@ -970,10 +1066,7 @@ export default function SuperAdminAccounts() {
                       setSelectedAccount(account)
                       setSenderIdDrawerOpen(true)
                     }}
-                    onPricingOverride={() => {
-                      setSelectedAccount(account)
-                      setPricingDrawerOpen(true)
-                    }}
+                    onPricingOverride={() => openPricingOverride(account)}
                     onAdjustCredits={() => {
                       setSelectedAccount(account)
                       setCreditAction('add_credits')
@@ -1337,45 +1430,30 @@ export default function SuperAdminAccounts() {
           </Dialog>
         )}
 
-        {/* Pricing Override Modal */}
-        {selectedAccount && (
-          <Dialog open={pricingDrawerOpen} onOpenChange={setPricingDrawerOpen}>
-            <DialogContent className="max-w-md bg-white border border-slate-200 rounded-2xl shadow-xl">
-              <DialogHeader>
-                <DialogTitle className="text-xl font-semibold text-slate-900">
-                  Pricing Override - {selectedAccount.name}
-                </DialogTitle>
-                <DialogDescription className="text-slate-600">
-                  Set custom pricing for this account. Leave empty to use global pricing.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div>
-                  <Label className="text-sm font-medium text-slate-700 mb-2 block">
-                    Price per SMS (KSh)
-                  </Label>
-                  <Input
-                    type="number"
-                    placeholder="Enter price"
-                    className="border-slate-200 focus:ring-2 focus:ring-emerald-500"
-                  />
-                </div>
-                <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200">
-                  <button
-                    onClick={() => setPricingDrawerOpen(false)}
-                    className="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-xl transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    className="px-4 py-2 text-sm font-medium bg-emerald-600 text-white hover:bg-emerald-700 rounded-xl transition-colors"
-                  >
-                    Save
-                  </button>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
+        {editingPricingRule && selectedAccount && (
+          <PricingRuleEditorDialog
+            open={pricingDrawerOpen}
+            onOpenChange={(open) => {
+              setPricingDrawerOpen(open)
+              if (!open) setEditingPricingRule(null)
+            }}
+            rule={editingPricingRule}
+            title={`Pricing Override - ${selectedAccount.name}`}
+            description={`${selectedAccount.email} · Custom pricing for this account. Use Remove to fall back to global.`}
+            onChange={setEditingPricingRule}
+            onSave={() => {
+              if (pricingSubmitting) return
+              void handleSavePricingOverride()
+            }}
+            onRemove={
+              selectedAccount.pricing
+                ? () => {
+                    if (pricingSubmitting) return
+                    void handleRemovePricingOverride()
+                  }
+                : undefined
+            }
+          />
         )}
       </div>
     </div>

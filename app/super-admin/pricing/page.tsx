@@ -124,6 +124,8 @@ export default function SuperAdminPricing() {
   const [accounts, setAccounts] = useState<Account[]>([])
   const [loading, setLoading] = useState(true)
   const [editingRule, setEditingRule] = useState<PricingRule | null>(null)
+  const [createOverrideOpen, setCreateOverrideOpen] = useState(false)
+  const [createOverrideAccountId, setCreateOverrideAccountId] = useState('')
   const [preview, setPreview] = useState<any>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [filterOverride, setFilterOverride] = useState<'all' | 'has_override' | 'using_global'>('all')
@@ -277,18 +279,31 @@ export default function SuperAdminPricing() {
     }
   }
 
+  const resolveRuleUserId = (rule: PricingRule): string | undefined => {
+    if (!rule.userId) return undefined
+    if (typeof rule.userId === 'object') {
+      return rule.userId._id?.toString() || (rule.userId as { id?: string }).id
+    }
+    return String(rule.userId)
+  }
+
   const handleSave = async () => {
     if (!editingRule) return
 
     try {
       const token = localStorage.getItem('token')
+      const userId = resolveRuleUserId(editingRule)
+      const payload = {
+        ...editingRule,
+        userId,
+      }
       const response = await fetch('/api/super-admin/pricing', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(editingRule),
+        body: JSON.stringify(payload),
       })
 
       if (response.ok) {
@@ -302,6 +317,49 @@ export default function SuperAdminPricing() {
     } catch (error) {
       alert('Failed to save pricing rule')
     }
+  }
+
+  const handleRemoveOverride = async () => {
+    if (!editingRule || editingRule.scope !== 'user') return
+    const userId = resolveRuleUserId(editingRule)
+    if (!userId) return
+    if (!confirm('Remove this account override? It will use global pricing.')) return
+
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch(`/api/super-admin/accounts/${userId}/pricing`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (response.ok) {
+        await fetchData()
+        setEditingRule(null)
+        alert('Pricing override removed')
+      } else {
+        const error = await response.json()
+        alert(error.error || 'Failed to remove override')
+      }
+    } catch {
+      alert('Failed to remove override')
+    }
+  }
+
+  const openCreateOverride = () => {
+    setCreateOverrideAccountId('')
+    setCreateOverrideOpen(true)
+  }
+
+  const startCreateOverride = () => {
+    if (!createOverrideAccountId) {
+      alert('Select an account')
+      return
+    }
+    if (globalRule) {
+      setEditingRule(copyGlobalRuleForOverride(globalRule, createOverrideAccountId) as PricingRule)
+    } else {
+      setEditingRule(getDefaultPricingRule('user', createOverrideAccountId) as PricingRule)
+    }
+    setCreateOverrideOpen(false)
   }
 
   const calculatePreview = async () => {
@@ -773,10 +831,7 @@ export default function SuperAdminPricing() {
               </p>
             </div>
             <Button
-              onClick={() => {
-                // Open create override dialog - for now just show message
-                alert('Select an account from the table and use the Actions menu to create an override')
-              }}
+              onClick={openCreateOverride}
               className="bg-[#FACC15] hover:bg-[#EAB308] text-[#020617] font-medium"
             >
               <Plus className="w-4 h-4 mr-2" />
@@ -850,9 +905,7 @@ export default function SuperAdminPricing() {
                 Global pricing is currently applied to all accounts.
               </p>
               <Button
-                onClick={() => {
-                  alert('Select an account from the table and use the Actions menu to create an override')
-                }}
+                onClick={openCreateOverride}
                 className="bg-[#FACC15] hover:bg-[#EAB308] text-[#020617] font-medium"
               >
                 <Plus className="w-4 h-4 mr-2" />
@@ -1728,8 +1781,51 @@ export default function SuperAdminPricing() {
             }
             onChange={setEditingRule}
             onSave={handleSave}
+            onRemove={editingRule.scope === 'user' ? handleRemoveOverride : undefined}
           />
         )}
+
+        <Dialog open={createOverrideOpen} onOpenChange={setCreateOverrideOpen}>
+          <DialogContent className="max-w-md bg-white border border-slate-200 rounded-2xl shadow-xl">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-semibold text-slate-900">Create User Override</DialogTitle>
+              <DialogDescription className="text-slate-600">
+                Choose an account to give custom pricing.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              <Select value={createOverrideAccountId} onValueChange={setCreateOverrideAccountId}>
+                <SelectTrigger className="border-slate-200 bg-white text-slate-900">
+                  <SelectValue placeholder="Select account" />
+                </SelectTrigger>
+                <SelectContent className="bg-white border border-slate-200 max-h-72">
+                  {accounts
+                    .filter((acc) => !acc.pricing)
+                    .map((acc) => (
+                      <SelectItem key={acc.id} value={acc.id}>
+                        {acc.name} ({acc.email})
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+              {accounts.filter((acc) => !acc.pricing).length === 0 && (
+                <p className="text-sm text-slate-500">All accounts already have overrides.</p>
+              )}
+              <div className="flex justify-end gap-2 pt-2">
+                <Button variant="outline" onClick={() => setCreateOverrideOpen(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={startCreateOverride}
+                  disabled={!createOverrideAccountId}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                >
+                  Continue
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   )

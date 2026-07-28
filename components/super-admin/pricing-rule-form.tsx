@@ -41,6 +41,7 @@ interface PricingRuleFormProps {
   onChange: (rule: EditablePricingRule) => void
   onSave: () => void
   onCancel: () => void
+  onRemove?: () => void
 }
 
 function NumberField({
@@ -52,7 +53,7 @@ function NumberField({
 }: {
   label: string
   value?: number
-  onChange: (value: number) => void
+  onChange: (value: number | undefined) => void
   step?: string
   placeholder?: string
 }) {
@@ -62,10 +63,19 @@ function NumberField({
       <Input
         type="number"
         step={step}
-        value={value ?? ''}
-        onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
-        placeholder={placeholder}
-        className="rounded-xl border border-slate-200 bg-white text-slate-900 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition"
+        value={value === undefined || value === null || Number.isNaN(value) ? '' : value}
+        onChange={(e) => {
+          const raw = e.target.value
+          if (raw === '') {
+            onChange(undefined)
+            return
+          }
+          const parsed = parseFloat(raw)
+          if (!Number.isNaN(parsed)) onChange(parsed)
+        }}
+        placeholder={placeholder || 'Enter price'}
+        autoComplete="off"
+        className="rounded-xl border border-slate-200 bg-white text-slate-900 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition [&:-webkit-autofill]:[-webkit-text-fill-color:#0f172a] [&:-webkit-autofill]:[box-shadow:0_0_0_1000px_#ffffff_inset]"
       />
     </div>
   )
@@ -100,6 +110,7 @@ export function PricingRuleForm({
   onChange,
   onSave,
   onCancel,
+  onRemove,
 }: PricingRuleFormProps) {
   const previewMessage = 'A'.repeat(250)
   const previewEncoding = 'gsm7' as const
@@ -318,6 +329,15 @@ export function PricingRuleForm({
           <Save className="w-4 h-4 mr-2" />
           Save Rule
         </Button>
+        {onRemove && (
+          <Button
+            variant="outline"
+            onClick={onRemove}
+            className="bg-white border border-red-200 text-red-700 hover:bg-red-50 rounded-xl"
+          >
+            Remove
+          </Button>
+        )}
         <Button variant="outline" onClick={onCancel} className="bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 rounded-xl">
           Cancel
         </Button>
@@ -334,6 +354,7 @@ export function PricingRuleEditorDialog({
   onOpenChange,
   onChange,
   onSave,
+  onRemove,
 }: {
   rule: EditablePricingRule
   title: string
@@ -342,6 +363,7 @@ export function PricingRuleEditorDialog({
   onOpenChange: (open: boolean) => void
   onChange: (rule: EditablePricingRule) => void
   onSave: () => void
+  onRemove?: () => void
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -360,6 +382,7 @@ export function PricingRuleEditorDialog({
           onChange={onChange}
           onSave={onSave}
           onCancel={() => onOpenChange(false)}
+          onRemove={onRemove}
         />
       </DialogContent>
     </Dialog>

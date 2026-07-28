@@ -74,7 +74,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'userId required for user scope' }, { status: 400 })
     }
 
-    const userObjectId = scope === 'user' ? new mongoose.Types.ObjectId(userId) : undefined
+    const resolvedUserId =
+      userId && typeof userId === 'object'
+        ? userId._id || userId.id
+        : userId
+
+    const userObjectId = scope === 'user' ? new mongoose.Types.ObjectId(String(resolvedUserId)) : undefined
 
     // Check if rule exists
     const existingRule = await PricingRule.findOne({
