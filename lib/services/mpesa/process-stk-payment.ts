@@ -5,7 +5,8 @@
 
 import mongoose from 'mongoose'
 import { MpesaTransaction, Transaction, User } from '@/lib/db/models'
-import { convertKesToCredits, resolvePricePerCreditKes } from '@/lib/utils/credits'
+import { convertKesToCredits } from '@/lib/utils/credits'
+import { resolvePricePerCreditKes } from '@/lib/utils/resolve-price-per-credit'
 import {
   completeSenderIdInvoicePayment,
   markInvoicePaymentFailed,

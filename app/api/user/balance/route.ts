@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import connectDB from '@/lib/db/connect'
 import { Transaction, User } from '@/lib/db/models'
 import { requireAuth } from '@/lib/auth/middleware'
-import { resolvePricePerCreditKes } from '@/lib/utils/credits'
+import { resolvePricePerCreditKes } from '@/lib/utils/resolve-price-per-credit'
 
 export async function GET(request: NextRequest) {
   try {

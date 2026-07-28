@@ -11,7 +11,8 @@ import { User } from '@/lib/db/models'
 import { requireOwner } from '@/lib/auth/middleware'
 import { logAudit } from '@/lib/utils/audit'
 import { adjustUserCredits } from '@/lib/services/credits/adjust-balance'
-import { convertKesToCredits, resolvePricePerCreditKes } from '@/lib/utils/credits'
+import { convertKesToCredits } from '@/lib/utils/credits'
+import { resolvePricePerCreditKes } from '@/lib/utils/resolve-price-per-credit'
 
 export async function PUT(
   request: NextRequest,

@@ -9,7 +9,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import connectDB from '@/lib/db/connect'
 import { MpesaTransaction, Transaction, User } from '@/lib/db/models'
-import { convertKesToCredits, resolvePricePerCreditKes } from '@/lib/utils/credits'
+import { convertKesToCredits } from '@/lib/utils/credits'
+import { resolvePricePerCreditKes } from '@/lib/utils/resolve-price-per-credit'
 import mongoose from 'mongoose'
 
 export async function POST(request: NextRequest) {

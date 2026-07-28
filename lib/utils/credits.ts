@@ -1,8 +1,6 @@
-// KES-only credit utilities for SMS pricing
+// KES-only credit utilities for SMS pricing (client-safe — no DB imports)
 // 1 credit = 1 SMS segment of up to 153 characters (per recipient)
 
-import connectDB from '@/lib/db/connect'
-import { PricingRule } from '@/lib/db/models'
 import type { PricingRuleConfig } from '@/lib/utils/pricing-calculations'
 
 /** Fallback when no PricingRule exists in the database. */
@@ -74,34 +72,6 @@ export function getEffectivePricePerCreditKes(overridePriceKes?: number): number
   return overridePriceKes && overridePriceKes > 0
     ? overridePriceKes
     : DEFAULT_PRICE_PER_CREDIT_KES
-}
-
-/**
- * Resolve KSh-per-credit from DB: user PricingRule override → global rule → default.
- */
-export async function resolvePricePerCreditKes(userId?: string | null): Promise<number> {
-  await connectDB()
-  const mongoose = await import('mongoose')
-
-  if (userId) {
-    try {
-      const userObjectId = new mongoose.Types.ObjectId(String(userId))
-      const userRule = await PricingRule.findOne({
-        scope: 'user',
-        userId: userObjectId,
-      }).lean()
-      const fromUser = pricePerCreditFromPricingRule(userRule as PricingRuleConfig | null)
-      if (fromUser != null) return fromUser
-    } catch {
-      // invalid userId — fall through to global
-    }
-  }
-
-  const globalRule = await PricingRule.findOne({ scope: 'global' }).lean()
-  const fromGlobal = pricePerCreditFromPricingRule(globalRule as PricingRuleConfig | null)
-  if (fromGlobal != null) return fromGlobal
-
-  return DEFAULT_PRICE_PER_CREDIT_KES
 }
 
 /**
