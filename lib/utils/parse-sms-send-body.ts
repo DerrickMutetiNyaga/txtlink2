@@ -16,11 +16,14 @@ function parseFormUrlEncoded(raw: string): SmsSendBody {
 }
 
 function isProbablyFormBody(contentType: string, raw: string): boolean {
+  const trimmed = raw.trim()
+  // Hotspot/AT gateways often send a JSON body with a form-urlencoded
+  // Content-Type header. Trust the body shape over the header.
+  if (trimmed.startsWith('{')) return false
   if (contentType.includes('application/x-www-form-urlencoded')) return true
   if (contentType.includes('application/json')) return false
   // Heuristic: key=value pairs without leading {
-  const trimmed = raw.trim()
-  return Boolean(trimmed) && !trimmed.startsWith('{') && trimmed.includes('=')
+  return Boolean(trimmed) && trimmed.includes('=')
 }
 
 /**
