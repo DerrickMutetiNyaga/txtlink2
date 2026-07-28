@@ -87,6 +87,32 @@ interface HostPinnacleResponse {
   error?: string
   message?: string
   httpStatus?: number
+  /** True for 502/503/504, HTML error pages, timeouts — safe to retry */
+  transient?: boolean
+}
+
+const TRANSIENT_HTTP_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504])
+
+function detectHttpStatusFromHtml(text: string): number | undefined {
+  const match = text.match(/\b(502|503|504)\s+Service\b/i) || text.match(/<h1>\s*(502|503|504)\b/i)
+  if (!match) return undefined
+  return parseInt(match[1], 10)
+}
+
+function isTransientProviderFailure(result: HostPinnacleResponse): boolean {
+  if (result.transient) return true
+  if (result.httpStatus && TRANSIENT_HTTP_STATUSES.has(result.httpStatus)) return true
+  const err = (result.error || result.message || '').toLowerCase()
+  return (
+    err.includes('timeout') ||
+    err.includes('503') ||
+    err.includes('502') ||
+    err.includes('504') ||
+    err.includes('service unavailable') ||
+    err.includes('no server is available') ||
+    err.includes('temporarily unavailable') ||
+    (err.includes('invalid response') && err.includes('<html'))
+  )
 }
 
 function normStatus(value: unknown): string {
@@ -258,21 +284,39 @@ async function requestForm(
 
     try {
       data = JSON.parse(text)
-    } catch (parseError) {
-      console.error(`[HostPinnacle] ${endpoint} returned non-JSON response (${text.length} bytes)`)
-      // If not JSON, treat as error
+    } catch {
+      const htmlStatus = detectHttpStatusFromHtml(text) || (!response.ok ? response.status : undefined)
+      const transient =
+        (htmlStatus != null && TRANSIENT_HTTP_STATUSES.has(htmlStatus)) ||
+        /service unavailable|no server is available|bad gateway|gateway time/i.test(text)
+
+      console.error(
+        `[HostPinnacle] ${endpoint} returned non-JSON response HTTP ${response.status} (${text.length} bytes)` +
+          (transient ? ' [transient]' : '')
+      )
+
+      const friendly =
+        htmlStatus != null
+          ? `HostPinnacle temporarily unavailable (HTTP ${htmlStatus})`
+          : `Invalid response: ${text.substring(0, 100)}`
+
       return {
         success: false,
-        error: `Invalid response: ${text.substring(0, 100)}`,
+        error: friendly,
+        message: friendly,
+        httpStatus: htmlStatus || response.status,
+        transient,
       }
     }
 
     if (!response.ok) {
       const parsed = parseHostPinnacleResponse(endpoint, data, false, response.status)
+      const transient = TRANSIENT_HTTP_STATUSES.has(response.status)
       return {
         ...parsed,
         error: parsed.error || `HTTP ${response.status}`,
         httpStatus: response.status,
+        transient,
       }
     }
 
@@ -282,11 +326,13 @@ async function requestForm(
       return {
         success: false,
         error: `Request timeout after ${timeout}ms. The HostPinnacle API may be slow or unavailable. Please try again.`,
+        transient: true,
       }
     }
     return {
       success: false,
       error: error.message || 'Network error',
+      transient: true,
     }
   }
 }
@@ -427,8 +473,7 @@ export async function readSenderIds(params: {
 
 /**
  * Send SMS batch
- * Uses longer timeout (90 seconds) as SMS sending can take time
- * Includes retry logic for timeout errors (up to 2 retries)
+ * Retries on timeouts and transient provider outages (502/503/504 HTML pages).
  */
 export async function sendSms(params: {
   mobile: string | string[] // Comma-separated or array
@@ -436,7 +481,7 @@ export async function sendSms(params: {
   senderid: string
   msgType?: string
   options?: HostPinnacleRequestOptions
-  retries?: number // Number of retries on timeout (default: 2)
+  retries?: number // Extra attempts after the first (default: 3 for outage resilience)
 }): Promise<HostPinnacleResponse> {
   const mobileStr = Array.isArray(params.mobile) ? params.mobile.join(',') : params.mobile
 
@@ -449,43 +494,43 @@ export async function sendSms(params: {
     output: 'json',
   }
 
-  const maxRetries = params.retries ?? 1 // Reduced from 2 to 1 for faster failure
+  const maxRetries = params.retries ?? 3
   let lastError: HostPinnacleResponse | null = null
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     const result = await requestForm('/SMSApi/send', body, {
       ...params.options,
-      timeout: (await getHostPinnacleSettings()).smsSendTimeout, // Use timeout for SMS send
+      timeout: (await getHostPinnacleSettings()).smsSendTimeout,
     })
 
-    // If successful, return immediately
     if (result.success) {
       return result
     }
 
-    // If timeout error and we have retries left, wait and retry
-    if (
-      result.error?.includes('timeout') &&
-      attempt < maxRetries
-    ) {
+    if (isTransientProviderFailure(result) && attempt < maxRetries) {
       lastError = result
-      // Wait before retrying (reduced backoff: 1s, 2s)
-      const waitTime = Math.min(1000 * Math.pow(2, attempt), 5000)
-      console.log(`SMS send timeout, retrying in ${waitTime}ms (attempt ${attempt + 1}/${maxRetries + 1})...`)
+      const waitTime = Math.min(1500 * Math.pow(2, attempt), 12000)
+      console.log(
+        `[HostPinnacle] transient send failure (${result.httpStatus || result.error}), ` +
+          `retrying in ${waitTime}ms (attempt ${attempt + 1}/${maxRetries + 1})...`
+      )
       await new Promise((resolve) => setTimeout(resolve, waitTime))
       continue
     }
 
-    // If not a timeout or no retries left, return the error
     return result
   }
 
-  // All retries exhausted
-  return lastError || {
-    success: false,
-    error: 'Request failed after multiple retries',
-  }
+  return (
+    lastError || {
+      success: false,
+      error: 'Request failed after multiple retries',
+      transient: true,
+    }
+  )
 }
+
+export { isTransientProviderFailure }
 
 /**
  * Create webhook for delivery reports

@@ -193,7 +193,7 @@ async function retrySingleMessage(sms: ISmsMessage & { _id: unknown }): Promise<
       msg: smsText,
       senderid: sms.senderName,
       options: { apiKey, userId: hpUserId, password },
-      retries: 1,
+      retries: 3,
     })
 
     if (hpResult.success) {

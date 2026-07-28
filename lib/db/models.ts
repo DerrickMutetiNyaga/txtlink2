@@ -298,6 +298,8 @@ export interface ISmsMessage {
   providerRetryDeliveredAt?: Date
   providerRetryFailedAt?: Date
   providerRetryFailureReason?: string
+  /** Set once when auto-resending after HostPinnacle 503/outage failures */
+  providerOutageResendAt?: Date
   createdAt: Date
   updatedAt: Date
 }
@@ -388,6 +390,7 @@ const SmsMessageSchema = new Schema<ISmsMessage>(
     providerRetryDeliveredAt: { type: Date },
     providerRetryFailedAt: { type: Date },
     providerRetryFailureReason: { type: String },
+    providerOutageResendAt: { type: Date },
   },
   { timestamps: true }
 )

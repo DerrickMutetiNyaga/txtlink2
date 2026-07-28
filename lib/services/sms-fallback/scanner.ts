@@ -7,6 +7,7 @@ import {
 } from './queue-phone'
 import { resetStaleSendingJobs } from './stale-sending'
 import { cleanupOldSmsHistory } from '@/lib/services/sms-history/cleanup'
+import { resendProviderOutageFailures } from '@/lib/services/sms/resend-provider-outages'
 import { getFallbackStaleMinutes } from './config'
 import { minutesAgo } from './helpers'
 import {
@@ -27,6 +28,8 @@ export interface FallbackScanResult {
   sampleMatches: FallbackScanSampleMatch[]
   cancelledBecauseDelivered: number
   resetStaleSending: number
+  providerOutageResent?: number
+  providerOutageClaimed?: number
   sourcesScanned: {
     dashboard: number
     bulk: number
@@ -123,8 +126,16 @@ export async function runSmsFallbackScan(): Promise<FallbackScanResult> {
   const providerDebug = createScanDebugStats()
   const phoneDebug = createScanDebugStats()
 
-  const [retriedProvider, queuedForPhone, cancelledBecauseDelivered, resetStaleSending, sourcesScanned, smsHistoryCleanup] =
-    await Promise.all([
+  const [
+    outageResend,
+    retriedProvider,
+    queuedForPhone,
+    cancelledBecauseDelivered,
+    resetStaleSending,
+    sourcesScanned,
+    smsHistoryCleanup,
+  ] = await Promise.all([
+      resendProviderOutageFailures(100),
       scanAndRetryUndeliveredSms(providerDebug),
       scanRetryResultsAndQueuePhoneFallback(phoneDebug),
       cancelDeliveredFallbackJobs(),
@@ -142,6 +153,8 @@ export async function runSmsFallbackScan(): Promise<FallbackScanResult> {
     queuedForPhone: queuedForPhone || merged.queuedForPhone,
     cancelledBecauseDelivered,
     resetStaleSending,
+    providerOutageClaimed: outageResend.claimed,
+    providerOutageResent: outageResend.resent,
     sourcesScanned,
     smsHistoryCleanup: {
       usersProcessed: smsHistoryCleanup.usersProcessed,
