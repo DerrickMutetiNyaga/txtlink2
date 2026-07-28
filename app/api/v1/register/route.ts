@@ -13,6 +13,26 @@ import connectDB from '@/lib/db/connect'
 import { User } from '@/lib/db/models'
 import { getBaseUrl } from '@/lib/auth/google-oauth'
 import { assignSignupDefaultSenderId } from '@/lib/services/senderids/signup-default'
+import { parseSmsSendRequest } from '@/lib/utils/parse-sms-send-body'
+
+/**
+ * Accept JSON, form-urlencoded, multipart, or query-string payloads so any
+ * integration platform can call this endpoint without strict JSON formatting.
+ */
+async function parseRegisterBody(request: NextRequest): Promise<Record<string, unknown>> {
+  const contentType = (request.headers.get('content-type') || '').toLowerCase()
+
+  if (contentType.includes('multipart/form-data')) {
+    const form = await request.formData()
+    const out: Record<string, unknown> = {}
+    for (const [key, value] of form.entries()) {
+      if (typeof value === 'string') out[key] = value
+    }
+    return out
+  }
+
+  return parseSmsSendRequest(request)
+}
 
 function generatePassword(length = 16): string {
   const alphabet =
@@ -39,7 +59,19 @@ export async function POST(request: NextRequest) {
 
     await connectDB()
 
-    const body = await request.json()
+    let body: Record<string, unknown>
+    try {
+      body = await parseRegisterBody(request)
+    } catch {
+      return NextResponse.json(
+        {
+          error:
+            'Invalid payload format. Send JSON {"username":"...","email":"..."} with Content-Type: application/json, or form fields username and email.',
+        },
+        { status: 400 }
+      )
+    }
+
     const username = typeof body.username === 'string' ? body.username.trim() : ''
     const email = typeof body.email === 'string' ? body.email.trim() : ''
 
