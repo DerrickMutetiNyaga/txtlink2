@@ -102,6 +102,16 @@ export function connectSmsHistoryLive(
 
     handlers.onConnectionChange?.('connecting')
     abortController = new AbortController()
+    const currentController = abortController
+
+    // Server sends heartbeats every 15s; if nothing arrives for 45s the
+    // stream is dead or buffered by a proxy — abort so we reconnect.
+    let lastActivity = Date.now()
+    const watchdog = setInterval(() => {
+      if (Date.now() - lastActivity > 45_000) {
+        currentController.abort()
+      }
+    }, 10_000)
 
     try {
       const response = await fetch('/api/user/sms/history/live', {
@@ -118,20 +128,26 @@ export function connectSmsHistoryLive(
         throw new Error(`Live stream HTTP ${response.status}`)
       }
 
-      handlers.onConnectionChange?.('live')
-      attempt = 0
-
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
       let buffer = ''
+      // Only report "live" once an event actually arrives through the stream.
+      // Headers can arrive even when a proxy/gzip buffers the body forever.
+      let sawEvent = false
 
       while (!aborted) {
         const { done, value } = await reader.read()
         if (done) break
+        lastActivity = Date.now()
         buffer += decoder.decode(value, { stream: true })
         buffer = parseSseChunk(buffer, (_eventName, data) => {
           try {
             const parsed = JSON.parse(data) as SmsHistoryLivePayload
+            if (!sawEvent) {
+              sawEvent = true
+              attempt = 0
+              handlers.onConnectionChange?.('live')
+            }
             handlers.onEvent(parsed)
           } catch {
             // ignore malformed chunks
@@ -143,12 +159,13 @@ export function connectSmsHistoryLive(
         handlers.onConnectionChange?.('disconnected')
         scheduleReconnect()
       }
-    } catch (err) {
+    } catch {
       if (aborted) return
-      const isAbort = err instanceof DOMException && err.name === 'AbortError'
-      if (isAbort) return
+      // AbortError here means the watchdog killed a stalled stream — reconnect.
       handlers.onConnectionChange?.('error')
       scheduleReconnect()
+    } finally {
+      clearInterval(watchdog)
     }
   }
 

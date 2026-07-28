@@ -498,6 +498,16 @@ export default function SMSHistoryPage() {
     return disconnect
   }, [applyLiveUpsert])
 
+  // Fallback: if the live stream isn't delivering events, silently poll the
+  // list every 15s so new SMS and status changes still appear.
+  useEffect(() => {
+    if (liveState === 'live') return
+    const interval = setInterval(() => {
+      void fetchSMSHistory(false)
+    }, 15000)
+    return () => clearInterval(interval)
+  }, [liveState, fetchSMSHistory])
+
   const getStatusBadge = (sms: SMSMessage) => {
     if (sms.status === 'delivered' && sms.deliveryMethod === 'android_phone_gateway') {
       return 'bg-emerald-100 text-emerald-700'
@@ -742,8 +752,8 @@ export default function SMSHistoryPage() {
               {liveState === 'live'
                 ? 'Live — new SMS and delivery updates appear automatically.'
                 : liveState === 'connecting'
-                  ? 'Connecting live updates…'
-                  : 'Live updates paused — use Refresh, or wait for reconnect.'}
+                  ? 'Connecting live updates… (auto-refreshing every 15s meanwhile)'
+                  : 'Live connection unavailable — auto-refreshing every 15s instead.'}
             </p>
             {unseenNewCount > 0 && (
               <button

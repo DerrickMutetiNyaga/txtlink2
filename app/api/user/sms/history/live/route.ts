@@ -74,6 +74,10 @@ export async function GET(request: NextRequest) {
 
       request.signal.addEventListener('abort', cleanup)
 
+      // Padding comment defeats intermediary buffering (gzip/proxies) so the
+      // browser sees the stream open immediately.
+      controller.enqueue(encoder.encode(`: ${' '.repeat(2048)}\n\n`))
+
       send({ type: 'connected', at: new Date().toISOString() })
 
       heartbeatTimer = setInterval(() => {
@@ -166,6 +170,9 @@ export async function GET(request: NextRequest) {
       'Cache-Control': 'no-cache, no-transform',
       Connection: 'keep-alive',
       'X-Accel-Buffering': 'no',
+      // Prevents Next.js production gzip from buffering the stream —
+      // without this, SSE events never reach the browser behind `next start`.
+      'Content-Encoding': 'none',
     },
   })
 }
