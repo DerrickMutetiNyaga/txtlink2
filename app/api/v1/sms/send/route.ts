@@ -13,7 +13,7 @@ import { User, SenderId, UserSenderId, SmsMessage, ApiKey } from '@/lib/db/model
 import { resolveHostPinnacleCredentials } from '@/lib/services/hostpinnacle/credentials'
 import { hostPinnacleClient } from '@/lib/services/hostpinnacle/client'
 import { extractHostPinnacleSendIds, primaryStatusLookupId } from '@/lib/services/hostpinnacle/send-ids'
-import { calculateSegments153, getEffectivePricePerCreditKes } from '@/lib/utils/credits'
+import { calculateSegments153, resolvePricePerCreditKes } from '@/lib/utils/credits'
 import { initialNextCheckAt } from '@/lib/services/sms-status/build-synchronizer'
 import { syncSmsMessageById } from '@/lib/services/sms-status/sync-user-pending'
 import { maskPhone } from '@/lib/utils/log-sanitize'
@@ -333,7 +333,7 @@ export async function POST(request: NextRequest) {
     }
     
     // For transparency & logging
-    const pricePerCreditKes = getEffectivePricePerCreditKes()
+    const pricePerCreditKes = await resolvePricePerCreditKes(userId)
     const totalCostKes = requiredCredits * pricePerCreditKes
     
     // Format phone number

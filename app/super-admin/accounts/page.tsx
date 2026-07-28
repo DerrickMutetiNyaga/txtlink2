@@ -53,7 +53,8 @@ import { Switch } from '@/components/ui/switch'
 import { Separator } from '@/components/ui/separator'
 import {
   convertKesToCredits,
-  getEffectivePricePerCreditKes,
+  pricePerCreditFromPricingRule,
+  DEFAULT_PRICE_PER_CREDIT_KES,
 } from '@/lib/utils/credits'
 import {
   PricingRuleEditorDialog,
@@ -670,7 +671,10 @@ export default function SuperAdminAccounts() {
     }
   }
 
-  const pricePerCreditKes = getEffectivePricePerCreditKes()
+  const pricePerCreditKes =
+    pricePerCreditFromPricingRule(selectedAccount?.pricing) ??
+    pricePerCreditFromPricingRule(selectedAccount?.globalPricing) ??
+    DEFAULT_PRICE_PER_CREDIT_KES
   const addCreditsPreview =
     creditAction === 'add_credits' && creditAmount
       ? convertKesToCredits({

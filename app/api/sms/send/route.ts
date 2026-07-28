@@ -10,7 +10,7 @@ import { resolveHostPinnacleCredentials } from '@/lib/services/hostpinnacle/cred
 import { hostPinnacleClient } from '@/lib/services/hostpinnacle/client'
 import { extractHostPinnacleSendIds, primaryStatusLookupId } from '@/lib/services/hostpinnacle/send-ids'
 import { requireAuth } from '@/lib/auth/middleware'
-import { calculateSegments153, getEffectivePricePerCreditKes } from '@/lib/utils/credits'
+import { calculateSegments153, resolvePricePerCreditKes } from '@/lib/utils/credits'
 import { initialNextCheckAt } from '@/lib/services/sms-status/build-synchronizer'
 import { syncSmsMessageById } from '@/lib/services/sms-status/sync-user-pending'
 import { buildMessageBodyFields, logSmsMessageCreateDebug } from '@/lib/services/sms/message-body'
@@ -104,7 +104,7 @@ export async function POST(request: NextRequest) {
     }
 
     // For transparency & logging, also compute money-equivalent cost in KSh
-    const pricePerCreditKes = getEffectivePricePerCreditKes()
+    const pricePerCreditKes = await resolvePricePerCreditKes(user.userId)
     const totalCostKes = requiredCredits * pricePerCreditKes
 
     // Format phone number

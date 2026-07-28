@@ -5,7 +5,7 @@
 
 import mongoose from 'mongoose'
 import { MpesaTransaction, Transaction, User } from '@/lib/db/models'
-import { convertKesToCredits, getEffectivePricePerCreditKes } from '@/lib/utils/credits'
+import { convertKesToCredits, resolvePricePerCreditKes } from '@/lib/utils/credits'
 import {
   completeSenderIdInvoicePayment,
   markInvoicePaymentFailed,
@@ -123,7 +123,7 @@ export async function processStkPaymentResult(
 
         if (userDoc) {
           const amountKes = mpesaTransaction.amount
-          const pricePerCreditKes = getEffectivePricePerCreditKes()
+          const pricePerCreditKes = await resolvePricePerCreditKes(String(userId))
           const { creditsToAdd } = convertKesToCredits({
             paidKes: amountKes,
             pricePerCreditKes,

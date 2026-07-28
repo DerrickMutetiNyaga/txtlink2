@@ -1,6 +1,11 @@
 // KES-only credit utilities for SMS pricing
 // 1 credit = 1 SMS segment of up to 153 characters (per recipient)
 
+import connectDB from '@/lib/db/connect'
+import { PricingRule } from '@/lib/db/models'
+import type { PricingRuleConfig } from '@/lib/utils/pricing-calculations'
+
+/** Fallback when no PricingRule exists in the database. */
 export const DEFAULT_PRICE_PER_CREDIT_KES = 0.3
 
 /**
@@ -27,14 +32,76 @@ export function calculateRequiredCredits(
 }
 
 /**
- * Resolve the effective per-credit price in KES.
- * For now this simply uses a global default, but you can later
- * add a per-user override and pass it into this function.
+ * Map a PricingRule (global or user override) to KSh per SMS credit.
+ * 1 credit ≈ 1 billed SMS unit for the chosen mode.
+ */
+export function pricePerCreditFromPricingRule(
+  rule?: PricingRuleConfig | null
+): number | null {
+  if (!rule?.mode) return null
+
+  switch (rule.mode) {
+    case 'per_sms': {
+      const price = Number(rule.pricePerSms)
+      return Number.isFinite(price) && price > 0 ? price : null
+    }
+    case 'per_part': {
+      const price = Number(rule.pricePerPart)
+      return Number.isFinite(price) && price > 0 ? price : null
+    }
+    case 'per_char_block': {
+      const price = Number(rule.pricePerBlock)
+      return Number.isFinite(price) && price > 0 ? price : null
+    }
+    case 'per_character': {
+      const perChar = Number(rule.pricePerCharacter)
+      if (!Number.isFinite(perChar) || perChar <= 0) return null
+      // 1 credit ≈ one 153-char GSM segment
+      return perChar * 153
+    }
+    default: {
+      const fallback = Number(rule.pricePerPart ?? rule.pricePerSms ?? rule.pricePerBlock)
+      return Number.isFinite(fallback) && fallback > 0 ? fallback : null
+    }
+  }
+}
+
+/**
+ * Sync helper: explicit override, else hardcoded default.
+ * Prefer resolvePricePerCreditKes() on the server so Pricing Rules apply.
  */
 export function getEffectivePricePerCreditKes(overridePriceKes?: number): number {
   return overridePriceKes && overridePriceKes > 0
     ? overridePriceKes
     : DEFAULT_PRICE_PER_CREDIT_KES
+}
+
+/**
+ * Resolve KSh-per-credit from DB: user PricingRule override → global rule → default.
+ */
+export async function resolvePricePerCreditKes(userId?: string | null): Promise<number> {
+  await connectDB()
+  const mongoose = await import('mongoose')
+
+  if (userId) {
+    try {
+      const userObjectId = new mongoose.Types.ObjectId(String(userId))
+      const userRule = await PricingRule.findOne({
+        scope: 'user',
+        userId: userObjectId,
+      }).lean()
+      const fromUser = pricePerCreditFromPricingRule(userRule as PricingRuleConfig | null)
+      if (fromUser != null) return fromUser
+    } catch {
+      // invalid userId — fall through to global
+    }
+  }
+
+  const globalRule = await PricingRule.findOne({ scope: 'global' }).lean()
+  const fromGlobal = pricePerCreditFromPricingRule(globalRule as PricingRuleConfig | null)
+  if (fromGlobal != null) return fromGlobal
+
+  return DEFAULT_PRICE_PER_CREDIT_KES
 }
 
 /**
@@ -58,5 +125,3 @@ export function convertKesToCredits({
 
   return { creditsToAdd }
 }
-
-

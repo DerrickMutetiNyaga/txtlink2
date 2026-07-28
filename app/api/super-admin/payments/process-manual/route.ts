@@ -9,7 +9,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import connectDB from '@/lib/db/connect'
 import { MpesaTransaction, Transaction, User } from '@/lib/db/models'
-import { convertKesToCredits, getEffectivePricePerCreditKes } from '@/lib/utils/credits'
+import { convertKesToCredits, resolvePricePerCreditKes } from '@/lib/utils/credits'
 import { requireOwner } from '@/lib/auth/middleware'
 import { logAudit } from '@/lib/utils/audit'
 import mongoose from 'mongoose'
@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const pricePerCreditKes = getEffectivePricePerCreditKes()
+    const pricePerCreditKes = await resolvePricePerCreditKes(userId)
     const { creditsToAdd } = convertKesToCredits({
       paidKes: amountKes,
       pricePerCreditKes,

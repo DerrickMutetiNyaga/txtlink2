@@ -9,7 +9,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import connectDB from '@/lib/db/connect'
 import { MpesaTransaction, Transaction, User } from '@/lib/db/models'
-import { convertKesToCredits, getEffectivePricePerCreditKes } from '@/lib/utils/credits'
+import { convertKesToCredits, resolvePricePerCreditKes } from '@/lib/utils/credits'
 import mongoose from 'mongoose'
 
 export async function POST(request: NextRequest) {
@@ -154,7 +154,7 @@ export async function POST(request: NextRequest) {
 
         if (userDoc) {
           const amountKes = mpesaTransaction.amount
-          const pricePerCreditKes = getEffectivePricePerCreditKes()
+          const pricePerCreditKes = await resolvePricePerCreditKes(String(userId))
 
           const { creditsToAdd } = convertKesToCredits({
             paidKes: amountKes,

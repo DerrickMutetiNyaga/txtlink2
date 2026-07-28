@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import connectDB from '@/lib/db/connect'
 import { Transaction, User } from '@/lib/db/models'
 import { requireAuth } from '@/lib/auth/middleware'
-import { DEFAULT_PRICE_PER_CREDIT_KES } from '@/lib/utils/credits'
+import { resolvePricePerCreditKes } from '@/lib/utils/credits'
 
 export async function GET(request: NextRequest) {
   try {
@@ -65,8 +65,8 @@ export async function GET(request: NextRequest) {
       // Wallet balance in credits (integer)
       balance: creditsBalance,
       balanceType: 'credits',
-      // Pricing info for UI estimates (KES-only)
-      pricePerCreditKes: DEFAULT_PRICE_PER_CREDIT_KES,
+      // Pricing info for UI estimates (KES-only) — from PricingRule
+      pricePerCreditKes: await resolvePricePerCreditKes(user.userId),
     })
   } catch (error: any) {
     if (error.message === 'Unauthorized') {

@@ -9,7 +9,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import connectDB from '@/lib/db/connect'
 import { SmsMessage, User, UserSenderId } from '@/lib/db/models'
 import { requireAuth } from '@/lib/auth/middleware'
-import { calculateSegments153, getEffectivePricePerCreditKes } from '@/lib/utils/credits'
+import { calculateSegments153, resolvePricePerCreditKes } from '@/lib/utils/credits'
 import { advancedSmsQueue } from '@/lib/services/sms/advanced-queue'
 import { initialNextCheckAt } from '@/lib/services/sms-status/build-synchronizer'
 import { buildMessageBodyFields, renderBulkTemplate, logSmsMessageCreateDebug } from '@/lib/services/sms/message-body'
@@ -109,7 +109,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Calculate costs
-    const pricePerCreditKes = getEffectivePricePerCreditKes()
+    const pricePerCreditKes = await resolvePricePerCreditKes(user.userId)
     const totalCostKes = requiredCredits * pricePerCreditKes
 
     // Format phone numbers

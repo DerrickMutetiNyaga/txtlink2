@@ -11,7 +11,7 @@ import { User } from '@/lib/db/models'
 import { requireOwner } from '@/lib/auth/middleware'
 import { logAudit } from '@/lib/utils/audit'
 import { adjustUserCredits } from '@/lib/services/credits/adjust-balance'
-import { convertKesToCredits, getEffectivePricePerCreditKes } from '@/lib/utils/credits'
+import { convertKesToCredits, resolvePricePerCreditKes } from '@/lib/utils/credits'
 
 export async function PUT(
   request: NextRequest,
@@ -99,7 +99,7 @@ export async function POST(
           )
         }
 
-        const pricePerCreditKes = getEffectivePricePerCreditKes()
+        const pricePerCreditKes = await resolvePricePerCreditKes(userId)
         const { creditsToAdd } = convertKesToCredits({ paidKes, pricePerCreditKes })
 
         if (creditsToAdd <= 0) {
