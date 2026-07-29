@@ -5,9 +5,30 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import connectDB from '@/lib/db/connect'
-import { SmsMessage } from '@/lib/db/models'
+import { SmsMessage, SystemSettings, UserWebhook } from '@/lib/db/models'
 import { requireAuth } from '@/lib/auth/middleware'
 import mongoose from 'mongoose'
+
+type StatusTone = 'operational' | 'degraded' | 'down'
+type StatusLabel = 'Operational' | 'Degraded' | 'Down'
+
+function toneLabel(tone: StatusTone): StatusLabel {
+  if (tone === 'operational') return 'Operational'
+  if (tone === 'degraded') return 'Degraded'
+  return 'Down'
+}
+
+function worstTone(...tones: StatusTone[]): StatusTone {
+  if (tones.includes('down')) return 'down'
+  if (tones.includes('degraded')) return 'degraded'
+  return 'operational'
+}
+
+function overallSummary(tone: StatusTone): string {
+  if (tone === 'operational') return 'All systems operational'
+  if (tone === 'degraded') return 'Some systems degraded'
+  return 'Service disruption detected'
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -282,6 +303,100 @@ export async function GET(request: NextRequest) {
       failedSparklineData.push({ value: count })
     }
 
+    // ---------- System status + alerts (user-scoped, no heavy provider probes) ----------
+    const settings = await SystemSettings.findOne()
+      .select('smsSendingEnabled autoMarkSentAsDelivered deliveryReportWebhookEnabled')
+      .lean()
+
+    const last24h = new Date(Date.now() - 24 * 60 * 60 * 1000)
+    const stuckCutoff = new Date(Date.now() - 60 * 60 * 1000) // stuck > 1 hour waiting on DLR
+
+    const [recentTotal, recentProviderFails, stuckPending, activeUserWebhooks] = await Promise.all([
+      SmsMessage.countDocuments({ userId, createdAt: { $gte: last24h } }),
+      SmsMessage.countDocuments({
+        userId,
+        createdAt: { $gte: last24h },
+        status: 'failed',
+        errorCode: { $in: ['HP_API_ERROR', 'ASYNC_ERROR'] },
+      }),
+      SmsMessage.countDocuments({
+        userId,
+        status: { $in: ['sent', 'processing', 'retrying'] },
+        sentAt: { $lte: stuckCutoff },
+        createdAt: { $gte: last24h },
+      }),
+      UserWebhook.countDocuments({ userId, status: 'active' }),
+    ])
+
+    // API Services — this request reached Mongo, so the API path is up
+    const apiTone: StatusTone =
+      mongoose.connection.readyState === 1 ? 'operational' : 'down'
+
+    // SMS Gateway — platform kill switch + this user's recent provider send failures
+    let gatewayTone: StatusTone = 'operational'
+    if (settings?.smsSendingEnabled === false) {
+      gatewayTone = 'down'
+    } else if (recentTotal >= 5 && recentProviderFails / recentTotal >= 0.2) {
+      gatewayTone = 'degraded'
+    }
+
+    // Webhooks / DLR — stuck "sent" messages mean delivery reports aren't resolving,
+    // unless the auto-mark-delivered toggle is on (no DLR wait by design).
+    let webhookTone: StatusTone = 'operational'
+    if (settings?.autoMarkSentAsDelivered) {
+      webhookTone = 'operational'
+    } else if (stuckPending >= 5) {
+      webhookTone = 'degraded'
+    } else if (activeUserWebhooks === 0 && settings?.deliveryReportWebhookEnabled === false) {
+      // Platform DLR webhook disabled and user has no outbound webhooks configured
+      webhookTone = 'degraded'
+    }
+
+    const overallTone = worstTone(apiTone, gatewayTone, webhookTone)
+    const deliveryRateNum = parseFloat(deliveryRate)
+    const DELIVERY_RATE_TARGET = 95
+
+    const alerts: Array<{
+      id: string
+      title: string
+      description: string
+      severity: 'warning' | 'info'
+    }> = []
+
+    if (recentTotal > 0 && deliveryRateNum < DELIVERY_RATE_TARGET) {
+      alerts.push({
+        id: 'delivery_rate',
+        title: 'Delivery rate below threshold',
+        description: `Last 7 days: ${deliveryRateNum.toFixed(1)}% (target: ${DELIVERY_RATE_TARGET}%)`,
+        severity: 'warning',
+      })
+    }
+
+    if (gatewayTone === 'down') {
+      alerts.push({
+        id: 'sms_disabled',
+        title: 'SMS sending disabled',
+        description: 'Platform-wide SMS sending is currently turned off',
+        severity: 'warning',
+      })
+    } else if (gatewayTone === 'degraded') {
+      alerts.push({
+        id: 'gateway_errors',
+        title: 'Elevated send failures',
+        description: `${recentProviderFails} provider send failures in the last 24 hours`,
+        severity: 'warning',
+      })
+    }
+
+    if (webhookTone === 'degraded' && stuckPending >= 5) {
+      alerts.push({
+        id: 'stuck_dlr',
+        title: 'Messages waiting on delivery reports',
+        description: `${stuckPending} message${stuckPending === 1 ? '' : 's'} still pending delivery confirmation for over an hour`,
+        severity: 'warning',
+      })
+    }
+
     return NextResponse.json({
       success: true,
       kpis: {
@@ -311,6 +426,16 @@ export async function GET(request: NextRequest) {
         failed,
       },
       activities,
+      systemStatus: {
+        overall: overallTone,
+        summary: overallSummary(overallTone),
+        items: [
+          { label: 'API Services', status: toneLabel(apiTone), tone: apiTone },
+          { label: 'SMS Gateway', status: toneLabel(gatewayTone), tone: gatewayTone },
+          { label: 'Webhooks', status: toneLabel(webhookTone), tone: webhookTone },
+        ],
+      },
+      alerts,
     })
   } catch (error: any) {
     if (error.message === 'Unauthorized') {

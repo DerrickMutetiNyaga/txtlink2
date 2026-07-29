@@ -448,6 +448,43 @@ export default function DashboardPage() {
   const dateRanges = ['Today', '7D', '30D'] as const
   const chartPeriods = ['7D', '30D', '90D'] as const
 
+  const systemStatusItems: Array<{
+    label: string
+    status: string
+    tone: 'operational' | 'degraded' | 'down'
+  }> = dashboardData?.systemStatus?.items ?? [
+    { label: 'API Services', status: '—', tone: 'operational' as const },
+    { label: 'SMS Gateway', status: '—', tone: 'operational' as const },
+    { label: 'Webhooks', status: '—', tone: 'operational' as const },
+  ]
+
+  const alerts: Array<{
+    id: string
+    title: string
+    description: string
+    severity: 'warning' | 'info'
+  }> = dashboardData?.alerts ?? []
+
+  const overallTone: 'operational' | 'degraded' | 'down' =
+    dashboardData?.systemStatus?.overall ?? 'operational'
+  const statusSummary: string =
+    dashboardData?.systemStatus?.summary ??
+    (loadingStats ? 'Checking systems…' : 'All systems operational')
+
+  const statusBadgeClass =
+    overallTone === 'operational'
+      ? 'bg-[#ECFDF5] text-[#047857] border-[#2F9B73]/30'
+      : overallTone === 'degraded'
+        ? 'bg-amber-50 text-amber-800 border-amber-200'
+        : 'bg-red-50 text-red-700 border-red-200'
+
+  const statusDotClass =
+    overallTone === 'operational'
+      ? 'bg-[#2F9B73]'
+      : overallTone === 'degraded'
+        ? 'bg-amber-500'
+        : 'bg-red-500'
+
   return (
     <PortalLayout activeSection="Dashboard">
       <div className="space-y-4 md:space-y-6 w-full max-w-full min-w-0">
@@ -457,9 +494,14 @@ export default function DashboardPage() {
         <div className="md:hidden min-w-0">
           <div className="flex items-center justify-between gap-2 mb-3">
             <h1 className="text-xl font-semibold text-[#0F172A]">Dashboard</h1>
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#ECFDF5] text-[#047857] text-[11px] font-semibold border border-[#2F9B73]/30 shrink-0">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#2F9B73] animate-pulse" />
-              All systems operational
+            <span
+              className={cn(
+                'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border shrink-0',
+                statusBadgeClass
+              )}
+            >
+              <span className={cn('w-1.5 h-1.5 rounded-full animate-pulse', statusDotClass)} />
+              {statusSummary}
             </span>
           </div>
           <div className="grid grid-cols-3 gap-1.5 p-1 bg-[#F8FAFC] rounded-xl border border-[#E2E8F0]">
@@ -484,9 +526,14 @@ export default function DashboardPage() {
           <div className="min-w-0">
             <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-2">
               <h1 className="text-2xl sm:text-3xl md:text-4xl font-semibold text-[#0F172A]">Dashboard</h1>
-              <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#ECFDF5] text-[#047857] text-sm font-semibold border border-[#2F9B73]/30 w-fit">
-                <span className="w-2 h-2 rounded-full bg-[#2F9B73] animate-pulse" />
-                All systems operational
+              <span
+                className={cn(
+                  'inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-semibold border w-fit',
+                  statusBadgeClass
+                )}
+              >
+                <span className={cn('w-2 h-2 rounded-full animate-pulse', statusDotClass)} />
+                {statusSummary}
               </span>
             </div>
             <p className="text-sm text-[#64748B]">Dashboard / Overview</p>
@@ -543,7 +590,13 @@ export default function DashboardPage() {
         {/* Mobile welcome summary */}
         <Card className={cn(cardClass, 'md:hidden p-4')}>
           <h2 className="text-base font-semibold text-[#0F172A] mb-0.5">Welcome back</h2>
-          <p className="text-sm text-[#64748B] mb-3">Your SMS workspace is running normally.</p>
+          <p className="text-sm text-[#64748B] mb-3">
+            {overallTone === 'operational'
+              ? 'Your SMS workspace is running normally.'
+              : overallTone === 'degraded'
+                ? 'Some systems need attention — check status below.'
+                : 'A service disruption was detected — check status below.'}
+          </p>
           <div className="grid grid-cols-3 gap-2">
             <div className="rounded-xl bg-[#F8FAFC] border border-[#E2E8F0] p-2.5 min-w-0">
               <p className="text-[10px] uppercase tracking-wide text-[#64748B] mb-0.5">Delivery</p>
@@ -608,6 +661,7 @@ export default function DashboardPage() {
                     <button
                       key={period}
                       type="button"
+                      onClick={() => setDateRange(period)}
                       className={cn(
                         'px-2 md:px-3 py-1.5 rounded-lg text-xs md:text-sm font-medium transition-all',
                         dateRange === period ? segmentedActive : segmentedInactive
@@ -835,25 +889,25 @@ export default function DashboardPage() {
                 <h3 className="text-base md:text-lg font-semibold text-[#0F172A]">System Status</h3>
               </div>
               <div className="space-y-2 md:space-y-3">
-                {[
-                  { label: 'API Services', status: 'Operational', tone: 'operational' as const },
-                  { label: 'SMS Gateway', status: 'Operational', tone: 'operational' as const },
-                  { label: 'Webhooks', status: 'Degraded', tone: 'degraded' as const },
-                ].map((item) => (
+                {systemStatusItems.map((item) => (
                   <div
                     key={item.label}
                     className={cn(
                       'flex items-center justify-between p-3 md:p-4 rounded-xl border min-w-0',
                       item.tone === 'operational'
                         ? 'bg-[#ECFDF5]/50 border-[#2F9B73]/20'
-                        : 'bg-amber-50/50 border-amber-200/40'
+                        : item.tone === 'degraded'
+                          ? 'bg-amber-50/50 border-amber-200/40'
+                          : 'bg-red-50/50 border-red-200/40'
                     )}
                   >
                     <div className="flex items-center gap-2 min-w-0">
                       {item.tone === 'operational' ? (
                         <CheckCircle2 size={16} className="text-[#2F9B73] shrink-0" />
-                      ) : (
+                      ) : item.tone === 'degraded' ? (
                         <Clock size={16} className="text-[#F59E0B] shrink-0" />
+                      ) : (
+                        <AlertCircle size={16} className="text-red-500 shrink-0" />
                       )}
                       <span className="text-sm md:text-base font-medium text-[#0F172A] truncate">
                         {item.label}
@@ -862,10 +916,14 @@ export default function DashboardPage() {
                     <span
                       className={cn(
                         'text-xs md:text-sm font-semibold shrink-0 ml-2',
-                        item.tone === 'operational' ? 'text-[#047857]' : 'text-[#F59E0B]'
+                        item.tone === 'operational'
+                          ? 'text-[#047857]'
+                          : item.tone === 'degraded'
+                            ? 'text-[#F59E0B]'
+                            : 'text-red-600'
                       )}
                     >
-                      {item.status}
+                      {loadingStats && !dashboardData ? '…' : item.status}
                     </span>
                   </div>
                 ))}
@@ -884,17 +942,46 @@ export default function DashboardPage() {
                   View all
                 </Link>
               </div>
-              <div className="p-3 md:p-4 rounded-xl bg-[#F8FAFC] border border-[#E2E8F0]">
-                <div className="flex items-start gap-2.5">
-                  <AlertCircle size={16} className="text-[#F59E0B] mt-0.5 shrink-0" />
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-[#0F172A] mb-0.5 break-words">
-                      Delivery rate below threshold
-                    </p>
-                    <p className="text-xs text-[#64748B]">Kenya region: 94.2% (target: 95%)</p>
+              {loadingStats && !dashboardData ? (
+                <div className="p-3 md:p-4 rounded-xl bg-[#F8FAFC] border border-[#E2E8F0]">
+                  <p className="text-sm text-[#64748B]">Loading alerts…</p>
+                </div>
+              ) : alerts.length === 0 ? (
+                <div className="p-3 md:p-4 rounded-xl bg-[#ECFDF5]/50 border border-[#2F9B73]/20">
+                  <div className="flex items-start gap-2.5">
+                    <CheckCircle2 size={16} className="text-[#2F9B73] mt-0.5 shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-[#0F172A] mb-0.5">No active alerts</p>
+                      <p className="text-xs text-[#64748B]">Delivery and messaging look healthy</p>
+                    </div>
                   </div>
                 </div>
-              </div>
+              ) : (
+                <div className="space-y-2">
+                  {alerts.map((alert) => (
+                    <div
+                      key={alert.id}
+                      className="p-3 md:p-4 rounded-xl bg-[#F8FAFC] border border-[#E2E8F0]"
+                    >
+                      <div className="flex items-start gap-2.5">
+                        <AlertCircle
+                          size={16}
+                          className={cn(
+                            'mt-0.5 shrink-0',
+                            alert.severity === 'warning' ? 'text-[#F59E0B]' : 'text-[#64748B]'
+                          )}
+                        />
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-[#0F172A] mb-0.5 break-words">
+                            {alert.title}
+                          </p>
+                          <p className="text-xs text-[#64748B]">{alert.description}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </Card>
 
             <Card className={cn(cardClass, 'p-4 md:p-6')}>
