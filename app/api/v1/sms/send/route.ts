@@ -402,8 +402,6 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'User not found' }, { status: 404 })
       }
       
-      const newBalance = updatedUser.creditsBalance || 0
-      
       // Create SMS log entry
       const [smsMessage] = await SmsMessage.create([{
         userId: userObjectId,
@@ -437,16 +435,10 @@ export async function POST(request: NextRequest) {
       
       await session.commitTransaction()
       
-      // Return success immediately
+      // Return a compact success payload (AT Gateway / hotspot panels display this as status)
       const response = NextResponse.json({
         success: true,
-        messageId: smsMessage._id.toString(),
-        segments,
-        totalCredits: requiredCredits,
-        totalCostKes,
-        newBalance,
-        status: 'queued',
-        to: formattedPhone,
+        message: 'Message sent',
         senderId: senderIdObj.senderName,
       })
       
