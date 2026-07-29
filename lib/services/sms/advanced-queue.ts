@@ -12,7 +12,7 @@
 
 import { SmsMessage } from '@/lib/db/models'
 import { hostPinnacleClient } from '@/lib/services/hostpinnacle/client'
-import { initialNextCheckAt } from '@/lib/services/sms-status/build-synchronizer'
+import { postSendStatusFields } from '@/lib/services/sms-status/auto-delivered'
 import { extractHostPinnacleSendIds, primaryStatusLookupId } from '@/lib/services/hostpinnacle/send-ids'
 import { syncSmsMessageById } from '@/lib/services/sms-status/sync-user-pending'
 import mongoose from 'mongoose'
@@ -269,18 +269,21 @@ class AdvancedSMSQueue {
       const hpIds = extractHostPinnacleSendIds(sendResult.data)
       const statusLookupId = primaryStatusLookupId(hpIds)
 
+      // 'sent' + polling schedule, or final 'delivered' when the
+      // super-admin auto-mark-delivered toggle is on.
+      const statusFields = await postSendStatusFields()
+
       await SmsMessage.findByIdAndUpdate(item.messageId, {
-        status: 'sent',
         externalMsgId: hpIds.messageId || statusLookupId,
         hpTransactionId: hpIds.transactionId || statusLookupId,
-        sentAt: new Date(),
-        providerStatus: 'SUBMITTED',
-        nextCheckAt: initialNextCheckAt(),
+        ...statusFields,
       }).catch(err => {
         console.error(`Failed to update message ${item.messageId}:`, err)
       })
 
-      void syncSmsMessageById(String(item.messageId)).catch(() => {})
+      if (statusFields.status === 'sent') {
+        void syncSmsMessageById(String(item.messageId)).catch(() => {})
+      }
 
     } catch (error: any) {
       console.error(`Error processing message ${item.messageId}:`, error)

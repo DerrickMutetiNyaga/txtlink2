@@ -13,6 +13,7 @@ import { requireAuth } from '@/lib/auth/middleware'
 import { calculateSegments153 } from '@/lib/utils/credits'
 import { resolvePricePerCreditKes } from '@/lib/utils/resolve-price-per-credit'
 import { initialNextCheckAt } from '@/lib/services/sms-status/build-synchronizer'
+import { postSendStatusFields } from '@/lib/services/sms-status/auto-delivered'
 import { syncSmsMessageById } from '@/lib/services/sms-status/sync-user-pending'
 import { buildMessageBodyFields, logSmsMessageCreateDebug } from '@/lib/services/sms/message-body'
 import { maskPhone } from '@/lib/utils/log-sanitize'
@@ -319,18 +320,20 @@ export async function POST(request: NextRequest) {
               recipient: maskPhone(formattedPhone),
             })
 
+            // 'sent' + polling schedule, or final 'delivered' when the
+            // super-admin auto-mark-delivered toggle is on.
+            const statusFields = await postSendStatusFields()
+
             await SmsMessage.findByIdAndUpdate(smsMessage._id, {
               externalMsgId: messageId || statusLookupId,
               hpTransactionId: transactionId || statusLookupId,
-              status: 'sent',
-              providerStatus: 'SUBMITTED',
-              sentAt: new Date(),
-              nextCheckAt: initialNextCheckAt(),
+              ...statusFields,
             })
 
             // Poll HostPinnacle for delivery status (webhooks often don't fire).
+            // Skipped when auto-marked delivered: the message is already final.
             const smsId = smsMessage._id?.toString()
-            if (smsId) {
+            if (smsId && statusFields.status === 'sent') {
               void syncSmsMessageById(smsId).catch((err) =>
                 console.warn('Post-send status sync failed:', err)
               )

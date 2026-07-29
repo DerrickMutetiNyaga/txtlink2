@@ -59,6 +59,7 @@ interface SystemSettings {
   defaultProviderCostPerPart: number
   retryPolicy: number
   deliveryReportWebhookEnabled: boolean
+  autoMarkSentAsDelivered?: boolean
   dlrWebhookBaseUrl?: string
   globalDefaultPricePerPart: number
   globalProviderCostPerPart: number
@@ -646,6 +647,19 @@ export default function SuperAdminSettingsPage() {
                 <Switch
                   checked={formData.deliveryReportWebhookEnabled || false}
                   onCheckedChange={(checked) => updateField('deliveryReportWebhookEnabled', checked)}
+                  variant="default"
+                />
+              </div>
+              <div className="flex items-center justify-between p-4 bg-[#F1F5F9] rounded-lg border border-[#E5E7EB] mt-3">
+                <div>
+                  <Label className="text-sm font-medium text-[#020617]">Auto-Mark Sent Messages as Delivered</Label>
+                  <p className="text-xs text-[#64748B] mt-1">
+                    When enabled, messages accepted by the provider are saved as delivered immediately instead of waiting for a delivery report (DLR)
+                  </p>
+                </div>
+                <Switch
+                  checked={formData.autoMarkSentAsDelivered || false}
+                  onCheckedChange={(checked) => updateField('autoMarkSentAsDelivered', checked)}
                   variant="default"
                 />
               </div>

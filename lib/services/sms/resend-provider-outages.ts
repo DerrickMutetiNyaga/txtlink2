@@ -12,7 +12,7 @@ import {
   extractHostPinnacleSendIds,
   primaryStatusLookupId,
 } from '@/lib/services/hostpinnacle/send-ids'
-import { initialNextCheckAt } from '@/lib/services/sms-status/build-synchronizer'
+import { postSendStatusFields } from '@/lib/services/sms-status/auto-delivered'
 import { resolveSmsMessageBody } from '@/lib/services/sms/message-body'
 import { normalizeKenyanPhone } from '@/lib/utils/phone'
 import { maskPhone } from '@/lib/utils/log-sanitize'
@@ -194,14 +194,14 @@ async function resendOne(sms: ISmsMessage & { _id: unknown }): Promise<'resent' 
   const hpIds = extractHostPinnacleSendIds(hpResult.data)
   const statusLookupId = primaryStatusLookupId(hpIds)
 
+  // 'sent' + polling schedule, or final 'delivered' when the super-admin
+  // auto-mark-delivered toggle is on (statusFields spread last so it wins).
+  const statusFields = await postSendStatusFields()
+
   await SmsMessage.findByIdAndUpdate(sms._id, {
     externalMsgId: hpIds.messageId || statusLookupId,
     hpTransactionId: hpIds.transactionId || statusLookupId,
-    status: 'sent',
-    providerStatus: 'SUBMITTED',
     deliveryStatus: 'sent',
-    sentAt: new Date(),
-    nextCheckAt: initialNextCheckAt(),
     lastCheckedAt: null,
     statusCheckAttempts: 0,
     finalizedAt: null,
@@ -210,6 +210,7 @@ async function resendOne(sms: ISmsMessage & { _id: unknown }): Promise<'resent' 
     errorMessage: undefined,
     refunded: false,
     creditDeducted: true,
+    ...statusFields,
   })
 
   return 'resent'

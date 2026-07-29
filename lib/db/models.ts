@@ -642,6 +642,8 @@ export interface ISystemSettings {
   defaultProviderCostPerPart: number
   retryPolicy: number // 0-3
   deliveryReportWebhookEnabled: boolean
+  /** When true, messages accepted by the provider are immediately finalized as 'delivered' instead of waiting for a DLR */
+  autoMarkSentAsDelivered?: boolean
   /** Public app URL for DLR/M-Pesa callbacks (overrides NEXT_PUBLIC_BASE_URL) */
   dlrWebhookBaseUrl?: string
   
@@ -709,6 +711,7 @@ const SystemSettingsSchema = new Schema<ISystemSettings>(
     defaultProviderCostPerPart: { type: Number, default: 1.5 },
     retryPolicy: { type: Number, default: 1, min: 0, max: 3 },
     deliveryReportWebhookEnabled: { type: Boolean, default: true },
+    autoMarkSentAsDelivered: { type: Boolean, default: false },
     dlrWebhookBaseUrl: { type: String, trim: true },
     
     globalDefaultPricePerPart: { type: Number, default: 2.0 },

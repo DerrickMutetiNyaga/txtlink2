@@ -16,6 +16,7 @@ import { extractHostPinnacleSendIds, primaryStatusLookupId } from '@/lib/service
 import { calculateSegments153 } from '@/lib/utils/credits'
 import { resolvePricePerCreditKes } from '@/lib/utils/resolve-price-per-credit'
 import { initialNextCheckAt } from '@/lib/services/sms-status/build-synchronizer'
+import { postSendStatusFields } from '@/lib/services/sms-status/auto-delivered'
 import { syncSmsMessageById } from '@/lib/services/sms-status/sync-user-pending'
 import { maskPhone } from '@/lib/utils/log-sanitize'
 import {
@@ -483,17 +484,18 @@ export async function POST(request: NextRequest) {
             const hpIds = extractHostPinnacleSendIds(hpResult.data)
             const statusLookupId = primaryStatusLookupId(hpIds)
 
+            // 'sent' + polling schedule, or final 'delivered' when the
+            // super-admin auto-mark-delivered toggle is on.
+            const statusFields = await postSendStatusFields()
+
             await SmsMessage.findByIdAndUpdate(smsMessage._id, {
               externalMsgId: hpIds.messageId || statusLookupId,
               hpTransactionId: hpIds.transactionId || statusLookupId,
-              status: 'sent',
-              providerStatus: 'SUBMITTED',
-              sentAt: new Date(),
-              nextCheckAt: initialNextCheckAt(),
+              ...statusFields,
             })
 
             const smsId = smsMessage._id?.toString()
-            if (smsId) {
+            if (smsId && statusFields.status === 'sent') {
               void syncSmsMessageById(smsId).catch((err) =>
                 console.warn('Post-send status sync failed:', err)
               )
