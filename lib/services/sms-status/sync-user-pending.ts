@@ -14,6 +14,9 @@ import { formatSmsHistoryRow, type FormattedSmsHistoryRow } from '@/lib/services
 const REAL_DELIVERED_PROVIDER = new Set(['DELIVERED', 'DELIVRD', 'DLVRD', 'DLV'])
 
 function toClaimedMessage(doc: Record<string, unknown>): ClaimedMessage {
+  const falseDelivered = looksFalselyDelivered(
+    doc as { status?: string; providerStatus?: string | null; awaitingProviderConfirmation?: boolean }
+  )
   return {
     _id: doc._id as mongoose.Types.ObjectId,
     userId: doc.userId as mongoose.Types.ObjectId,
@@ -28,6 +31,9 @@ function toClaimedMessage(doc: Record<string, unknown>): ClaimedMessage {
     createdAt: doc.createdAt as Date,
     toNumbers: (doc.toNumbers as string[]) ?? [],
     senderName: (doc.senderName as string) ?? '',
+    awaitingProviderConfirmation:
+      Boolean(doc.awaitingProviderConfirmation) || falseDelivered,
+    source: doc.source as string | undefined,
   }
 }
 
@@ -35,8 +41,10 @@ function toClaimedMessage(doc: Record<string, unknown>): ClaimedMessage {
 export function looksFalselyDelivered(doc: {
   status?: string
   providerStatus?: string | null
+  awaitingProviderConfirmation?: boolean
 }): boolean {
   if (doc.status !== 'delivered') return false
+  if (doc.awaitingProviderConfirmation) return true
   const raw = (doc.providerStatus || '').trim().toUpperCase()
   if (!raw) return true
   return !REAL_DELIVERED_PROVIDER.has(raw)
@@ -87,6 +95,7 @@ export async function syncUserPendingMessages(
       $or: [
         { status: { $in: [...SMS_PENDING_STATUSES] } },
         // Re-check rows marked delivered without a real HostPinnacle DELIVERED
+        { status: 'delivered', awaitingProviderConfirmation: true },
         {
           status: 'delivered',
           $or: [
@@ -128,11 +137,7 @@ export async function syncUserPendingMessages(
 
     checked++
     try {
-      // Treat falsely-delivered as pending so HostPinnacle FAILED can correct it.
       const claimed = toClaimedMessage(doc)
-      if (looksFalselyDelivered(doc as { status?: string; providerStatus?: string | null })) {
-        claimed.status = 'sent'
-      }
       const outcome = await synchronizer.syncClaimedMessage(claimed)
       if (outcome === 'finalized') finalized++
     } catch (error) {
@@ -163,7 +168,6 @@ export async function syncSmsMessageById(messageId: string): Promise<boolean> {
 
   const { synchronizer } = await getSharedSynchronizer()
   const claimed = toClaimedMessage(doc as Record<string, unknown>)
-  if (falseDelivered) claimed.status = 'sent'
   const outcome = await synchronizer.syncClaimedMessage(claimed)
   return outcome === 'finalized'
 }

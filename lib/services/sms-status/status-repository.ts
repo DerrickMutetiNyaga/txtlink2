@@ -26,6 +26,8 @@ export interface ClaimedMessage {
   createdAt: Date
   toNumbers: string[]
   senderName: string
+  awaitingProviderConfirmation?: boolean
+  source?: string
 }
 
 function toClaimedMessage(doc: any): ClaimedMessage {
@@ -45,6 +47,14 @@ function toClaimedMessage(doc: any): ClaimedMessage {
     createdAt: doc.createdAt,
     toNumbers: doc.toNumbers ?? [],
     senderName: doc.senderName ?? '',
+    awaitingProviderConfirmation: !!doc.awaitingProviderConfirmation,
+    source: doc.source,
+  }
+}
+
+function claimLeaseFilter(now: Date) {
+  return {
+    $or: [{ statusCheckLockedUntil: null }, { statusCheckLockedUntil: { $lte: now } }],
   }
 }
 
@@ -52,11 +62,8 @@ export class StatusRepository {
   /**
    * Atomically claim up to `batchSize` due pending messages for `workerId`.
    *
-   * Uses repeated findOneAndUpdate claims (the safest pattern under many
-   * workers): each call atomically matches an unclaimed due message and sets
-   * the lease in the same operation, so concurrent workers can never claim
-   * the same document. The query is fully covered by the partial
-   * `pending_status_check` index.
+   * Also claims auto-mark rows still awaiting HostPinnacle confirmation
+   * (status may already be 'delivered' but nextCheckAt is due).
    */
   async claimDueMessages(params: {
     workerId: string
@@ -67,17 +74,11 @@ export class StatusRepository {
     const now = params.now ?? new Date()
     const lockUntil = new Date(now.getTime() + params.leaseSeconds * 1000)
     const claimed: ClaimedMessage[] = []
+    const claimedIds = new Set<string>()
 
-    for (let i = 0; i < params.batchSize; i++) {
+    const claimOne = async (filter: Record<string, unknown>) => {
       const doc = await SmsMessage.findOneAndUpdate(
-        {
-          status: { $in: [...SMS_PENDING_STATUSES] },
-          nextCheckAt: { $lte: now },
-          $or: [
-            { statusCheckLockedUntil: null },
-            { statusCheckLockedUntil: { $lte: now } },
-          ],
-        },
+        filter,
         {
           $set: {
             statusCheckLockedUntil: lockUntil,
@@ -86,17 +87,36 @@ export class StatusRepository {
           $inc: { statusCheckAttempts: 1 },
         },
         {
-          // Sort by nextCheckAt only: it is the leading key of the partial
-          // pending_status_check index, so MongoDB satisfies both the filter
-          // and the ordering with an IXSCAN - no in-memory sort even with a
-          // large backlog. (An _id tiebreaker would force a blocking sort.)
           sort: { nextCheckAt: 1 },
           new: true,
         }
       ).lean()
+      if (!doc) return null
+      const id = String(doc._id)
+      if (claimedIds.has(id)) return null
+      claimedIds.add(id)
+      return toClaimedMessage(doc)
+    }
 
-      if (!doc) break
-      claimed.push(toClaimedMessage(doc))
+    // Prefer classic pending statuses first, then auto-mark verification rows.
+    while (claimed.length < params.batchSize) {
+      const pending = await claimOne({
+        status: { $in: [...SMS_PENDING_STATUSES] },
+        nextCheckAt: { $lte: now },
+        ...claimLeaseFilter(now),
+      })
+      if (!pending) break
+      claimed.push(pending)
+    }
+
+    while (claimed.length < params.batchSize) {
+      const verifying = await claimOne({
+        awaitingProviderConfirmation: true,
+        nextCheckAt: { $lte: now },
+        ...claimLeaseFilter(now),
+      })
+      if (!verifying) break
+      claimed.push(verifying)
     }
 
     return claimed
@@ -119,6 +139,7 @@ export class StatusRepository {
       nextCheckAt: null,
       statusCheckLockedUntil: null,
       statusCheckWorkerId: null,
+      awaitingProviderConfirmation: false,
     }
     if (params.providerStatusRaw !== undefined) update.providerStatus = params.providerStatusRaw
     if (params.cause !== undefined) update.deliveryCause = params.cause
@@ -135,6 +156,56 @@ export class StatusRepository {
       update.deliveryStatus = params.status
     }
 
+    await SmsMessage.updateOne({ _id: params.messageId }, { $set: update })
+  }
+
+  /**
+   * Keep showing delivered (auto-mark) while HostPinnacle still reports pending.
+   * Does not change status away from delivered.
+   */
+  async rescheduleVerification(params: {
+    messageId: mongoose.Types.ObjectId | string
+    nextCheckAt: Date
+    providerStatusRaw?: string
+    cause?: string
+    providerError?: string
+    now?: Date
+  }): Promise<void> {
+    const now = params.now ?? new Date()
+    const update: Record<string, any> = {
+      // Keep UI on delivered while we verify
+      status: 'delivered',
+      awaitingProviderConfirmation: true,
+      lastCheckedAt: now,
+      nextCheckAt: params.nextCheckAt,
+      statusCheckLockedUntil: null,
+      statusCheckWorkerId: null,
+      finalizedAt: null,
+    }
+    if (params.providerStatusRaw !== undefined) update.providerStatus = params.providerStatusRaw
+    if (params.cause !== undefined) update.deliveryCause = params.cause
+    if (params.providerError !== undefined) update.providerError = params.providerError
+
+    await SmsMessage.updateOne({ _id: params.messageId }, { $set: update })
+  }
+
+  /** Stop verifying an auto-mark row without changing the shown delivered status. */
+  async stopVerificationKeepDelivered(params: {
+    messageId: mongoose.Types.ObjectId | string
+    now?: Date
+    providerError?: string
+  }): Promise<void> {
+    const now = params.now ?? new Date()
+    const update: Record<string, any> = {
+      status: 'delivered',
+      awaitingProviderConfirmation: false,
+      finalizedAt: now,
+      lastCheckedAt: now,
+      nextCheckAt: null,
+      statusCheckLockedUntil: null,
+      statusCheckWorkerId: null,
+    }
+    if (params.providerError !== undefined) update.providerError = params.providerError
     await SmsMessage.updateOne({ _id: params.messageId }, { $set: update })
   }
 
@@ -213,8 +284,10 @@ export class StatusRepository {
   /** Count messages currently due for a check (ops/monitoring). */
   async countDue(now: Date = new Date()): Promise<number> {
     return SmsMessage.countDocuments({
-      status: { $in: [...SMS_PENDING_STATUSES] },
-      nextCheckAt: { $lte: now },
+      $or: [
+        { status: { $in: [...SMS_PENDING_STATUSES] }, nextCheckAt: { $lte: now } },
+        { awaitingProviderConfirmation: true, nextCheckAt: { $lte: now } },
+      ],
     })
   }
 }

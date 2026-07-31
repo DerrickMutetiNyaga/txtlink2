@@ -11,6 +11,7 @@ import { requireOwner } from '@/lib/auth/middleware'
 import { logAudit } from '@/lib/utils/audit'
 import { clearHostPinnacleSettingsCache } from '@/lib/services/hostpinnacle/client'
 import { clearAutoMarkDeliveredCache } from '@/lib/services/sms-status/auto-delivered'
+import { clearFailureAlertPhoneCache } from '@/lib/services/sms-status/failure-alert'
 import mongoose from 'mongoose'
 
 export async function GET(request: NextRequest) {
@@ -108,6 +109,7 @@ export async function POST(request: NextRequest) {
       retryPolicy,
       deliveryReportWebhookEnabled,
       autoMarkSentAsDelivered,
+      failureAlertPhone,
       dlrWebhookBaseUrl,
       
       // Pricing & Cost Controls
@@ -181,6 +183,10 @@ export async function POST(request: NextRequest) {
     if (retryPolicy !== undefined) updateData.retryPolicy = Math.max(0, Math.min(3, retryPolicy))
     if (deliveryReportWebhookEnabled !== undefined) updateData.deliveryReportWebhookEnabled = deliveryReportWebhookEnabled
     if (autoMarkSentAsDelivered !== undefined) updateData.autoMarkSentAsDelivered = !!autoMarkSentAsDelivered
+    if (failureAlertPhone !== undefined) {
+      updateData.failureAlertPhone =
+        typeof failureAlertPhone === 'string' ? failureAlertPhone.trim() : ''
+    }
     if (dlrWebhookBaseUrl !== undefined) {
       updateData.dlrWebhookBaseUrl = dlrWebhookBaseUrl.trim().replace(/\/$/, '') || null
     }
@@ -274,6 +280,7 @@ export async function POST(request: NextRequest) {
     // Clear settings caches so new settings are used immediately
     clearHostPinnacleSettingsCache()
     clearAutoMarkDeliveredCache()
+    clearFailureAlertPhoneCache()
 
     // Log audit
     await logAudit(

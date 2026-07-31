@@ -303,6 +303,13 @@ export interface ISmsMessage {
   providerRetryFailureReason?: string
   /** Set once when auto-resending after HostPinnacle 503/outage failures */
   providerOutageResendAt?: Date
+  /**
+   * When true, UI may show delivered (auto-mark) but the status worker still
+   * polls HostPinnacle — a later FAILED must override delivered.
+   */
+  awaitingProviderConfirmation?: boolean
+  /** Set when a failure-alert SMS was sent to the super-admin phone (once per message). */
+  failureAlertSentAt?: Date
   createdAt: Date
   updatedAt: Date
 }
@@ -357,6 +364,8 @@ const SmsMessageSchema = new Schema<ISmsMessage>(
     statusCheckLockedUntil: { type: Date, default: null },
     statusCheckWorkerId: { type: String, default: null },
     finalizedAt: { type: Date, default: null },
+    awaitingProviderConfirmation: { type: Boolean, default: false },
+    failureAlertSentAt: { type: Date },
     errorCode: { type: String },
     errorMessage: { type: String },
     sentAt: { type: Date },
@@ -407,6 +416,14 @@ SmsMessageSchema.index(
   {
     name: 'pending_status_check',
     partialFilterExpression: { status: { $in: [...SMS_PENDING_STATUSES] } },
+  }
+)
+// Auto-mark verification: delivered rows that still need HostPinnacle confirmation
+SmsMessageSchema.index(
+  { nextCheckAt: 1, awaitingProviderConfirmation: 1 },
+  {
+    name: 'awaiting_provider_confirmation_check',
+    partialFilterExpression: { awaitingProviderConfirmation: true },
   }
 )
 // General status + schedule access pattern (admin dashboards, ops queries)
@@ -647,6 +664,11 @@ export interface ISystemSettings {
   deliveryReportWebhookEnabled: boolean
   /** When true, messages accepted by the provider are immediately finalized as 'delivered' instead of waiting for a DLR */
   autoMarkSentAsDelivered?: boolean
+  /**
+   * Super-admin phone (E.164 / Kenya format) for SMS alerts when HostPinnacle
+   * reports a delivery failure — including failures that override auto-marked delivered.
+   */
+  failureAlertPhone?: string
   /** Public app URL for DLR/M-Pesa callbacks (overrides NEXT_PUBLIC_BASE_URL) */
   dlrWebhookBaseUrl?: string
   
@@ -715,6 +737,7 @@ const SystemSettingsSchema = new Schema<ISystemSettings>(
     retryPolicy: { type: Number, default: 1, min: 0, max: 3 },
     deliveryReportWebhookEnabled: { type: Boolean, default: true },
     autoMarkSentAsDelivered: { type: Boolean, default: false },
+    failureAlertPhone: { type: String, trim: true },
     dlrWebhookBaseUrl: { type: String, trim: true },
     
     globalDefaultPricePerPart: { type: Number, default: 2.0 },

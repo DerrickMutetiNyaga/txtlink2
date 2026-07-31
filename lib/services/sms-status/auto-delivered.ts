@@ -2,9 +2,8 @@
  * Auto-mark-delivered feature (super admin toggle).
  *
  * When `autoMarkSentAsDelivered` is enabled in SystemSettings, a message that
- * the provider accepts is immediately finalized as 'delivered' instead of
- * staying 'sent' and waiting for a DLR / status poll. When the toggle is off,
- * the normal lifecycle (sent -> DLR/poll -> delivered) is untouched.
+ * the provider accepts is shown as 'delivered' immediately for UX — but we
+ * still schedule HostPinnacle status checks so a later FAILED can override.
  *
  * All send paths must build their post-accept status update via
  * `postSendStatusFields()` so the behavior stays consistent everywhere.
@@ -45,7 +44,8 @@ export function clearAutoMarkDeliveredCache(): void {
  * Status fields to apply to an SmsMessage right after the provider accepts it.
  *
  * - Toggle off (default): mark 'sent' and schedule the delivery-status worker.
- * - Toggle on: finalize as 'delivered' right away (no DLR wait, no polling).
+ * - Toggle on: show as 'delivered' immediately, but keep polling HostPinnacle
+ *   (`awaitingProviderConfirmation`) so a later FAILED overrides delivered.
  */
 export async function postSendStatusFields(now: Date = new Date()): Promise<Record<string, any>> {
   if (await isAutoMarkDeliveredEnabled()) {
@@ -56,9 +56,11 @@ export async function postSendStatusFields(now: Date = new Date()): Promise<Reco
       deliveredAt: now,
       deliveryStatus: 'delivered',
       deliveryMethod: 'provider',
-      finalizedAt: now,
+      // Keep checking — do not finalize until HostPinnacle confirms or fails.
+      finalizedAt: null,
+      awaitingProviderConfirmation: true,
       lastCheckedAt: now,
-      nextCheckAt: null,
+      nextCheckAt: initialNextCheckAt(),
     }
   }
 
@@ -69,6 +71,7 @@ export async function postSendStatusFields(now: Date = new Date()): Promise<Reco
     // Clear any stale auto-mark fields if a previous code path set them
     deliveredAt: null,
     finalizedAt: null,
+    awaitingProviderConfirmation: false,
     deliveryStatus: 'sent',
     nextCheckAt: initialNextCheckAt(),
   }

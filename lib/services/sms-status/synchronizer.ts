@@ -13,6 +13,7 @@ import type { Logger } from '@/lib/worker/logger'
 import { RetryScheduler } from './retry-scheduler'
 import { StatusRepository, type ClaimedMessage } from './status-repository'
 import { mapProviderStatus, isFinalStatus } from './status-mapper'
+import { notifyDeliveryFailureAlert } from './failure-alert'
 import type { ProviderStatusResult, SyncBatchSummary } from './types'
 
 /** Final failure statuses that trigger a credit refund (business rule carried
@@ -109,6 +110,19 @@ export class SmsStatusSynchronizer {
 
     // Give up permanently once the message is too old to ever resolve.
     if (this.scheduler.hasTimedOut(message.sentAt, message.createdAt, now)) {
+      // Auto-mark verification: keep showing Delivered rather than "provider_timeout"
+      // after the poll window ends without a HostPinnacle FAILED.
+      if (message.awaitingProviderConfirmation || message.status === 'delivered') {
+        await this.repository.stopVerificationKeepDelivered({
+          messageId: message._id,
+          now,
+          providerError: 'Stopped verifying after timeout; no HostPinnacle FAILED received',
+        })
+        this.logger.info('auto-mark verification stopped (timeout); kept delivered', {
+          messageId: message._id.toString(),
+        })
+        return 'timedOut'
+      }
       await this.repository.markFinal({
         messageId: message._id,
         status: 'provider_timeout',
@@ -180,6 +194,15 @@ export class SmsStatusSynchronizer {
 
     if (!lookup.result) {
       // Provider has no report yet - normal shortly after sending.
+      if (message.awaitingProviderConfirmation || message.status === 'delivered') {
+        await this.repository.rescheduleVerification({
+          messageId: message._id,
+          nextCheckAt: this.scheduler.nextCheckAt(message.statusCheckAttempts, now),
+          providerStatusRaw: 'NO_REPORT',
+          now,
+        })
+        return 'rescheduled'
+      }
       await this.repository.reschedule({
         messageId: message._id,
         status: 'retrying',
@@ -214,10 +237,13 @@ export class SmsStatusSynchronizer {
 
     // Guard against out-of-order updates: once a message is final, a late
     // pending report (e.g. a delayed SUBMITTED DLR after DELIVERED) must not
-    // resurrect it. A late *final* report is still applied because the
-    // provider is authoritative for terminal outcomes (e.g. a DELIVERED
-    // webhook arriving after the worker gave up with provider_timeout).
-    if (isFinalStatus(doc.status) && !result.isFinal) {
+    // resurrect it — unless we are still verifying an auto-mark. A late
+    // *final* report is always applied (FAILED must override Delivered).
+    if (
+      isFinalStatus(doc.status) &&
+      !result.isFinal &&
+      !doc.awaitingProviderConfirmation
+    ) {
       this.logger.info('applyProviderStatus: ignored pending update for final message', {
         providerMessageId,
         currentStatus: doc.status,
@@ -239,6 +265,8 @@ export class SmsStatusSynchronizer {
       createdAt: doc.createdAt,
       toNumbers: doc.toNumbers ?? [],
       senderName: doc.senderName,
+      awaitingProviderConfirmation: !!doc.awaitingProviderConfirmation,
+      source: doc.source,
     }
 
     const outcome = await this.applyStatusResult(message, result, new Date())
@@ -256,7 +284,11 @@ export class SmsStatusSynchronizer {
     if (!doc) return { applied: false }
 
     const result = mapProviderStatus(providerStatusRaw, cause)
-    if (isFinalStatus(doc.status) && !result.isFinal) {
+    if (
+      isFinalStatus(doc.status) &&
+      !result.isFinal &&
+      !doc.awaitingProviderConfirmation
+    ) {
       return { applied: false, status: doc.status }
     }
 
@@ -274,6 +306,8 @@ export class SmsStatusSynchronizer {
       createdAt: doc.createdAt,
       toNumbers: doc.toNumbers ?? [],
       senderName: doc.senderName ?? '',
+      awaitingProviderConfirmation: !!doc.awaitingProviderConfirmation,
+      source: doc.source,
     }
 
     await this.applyStatusResult(message, result, new Date())
@@ -286,6 +320,7 @@ export class SmsStatusSynchronizer {
     now: Date
   ): Promise<'finalized' | 'rescheduled'> {
     if (result.isFinal) {
+      const previousStatus = message.status
       await this.repository.markFinal({
         messageId: message._id,
         status: result.status,
@@ -316,12 +351,38 @@ export class SmsStatusSynchronizer {
         }
       }
 
+      if (REFUNDABLE_FINAL_STATUSES.has(result.status)) {
+        // Fire-and-forget — never block the status pipeline on alert SMS.
+        void notifyDeliveryFailureAlert({
+          messageId: message._id,
+          status: result.status,
+          toNumbers: message.toNumbers,
+          senderName: message.senderName,
+          cause: result.cause || result.providerStatusRaw,
+          previousStatus,
+          source: message.source,
+        })
+      }
+
       this.logger.info('message finalized', {
         messageId: message._id.toString(),
         status: result.status,
         providerStatus: result.providerStatusRaw,
+        previousStatus,
       })
       return 'finalized'
+    }
+
+    // Auto-mark: keep UI on Delivered while HostPinnacle still says pending.
+    if (message.awaitingProviderConfirmation || message.status === 'delivered') {
+      await this.repository.rescheduleVerification({
+        messageId: message._id,
+        nextCheckAt: this.scheduler.nextCheckAt(message.statusCheckAttempts, now),
+        providerStatusRaw: result.providerStatusRaw,
+        cause: result.cause,
+        now,
+      })
+      return 'rescheduled'
     }
 
     await this.repository.reschedule({

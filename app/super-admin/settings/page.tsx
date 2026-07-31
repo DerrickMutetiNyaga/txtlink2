@@ -60,6 +60,7 @@ interface SystemSettings {
   retryPolicy: number
   deliveryReportWebhookEnabled: boolean
   autoMarkSentAsDelivered?: boolean
+  failureAlertPhone?: string
   dlrWebhookBaseUrl?: string
   globalDefaultPricePerPart: number
   globalProviderCostPerPart: number
@@ -654,13 +655,25 @@ export default function SuperAdminSettingsPage() {
                 <div>
                   <Label className="text-sm font-medium text-[#020617]">Auto-Mark Sent Messages as Delivered</Label>
                   <p className="text-xs text-[#64748B] mt-1">
-                    Off (recommended): status follows HostPinnacle — Sent / Pending until a real DLR shows Delivered or Failed. On: every accepted send is saved as Delivered immediately (skips HostPinnacle delivery checks). Click Save after changing.
+                    Off (recommended): status follows HostPinnacle — Sent / Pending until a real DLR shows Delivered or Failed. On: accepted sends show Delivered immediately, but TXTLINK keeps checking HostPinnacle — if it later reports Failed, status switches to Failed and you get an SMS alert. Click Save after changing.
                   </p>
                 </div>
                 <Switch
                   checked={formData.autoMarkSentAsDelivered || false}
                   onCheckedChange={(checked) => updateField('autoMarkSentAsDelivered', checked)}
                   variant="default"
+                />
+              </div>
+              <div className="mt-3 p-4 bg-[#F1F5F9] rounded-lg border border-[#E5E7EB] space-y-2">
+                <Label className="text-sm font-medium text-[#020617]">Failure alert phone</Label>
+                <p className="text-xs text-[#64748B]">
+                  Your number for immediate SMS alerts when HostPinnacle reports a delivery failure (including when a message was already shown as Delivered). Leave blank to disable alerts.
+                </p>
+                <Input
+                  value={formData.failureAlertPhone || ''}
+                  onChange={(e) => updateField('failureAlertPhone', e.target.value)}
+                  placeholder="2547XXXXXXXX"
+                  className="border-[#E5E7EB] bg-white text-[#020617] text-sm max-w-sm"
                 />
               </div>
               <div className="mt-3 space-y-3">
