@@ -7,8 +7,9 @@ import {
 import { getFallbackScanBatchSize, getFallbackScanConcurrency } from './config'
 import { mapPool } from './concurrency'
 
-export const GATEWAY_SENDING_TIMEOUT_MS = 5 * 60 * 1000
-export const GATEWAY_MAX_SEND_ATTEMPTS = 3
+/** Faster reclaim so older stuck jobs return to the pending queue quickly. */
+export const GATEWAY_SENDING_TIMEOUT_MS = 2 * 60 * 1000
+export const GATEWAY_MAX_SEND_ATTEMPTS = 5
 
 function isDeviceOffline(device: {
   lastHeartbeatAt?: Date | null
