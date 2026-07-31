@@ -1,5 +1,8 @@
 /**
  * Bulk retry undelivered SMS via HostPinnacle (Sender ID / API) or Android phone gateway.
+ *
+ * The HTTP handler returns immediately after claiming messages; actual HostPinnacle
+ * / phone-queue work runs in the background so the UI does not hang on 100s of sends.
  */
 
 import mongoose from 'mongoose'
@@ -24,12 +27,16 @@ export type BulkRetryResult = {
   attempted: number
   succeeded: number
   failed: number
+  started: boolean
   errors: Array<{ id: string; error: string }>
   message: string
 }
 
 const MAX_BULK = 500
-const CONCURRENCY = 4
+/** HostPinnacle sends — keep moderate to avoid rate limits / timeouts */
+const PROVIDER_CONCURRENCY = 8
+/** Phone queue is DB-only — can go faster */
+const PHONE_CONCURRENCY = 16
 
 async function retryViaPhone(
   sms: ISmsMessage & { _id: unknown }
@@ -38,14 +45,137 @@ async function retryViaPhone(
     return { ok: false, error: 'Message already delivered' }
   }
 
-  // Phone-failed jobs: reset via createOrUpdate with resetExisting
   const result = await createOrUpdatePhoneFallbackJob(sms, { resetExisting: true })
   if (!result.ok) {
     return { ok: false, error: result.error || 'Failed to queue phone fallback' }
   }
+
+  await SmsMessage.findByIdAndUpdate(sms._id, {
+    status: 'queued',
+    deliveryMethod: 'android_phone_gateway',
+    fallbackStatus: 'queued_for_phone',
+    fallbackQueued: true,
+    nextCheckAt: null,
+    failedAt: null,
+    finalizedAt: null,
+  })
+
   return { ok: true }
 }
 
+/** Prepare failed messages so provider retry can claim them again. */
+async function prepareMessagesForProviderRetry(ids: mongoose.Types.ObjectId[]): Promise<void> {
+  if (ids.length === 0) return
+  await SmsMessage.updateMany(
+    { _id: { $in: ids } },
+    {
+      $set: {
+        providerRetryAttempted: false,
+        providerRetryStatus: 'not_started',
+        fallbackStatus: 'retrying_provider',
+        deliveryMethod: 'provider',
+        status: 'queued',
+        nextCheckAt: null,
+      },
+      $unset: {
+        providerRetryFailureReason: 1,
+        failedAt: 1,
+        finalizedAt: 1,
+        fallbackFailedAt: 1,
+        fallbackFailureReason: 1,
+        fallbackFailureCode: 1,
+        requiresPhoneTopUp: 1,
+      },
+    }
+  )
+}
+
+async function prepareMessagesForPhoneQueue(ids: mongoose.Types.ObjectId[]): Promise<void> {
+  if (ids.length === 0) return
+  await SmsMessage.updateMany(
+    { _id: { $in: ids } },
+    {
+      $set: {
+        status: 'queued',
+        deliveryMethod: 'android_phone_gateway',
+        fallbackStatus: 'queued_for_phone',
+        fallbackQueued: true,
+        nextCheckAt: null,
+      },
+      $unset: {
+        failedAt: 1,
+        finalizedAt: 1,
+        fallbackFailedAt: 1,
+        fallbackFailureReason: 1,
+        fallbackFailureCode: 1,
+        requiresPhoneTopUp: 1,
+      },
+    }
+  )
+}
+
+async function runBulkRetryWork(params: {
+  userId: mongoose.Types.ObjectId
+  channel: BulkRetryChannel
+  ids: string[]
+}): Promise<void> {
+  const concurrency = params.channel === 'phone' ? PHONE_CONCURRENCY : PROVIDER_CONCURRENCY
+  let succeeded = 0
+  let failed = 0
+
+  console.log('[bulk-retry] background start', {
+    channel: params.channel,
+    count: params.ids.length,
+    userId: String(params.userId),
+  })
+
+  await mapPool(params.ids, concurrency, async (id) => {
+    try {
+      if (params.channel === 'provider') {
+        const result = await retryProviderForMessage(id, params.userId, {
+          forceManual: true,
+          bulk: true,
+        })
+        if (result.success) succeeded++
+        else {
+          failed++
+          console.warn('[bulk-retry] provider failed', { id, error: result.error })
+        }
+        return
+      }
+
+      const sms = await SmsMessage.findById(id).lean()
+      if (!sms) {
+        failed++
+        return
+      }
+      const phoneResult = await retryViaPhone(sms as ISmsMessage & { _id: unknown })
+      if (phoneResult.ok) succeeded++
+      else {
+        failed++
+        console.warn('[bulk-retry] phone queue failed', { id, error: phoneResult.error })
+      }
+    } catch (err) {
+      failed++
+      console.error('[bulk-retry] unexpected error', {
+        id,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
+  })
+
+  console.log('[bulk-retry] background done', {
+    channel: params.channel,
+    succeeded,
+    failed,
+    total: params.ids.length,
+  })
+}
+
+/**
+ * Claim actionable SMS and kick off background retries.
+ * Returns immediately so the browser request does not time out.
+ */
 export async function bulkRetryActionableSms(params: {
   userId: string
   channel: BulkRetryChannel
@@ -60,61 +190,57 @@ export async function bulkRetryActionableSms(params: {
   const limit = Math.min(Math.max(params.limit ?? MAX_BULK, 1), MAX_BULK)
 
   const filter = buildActionableSmsFilter(userId, view)
-  const docs = await SmsMessage.find(filter).sort({ createdAt: -1 }).limit(limit).lean()
+  const docs = await SmsMessage.find(filter)
+    .sort({ createdAt: 1 }) // oldest first — drain the backlog
+    .select('_id')
+    .limit(limit)
+    .lean()
 
-  const errors: Array<{ id: string; error: string }> = []
-  let succeeded = 0
+  const ids = docs.map((d) => d._id as mongoose.Types.ObjectId)
+  const idStrings = ids.map((id) => String(id))
 
-  const results = await mapPool(
-    docs as Array<ISmsMessage & { _id: unknown }>,
-    CONCURRENCY,
-    async (sms) => {
-      const id = String(sms._id)
-      try {
-        if (channel === 'provider') {
-          const result = await retryProviderForMessage(id, userId, { forceManual: true })
-          if (!result.success) {
-            errors.push({ id, error: result.error || 'Provider retry failed' })
-            return false
-          }
-          return true
-        }
-
-        const phoneResult = await retryViaPhone(sms)
-        if (!phoneResult.ok) {
-          errors.push({ id, error: phoneResult.error || 'Phone queue failed' })
-          return false
-        }
-        return true
-      } catch (err) {
-        errors.push({
-          id,
-          error: err instanceof Error ? err.message : 'Unknown error',
-        })
-        return false
-      }
+  if (ids.length === 0) {
+    return {
+      success: true,
+      channel,
+      view,
+      attempted: 0,
+      succeeded: 0,
+      failed: 0,
+      started: false,
+      errors: [],
+      message: `No ${view} SMS to retry`,
     }
-  )
+  }
 
-  succeeded = results.filter(Boolean).length
-  const attempted = docs.length
-  const failed = attempted - succeeded
+  // Mark the whole batch immediately so history/UI show progress while sends run
+  if (channel === 'provider') {
+    await prepareMessagesForProviderRetry(ids)
+  } else {
+    await prepareMessagesForPhoneQueue(ids)
+  }
+
+  // Fire-and-forget — do not await the HostPinnacle storm inside the HTTP request
+  Promise.resolve()
+    .then(() =>
+      runBulkRetryWork({
+        userId,
+        channel,
+        ids: idStrings,
+      })
+    )
+    .catch((err) => console.error('[bulk-retry] background crash', err))
 
   const channelLabel = channel === 'provider' ? 'HostPinnacle (Sender ID / API)' : 'phone gateway'
-  const message =
-    attempted === 0
-      ? `No ${view} SMS to retry`
-      : `Retried ${succeeded} of ${attempted} via ${channelLabel}` +
-        (failed > 0 ? ` (${failed} failed)` : '')
-
   return {
     success: true,
     channel,
     view,
-    attempted,
-    succeeded,
-    failed,
-    errors: errors.slice(0, 20),
-    message,
+    attempted: ids.length,
+    succeeded: 0,
+    failed: 0,
+    started: true,
+    errors: [],
+    message: `Started retrying ${ids.length} SMS via ${channelLabel}. They will send in the background — refresh history in a minute.`,
   }
 }

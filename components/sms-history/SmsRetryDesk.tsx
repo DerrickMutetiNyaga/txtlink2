@@ -404,8 +404,12 @@ export function SmsRetryDesk({ onMessagePatched, failedCount = 0, pendingCount =
       }
 
       toast({
-        title: 'Retry all started',
-        description: data.message || `Retried ${data.succeeded ?? 0} message(s).`,
+        title: data.started ? 'Retry running in background' : 'Retry all',
+        description:
+          data.message ||
+          (data.started
+            ? `Started ${data.attempted ?? 0} SMS — they will send shortly. Refresh history in a minute.`
+            : `Retried ${data.succeeded ?? 0} message(s).`),
       })
 
       const patches = items.map((sms) => ({
@@ -416,7 +420,8 @@ export function SmsRetryDesk({ onMessagePatched, failedCount = 0, pendingCount =
         providerRetryAttempted: channel === 'provider' ? true : sms.providerRetryAttempted,
       }))
       applyLocalPatches(patches)
-      await fetchActionable(true)
+      // Don't block the spinner on a full reload — background sends continue either way
+      void fetchActionable(true)
     } catch (err) {
       toast({
         title: 'Retry all failed',

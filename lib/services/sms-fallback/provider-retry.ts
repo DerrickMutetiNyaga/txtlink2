@@ -178,11 +178,14 @@ async function retrySingleMessage(sms: ISmsMessage & { _id: unknown }): Promise<
 
   const { userId: hpUserId, password, apiKey } = hpCreds
   const now = new Date()
+  // Bulk/manual retries use fewer HP retries so a large backlog drains faster
+  const sendRetries = (sms as { __bulkRetry?: boolean }).__bulkRetry ? 1 : 3
 
   await SmsMessage.findByIdAndUpdate(sms._id, {
     providerRetryAttempted: true,
     providerRetryAttemptedAt: now,
     fallbackStatus: 'retrying_provider',
+    status: 'queued',
   })
 
   await upsertFallbackJobForRetry(sms, 'retrying_provider')
@@ -193,7 +196,7 @@ async function retrySingleMessage(sms: ISmsMessage & { _id: unknown }): Promise<
       msg: smsText,
       senderid: sms.senderName,
       options: { apiKey, userId: hpUserId, password },
-      retries: 3,
+      retries: sendRetries,
     })
 
     if (hpResult.success) {
@@ -202,12 +205,23 @@ async function retrySingleMessage(sms: ISmsMessage & { _id: unknown }): Promise<
         hpResult.data?.transactionid ||
         hpResult.data?.id ||
         undefined
+      const messageId =
+        hpResult.data?.messageId ||
+        hpResult.data?.MessageId ||
+        hpResult.data?.uuid ||
+        undefined
 
       await SmsMessage.findByIdAndUpdate(sms._id, {
+        status: 'sent',
+        sentAt: now,
+        deliveryMethod: 'provider',
+        externalMsgId: messageId ? String(messageId) : undefined,
+        hpTransactionId: transactionId ? String(transactionId) : undefined,
         providerRetrySmsId: transactionId ? String(transactionId) : undefined,
         providerRetryStatus: 'sent',
         providerRetrySentAt: now,
         fallbackStatus: 'retry_waiting_delivery',
+        nextCheckAt: new Date(now.getTime() + 15_000),
       })
 
       await SmsFallbackJob.findOneAndUpdate(
@@ -352,7 +366,7 @@ export async function scanAndRetryUndeliveredSms(
 export async function retryProviderForMessage(
   messageId: string,
   userId: mongoose.Types.ObjectId,
-  options?: { forceManual?: boolean }
+  options?: { forceManual?: boolean; bulk?: boolean }
 ): Promise<{ success: boolean; error?: string }> {
   await connectDB()
 
@@ -378,7 +392,7 @@ export async function retryProviderForMessage(
     if (!eligibility.eligible) {
       return { success: false, error: 'Message not eligible for retry' }
     }
-  } else if (sms.providerRetryAttempted) {
+  } else {
     // Reset so retrySingleMessage can claim another HostPinnacle send
     await SmsMessage.findByIdAndUpdate(sms._id, {
       providerRetryAttempted: false,
@@ -387,6 +401,8 @@ export async function retryProviderForMessage(
       failedAt: undefined,
       finalizedAt: undefined,
       nextCheckAt: null,
+      deliveryMethod: 'provider',
+      status: 'queued',
     })
   }
 
@@ -395,6 +411,10 @@ export async function retryProviderForMessage(
     : (sms as ISmsMessage & { _id: unknown })
 
   if (!fresh) return { success: false, error: 'Message not found' }
+
+  if (options?.bulk || options?.forceManual) {
+    ;(fresh as { __bulkRetry?: boolean }).__bulkRetry = true
+  }
 
   const ok = await retrySingleMessage(fresh)
   return ok ? { success: true } : { success: false, error: 'Provider retry failed' }
