@@ -1,6 +1,14 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -78,6 +86,29 @@ function stillActionable(sms: ActionableSms) {
   return isPendingSms(sms) || isFailedSms(sms) || Boolean(sms.fallbackStatus)
 }
 
+function matchesView(sms: ActionableSms, view: ViewFilter) {
+  if (!stillActionable(sms)) return false
+  if (view === 'pending') return isPendingSms(sms) && !isFailedSms(sms)
+  if (view === 'failed') return isFailedSms(sms)
+  return true
+}
+
+function toActionableRow(raw: Partial<ActionableSms> & { id: string }): ActionableSms {
+  return {
+    id: raw.id,
+    time: raw.time || '',
+    recipient: raw.recipient || '',
+    senderId: raw.senderId || '',
+    message: raw.message || '',
+    status: raw.status || 'pending',
+    displayStatus: raw.displayStatus,
+    fallbackStatus: raw.fallbackStatus ?? null,
+    failureReason: raw.failureReason,
+    providerRetryAttempted: raw.providerRetryAttempted,
+    requiresPhoneTopUp: raw.requiresPhoneTopUp,
+  }
+}
+
 function canRetryViaSenderId(sms: ActionableSms) {
   if (sms.status === 'delivered') return false
   // Manual retries may re-hit HostPinnacle even after a prior attempt
@@ -124,16 +155,27 @@ function recount(list: ActionableSms[]) {
 type Props = {
   /** Patch a single history row — never reload the whole table */
   onMessagePatched?: (updates: Array<Partial<ActionableSms> & { id: string }>) => void
-  /** KPI totals from history page (so Retry All stays visible even if list is still loading) */
+  /** KPI totals from history page (used only before the desk's first load) */
   failedCount?: number
   pendingCount?: number
 }
 
-export function SmsRetryDesk({ onMessagePatched, failedCount = 0, pendingCount = 0 }: Props) {
+export type SmsRetryDeskHandle = {
+  /** Apply a live SSE upsert so the desk updates without a full reload */
+  applyLiveMessage: (message: Partial<ActionableSms> & { id: string }) => void
+  /** Silent refresh of list + counts */
+  refreshQuiet: () => void
+}
+
+export const SmsRetryDesk = forwardRef<SmsRetryDeskHandle, Props>(function SmsRetryDesk(
+  { onMessagePatched, failedCount = 0, pendingCount = 0 },
+  ref
+) {
   const { toast } = useToast()
   const [open, setOpen] = useState(true)
   const [view, setView] = useState<ViewFilter>('all')
   const [loading, setLoading] = useState(true)
+  const [hasLoaded, setHasLoaded] = useState(false)
   const [items, setItems] = useState<ActionableSms[]>([])
   const [counts, setCounts] = useState({ pending: 0, failed: 0, total: 0 })
   const [busyId, setBusyId] = useState<string | null>(null)
@@ -142,9 +184,21 @@ export function SmsRetryDesk({ onMessagePatched, failedCount = 0, pendingCount =
   const [clearingQueue, setClearingQueue] = useState(false)
   const [retryingAll, setRetryingAll] = useState(false)
   const [bulkBusy, setBulkBusy] = useState<string | null>(null)
+  const quietRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const viewRef = useRef(view)
+  viewRef.current = view
 
-  const displayFailed = Math.max(counts.failed, failedCount)
-  const displayPending = Math.max(counts.pending, pendingCount)
+  // Prefer desk API counts once loaded — parent KPI max() was showing stale "11 pending" with All (0)
+  const displayFailed = hasLoaded ? counts.failed : Math.max(counts.failed, failedCount)
+  const displayPending = hasLoaded ? counts.pending : Math.max(counts.pending, pendingCount)
+
+  const scheduleQuietRefresh = useCallback(() => {
+    if (quietRefreshTimer.current) clearTimeout(quietRefreshTimer.current)
+    quietRefreshTimer.current = setTimeout(() => {
+      quietRefreshTimer.current = null
+      void fetchActionableRef.current?.(false)
+    }, 350)
+  }, [])
 
   const applyLocalPatches = useCallback(
     (updates: Array<Partial<ActionableSms> & { id: string }>) => {
@@ -157,14 +211,65 @@ export function SmsRetryDesk({ onMessagePatched, failedCount = 0, pendingCount =
             const patch = byId.get(row.id)
             return patch ? { ...row, ...patch } : row
           })
-          .filter(stillActionable)
-        setCounts(recount(next))
+          .filter((row) => matchesView(row, viewRef.current))
+        setCounts((prevCounts) => {
+          const local = recount(next)
+          // Keep API totals when list is capped; still nudge from local when items leave
+          if (prevCounts.total <= next.length + 5) {
+            return local
+          }
+          return prevCounts
+        })
         return next
       })
 
       onMessagePatched?.(updates)
+      scheduleQuietRefresh()
     },
-    [onMessagePatched]
+    [onMessagePatched, scheduleQuietRefresh]
+  )
+
+  const applyLiveMessage = useCallback(
+    (raw: Partial<ActionableSms> & { id: string }) => {
+      if (!raw?.id) return
+      const sms = toActionableRow(raw)
+      const inView = matchesView(sms, viewRef.current)
+
+      setItems((prev) => {
+        const idx = prev.findIndex((row) => row.id === sms.id)
+        let next = prev
+        if (!inView) {
+          if (idx === -1) return prev
+          next = prev.filter((row) => row.id !== sms.id)
+        } else if (idx === -1) {
+          next = [sms, ...prev].slice(0, 100)
+        } else {
+          next = prev.map((row) => (row.id === sms.id ? { ...row, ...sms } : row))
+        }
+        setCounts((prevCounts) => {
+          const wasFailed = idx >= 0 && isFailedSms(prev[idx])
+          const wasPending = idx >= 0 && !wasFailed && stillActionable(prev[idx])
+          const nowFailed = inView && isFailedSms(sms)
+          const nowPending = inView && !nowFailed && stillActionable(sms)
+
+          let failed = prevCounts.failed
+          let pending = prevCounts.pending
+          if (wasFailed && !nowFailed) failed = Math.max(0, failed - 1)
+          if (!wasFailed && nowFailed) failed += 1
+          if (wasPending && !nowPending) pending = Math.max(0, pending - 1)
+          if (!wasPending && nowPending) pending += 1
+          // New actionable insert that wasn't in the list
+          if (idx === -1 && inView) {
+            // already counted via nowFailed/nowPending above (was* false)
+          }
+          return { pending, failed, total: pending + failed }
+        })
+        return next
+      })
+
+      scheduleQuietRefresh()
+    },
+    [scheduleQuietRefresh]
   )
 
   const fetchActionable = useCallback(async (showSpinner = true) => {
@@ -179,6 +284,7 @@ export function SmsRetryDesk({ onMessagePatched, failedCount = 0, pendingCount =
       const data = await response.json()
       setItems(data.data || [])
       setCounts(data.counts || { pending: 0, failed: 0, total: 0 })
+      setHasLoaded(true)
     } catch {
       if (showSpinner) {
         toast({
@@ -192,12 +298,51 @@ export function SmsRetryDesk({ onMessagePatched, failedCount = 0, pendingCount =
     }
   }, [view, toast])
 
-  // Load once when filter changes — not on a timer for the whole list
+  const fetchActionableRef = useRef(fetchActionable)
+  fetchActionableRef.current = fetchActionable
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      applyLiveMessage,
+      refreshQuiet: () => {
+        void fetchActionableRef.current?.(false)
+      },
+    }),
+    [applyLiveMessage]
+  )
+
+  // Load when filter changes
   useEffect(() => {
     fetchActionable(true)
   }, [fetchActionable])
 
-  // Only sync pending rows in this desk (for resend status) — patch in place
+  // Realtime fallback: quiet poll so counts/list stay fresh even if SSE misses an event
+  useEffect(() => {
+    const interval = setInterval(() => {
+      void fetchActionableRef.current?.(false)
+    }, 8000)
+    return () => clearInterval(interval)
+  }, [])
+
+  // Refresh when the tab becomes visible again
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState === 'visible') {
+        void fetchActionableRef.current?.(false)
+      }
+    }
+    document.addEventListener('visibilitychange', onVis)
+    return () => document.removeEventListener('visibilitychange', onVis)
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (quietRefreshTimer.current) clearTimeout(quietRefreshTimer.current)
+    }
+  }, [])
+
+  // Sync pending rows against HostPinnacle — patch in place
   const pendingIdsKey = useMemo(
     () =>
       items
@@ -233,8 +378,8 @@ export function SmsRetryDesk({ onMessagePatched, failedCount = 0, pendingCount =
       }
     }
 
-    const initial = setTimeout(syncRows, 2000)
-    const interval = setInterval(syncRows, 15000)
+    const initial = setTimeout(syncRows, 1500)
+    const interval = setInterval(syncRows, 8000)
     return () => {
       cancelled = true
       clearTimeout(initial)
@@ -780,4 +925,4 @@ export function SmsRetryDesk({ onMessagePatched, failedCount = 0, pendingCount =
       </Collapsible>
     </Card>
   )
-}
+})

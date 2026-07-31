@@ -48,10 +48,10 @@ import {
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react'
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import Link from 'next/link'
 import SenderIdAdBanner from '@/components/sender-id-ad/SenderIdAdBanner'
-import { SmsRetryDesk } from '@/components/sms-history/SmsRetryDesk'
+import { SmsRetryDesk, type SmsRetryDeskHandle } from '@/components/sms-history/SmsRetryDesk'
 import { cn } from '@/lib/utils'
 import {
   connectSmsHistoryLive,
@@ -251,6 +251,7 @@ export default function SMSHistoryPage() {
     'connecting'
   )
   const [unseenNewCount, setUnseenNewCount] = useState(0)
+  const retryDeskRef = useRef<SmsRetryDeskHandle>(null)
 
   const buildQueryParams = useCallback(() => {
     const params = new URLSearchParams({
@@ -424,16 +425,86 @@ export default function SMSHistoryPage() {
         setSmsHistory((prev) => {
           const idx = prev.findIndex((m) => m.id === row.id)
           if (idx === -1) return prev
+          const prevRow = prev[idx]
+          const wasPending = ['sent', 'queued', 'processing', 'retrying', 'pending'].includes(
+            prevRow.status
+          )
+          const wasFailed = prevRow.status === 'failed'
+          const wasDelivered = prevRow.status === 'delivered'
+          const nowPending = ['sent', 'queued', 'processing', 'retrying', 'pending'].includes(
+            row.status
+          )
+          const nowFailed = row.status === 'failed'
+          const nowDelivered = row.status === 'delivered'
+
           if (!liveRowMatchesFilters(payload.message, filters)) {
             const next = prev.filter((m) => m.id !== row.id)
             setPagination((p) => ({
               ...p,
               total: Math.max(0, p.total - 1),
             }))
+            setDeliveryStats((stats) => ({
+              delivered: {
+                count: Math.max(
+                  0,
+                  stats.delivered.count +
+                    (wasDelivered && !nowDelivered ? -1 : 0) +
+                    (!wasDelivered && nowDelivered ? 1 : 0)
+                ),
+                percentage: stats.delivered.percentage,
+              },
+              failed: {
+                count: Math.max(
+                  0,
+                  stats.failed.count +
+                    (wasFailed && !nowFailed ? -1 : 0) +
+                    (!wasFailed && nowFailed ? 1 : 0)
+                ),
+                percentage: stats.failed.percentage,
+              },
+              pending: {
+                count: Math.max(
+                  0,
+                  stats.pending.count +
+                    (wasPending && !nowPending ? -1 : 0) +
+                    (!wasPending && nowPending ? 1 : 0)
+                ),
+                percentage: stats.pending.percentage,
+              },
+            }))
             return next
           }
           const next = [...prev]
           next[idx] = { ...next[idx], ...row }
+          setDeliveryStats((stats) => ({
+            delivered: {
+              count: Math.max(
+                0,
+                stats.delivered.count +
+                  (wasDelivered && !nowDelivered ? -1 : 0) +
+                  (!wasDelivered && nowDelivered ? 1 : 0)
+              ),
+              percentage: stats.delivered.percentage,
+            },
+            failed: {
+              count: Math.max(
+                0,
+                stats.failed.count +
+                  (wasFailed && !nowFailed ? -1 : 0) +
+                  (!wasFailed && nowFailed ? 1 : 0)
+              ),
+              percentage: stats.failed.percentage,
+            },
+            pending: {
+              count: Math.max(
+                0,
+                stats.pending.count +
+                  (wasPending && !nowPending ? -1 : 0) +
+                  (!wasPending && nowPending ? 1 : 0)
+              ),
+              percentage: stats.pending.percentage,
+            },
+          }))
           return next
         })
         setSelectedSms((prev) => (prev?.id === row.id ? { ...prev, ...row } : prev))
@@ -502,6 +573,8 @@ export default function SMSHistoryPage() {
       onEvent: (event) => {
         if (event.type === 'sms.upsert') {
           applyLiveUpsert({ op: event.op, message: event.message })
+          // Keep Pending & Failed desk in sync with the same live events
+          retryDeskRef.current?.applyLiveMessage(event.message)
         }
       },
     })
@@ -1000,6 +1073,7 @@ export default function SMSHistoryPage() {
 
         <div id="sms-retry-desk">
           <SmsRetryDesk
+            ref={retryDeskRef}
             onMessagePatched={applyMessagePatches}
             failedCount={deliveryStats.failed.count}
             pendingCount={deliveryStats.pending.count}
