@@ -167,3 +167,21 @@ export async function syncSmsMessageById(messageId: string): Promise<boolean> {
   const outcome = await synchronizer.syncClaimedMessage(claimed)
   return outcome === 'finalized'
 }
+
+/**
+ * After HostPinnacle accepts a send, poll a few times for the real DLR.
+ * Immediate lookup often still returns SUBMITTED; HostPinnacle typically
+ * flips to DELIVERED within seconds. Background worker remains the long backup.
+ */
+export function schedulePostSendStatusSync(messageId: string): void {
+  const delaysMs = [0, 8_000, 25_000, 60_000]
+  for (const delay of delaysMs) {
+    const run = () => {
+      void syncSmsMessageById(messageId).catch((err) =>
+        console.warn('Post-send status sync failed:', { messageId, delay, err })
+      )
+    }
+    if (delay === 0) run()
+    else setTimeout(run, delay)
+  }
+}

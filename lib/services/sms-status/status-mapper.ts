@@ -79,12 +79,22 @@ export function isApiEnvelopeStatus(providerStatusRaw: string): boolean {
   return API_ENVELOPE_STATUSES.has(providerStatusRaw.trim().toUpperCase())
 }
 
+function hasMeaningfulDeliveredTime(deliveredTime: string | number | null | undefined): boolean {
+  if (deliveredTime == null) return false
+  const raw = String(deliveredTime).trim()
+  if (!raw || raw === '0' || raw.toLowerCase() === 'null') return false
+  return true
+}
+
 /**
  * Resolve HostPinnacle DLR webhook fields into a provider status string.
  *
- * HostPinnacle's portal often fills "Delivered Time" even when Status is
- * FAILED (same timestamp as Submitted Time). DeliveredTime alone must NEVER
- * imply handset delivery — Status and ErrorCode/Cause are authoritative.
+ * HostPinnacle's webhook params are typically:
+ *   Transactionid, Messageid, ErrorCode, mobileNo, ReceivedTime, DeliveredTime
+ * — often WITHOUT a Status field. Real delivery is signaled by DeliveredTime
+ * with ErrorCode empty/0. Failures use a non-zero ErrorCode (or Status=FAILED).
+ *
+ * Priority: explicit Status (incl. FAILED) → ErrorCode → DeliveredTime → pending.
  */
 export function resolveHostPinnacleDlrStatus(fields: {
   status?: string | null
@@ -103,23 +113,37 @@ export function resolveHostPinnacleDlrStatus(fields: {
     errorCode !== '0' &&
     errorCode !== 0 &&
     String(errorCode).toLowerCase() !== 'null'
+  const causeStr =
+    fields.cause != null && String(fields.cause).trim() !== ''
+      ? String(fields.cause).trim().toUpperCase()
+      : ''
 
   // 1. Explicit Status from HostPinnacle (FAILED / DELIVERED / SUBMITTED / …)
   if (statusStr) {
     if (isApiEnvelopeStatus(statusStr)) {
-      // status:"success" on a webhook is not a handset DLR
+      // status:"success" alone is not a handset DLR
       if (hasErrorCode) return 'FAILED'
+      if (hasMeaningfulDeliveredTime(fields.deliveredTime)) return 'DELIVERED'
       return 'SUBMITTED'
     }
+    // Status=FAILED always wins even if DeliveredTime is also filled
+    // (HostPinnacle portal often stamps Delivered Time on failed rows).
     return statusStr
   }
 
-  // 2. Non-zero ErrorCode ⇒ failed (HostPinnacle webhook param)
+  // 2. Non-zero ErrorCode ⇒ failed (classic HostPinnacle webhook param)
   if (hasErrorCode) return 'FAILED'
 
-  // 3. Do NOT promote DeliveredTime → DELIVERED. HostPinnacle sets Delivered
-  //    Time on FAILED rows too. Without an explicit status, stay pending and
-  //    let status polling / a later DLR with Status settle it.
+  // 3. DeliveredTime with no failure ⇒ delivered.
+  // HostPinnacle DLRs usually send DeliveredTime without a Status field.
+  if (hasMeaningfulDeliveredTime(fields.deliveredTime)) return 'DELIVERED'
+
+  // 4. Cause text sometimes carries the outcome when Status is omitted
+  if (causeStr === 'DELIVERED' || causeStr === 'DELIVRD' || causeStr === 'SUCCESS') {
+    return 'DELIVERED'
+  }
+  if (isFailureProviderStatus(causeStr)) return causeStr
+
   return 'SUBMITTED'
 }
 

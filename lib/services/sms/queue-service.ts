@@ -12,7 +12,7 @@ import { SmsMessage } from '@/lib/db/models'
 import { hostPinnacleClient } from '@/lib/services/hostpinnacle/client'
 import { postSendStatusFields } from '@/lib/services/sms-status/auto-delivered'
 import { extractHostPinnacleSendIds, primaryStatusLookupId } from '@/lib/services/hostpinnacle/send-ids'
-import { syncSmsMessageById } from '@/lib/services/sms-status/sync-user-pending'
+import { schedulePostSendStatusSync } from '@/lib/services/sms-status/sync-user-pending'
 import mongoose from 'mongoose'
 
 interface QueueItem {
@@ -157,7 +157,7 @@ class SMSQueue {
       })
 
       if (statusFields.status === 'sent') {
-        void syncSmsMessageById(String(item.messageId)).catch(() => {})
+        schedulePostSendStatusSync(String(item.messageId))
       }
 
       return { success: true }

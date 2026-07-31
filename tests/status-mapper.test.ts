@@ -168,21 +168,38 @@ describe('resolveHostPinnacleDlrStatus', () => {
     ).toBe('DELIVERED')
   })
 
-  it('does not treat DeliveredTime alone as delivered', () => {
+  it('treats DeliveredTime with no ErrorCode as DELIVERED (HostPinnacle webhook shape)', () => {
     expect(
       resolveHostPinnacleDlrStatus({
-        deliveredTime: '2026-07-31 16:50:01',
+        deliveredTime: '2026-07-31 18:19:01',
+        errorCode: '0',
       })
-    ).toBe('SUBMITTED')
+    ).toBe('DELIVERED')
+    expect(
+      resolveHostPinnacleDlrStatus({
+        deliveredTime: '2026-07-31 18:19:01',
+      })
+    ).toBe('DELIVERED')
   })
 
-  it('maps non-zero ErrorCode to FAILED', () => {
-    expect(resolveHostPinnacleDlrStatus({ errorCode: '1' })).toBe('FAILED')
+  it('maps non-zero ErrorCode to FAILED even with DeliveredTime', () => {
+    expect(
+      resolveHostPinnacleDlrStatus({
+        errorCode: '1',
+        deliveredTime: '2026-07-31 18:19:01',
+      })
+    ).toBe('FAILED')
     expect(resolveHostPinnacleDlrStatus({ errorCode: '0' })).toBe('SUBMITTED')
   })
 
-  it('ignores status:success envelope on webhook', () => {
+  it('uses status:success + DeliveredTime as DELIVERED, not API envelope alone', () => {
     expect(resolveHostPinnacleDlrStatus({ status: 'success' })).toBe('SUBMITTED')
+    expect(
+      resolveHostPinnacleDlrStatus({
+        status: 'success',
+        deliveredTime: '2026-07-31 18:19:01',
+      })
+    ).toBe('DELIVERED')
     expect(resolveHostPinnacleDlrStatus({ status: 'success', errorCode: '12' })).toBe('FAILED')
   })
 })

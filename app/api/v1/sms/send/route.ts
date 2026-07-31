@@ -17,7 +17,7 @@ import { calculateSegments153 } from '@/lib/utils/credits'
 import { resolvePricePerCreditKes } from '@/lib/utils/resolve-price-per-credit'
 import { initialNextCheckAt } from '@/lib/services/sms-status/build-synchronizer'
 import { postSendStatusFields } from '@/lib/services/sms-status/auto-delivered'
-import { syncSmsMessageById } from '@/lib/services/sms-status/sync-user-pending'
+import { schedulePostSendStatusSync } from '@/lib/services/sms-status/sync-user-pending'
 import {
   isPhoneGatewayRoutingEnabled,
   routeSmsViaPhoneGateway,
@@ -525,9 +525,7 @@ export async function POST(request: NextRequest) {
 
             const smsId = smsMessage._id?.toString()
             if (smsId && statusFields.status === 'sent') {
-              void syncSmsMessageById(smsId).catch((err) =>
-                console.warn('Post-send status sync failed:', err)
-              )
+              schedulePostSendStatusSync(smsId)
             }
           }
         } catch (error) {
