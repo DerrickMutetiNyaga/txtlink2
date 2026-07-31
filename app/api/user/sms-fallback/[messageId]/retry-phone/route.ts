@@ -22,7 +22,12 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Already delivered via phone' }, { status: 400 })
     }
 
-    if (sms.fallbackStatus !== 'phone_failed' && sms.fallbackStatus !== 'phone_requires_topup') {
+    const canRetryPhone =
+      sms.fallbackStatus === 'phone_failed' ||
+      sms.fallbackStatus === 'phone_requires_topup' ||
+      sms.deliveryMethod === 'android_phone_gateway_failed'
+
+    if (!canRetryPhone) {
       return NextResponse.json(
         { error: 'Phone fallback has not failed for this message' },
         { status: 400 }
@@ -53,16 +58,22 @@ export async function POST(request: NextRequest, context: RouteContext) {
     await job.save()
 
     await SmsMessage.findByIdAndUpdate(sms._id, {
+      status: 'queued',
       fallbackStatus: 'queued_for_phone',
       fallbackQueued: true,
       fallbackFailedAt: undefined,
       fallbackFailureReason: undefined,
       fallbackFailureCode: undefined,
       requiresPhoneTopUp: false,
-      deliveryMethod: undefined,
+      deliveryMethod: 'android_phone_gateway',
+      failedAt: undefined,
+      finalizedAt: undefined,
+      errorMessage: undefined,
+      errorCode: undefined,
+      nextCheckAt: null,
     })
 
-    return NextResponse.json({ success: true, message: 'Phone fallback re-queued for manual retry' })
+    return NextResponse.json({ success: true, message: 'Re-queued for phone gateway — will resend when the app is online' })
   } catch (error: any) {
     if (error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

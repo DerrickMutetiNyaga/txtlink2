@@ -109,12 +109,18 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     if (!job.isTest) {
       await SmsMessage.findByIdAndUpdate(job.originalSmsId, {
+        status: 'failed',
         fallbackStatus: needsTopUp ? 'phone_requires_topup' : 'phone_failed',
         fallbackFailedAt: failedAt,
         fallbackFailureReason: failureReason,
         fallbackFailureCode: failureCode,
         requiresPhoneTopUp: needsTopUp,
-        deliveryMethod: needsTopUp ? undefined : 'android_phone_gateway_failed',
+        deliveryMethod: 'android_phone_gateway_failed',
+        failedAt,
+        finalizedAt: failedAt,
+        nextCheckAt: null,
+        errorMessage: failureReason,
+        errorCode: failureCode || 'PHONE_GATEWAY_FAILED',
       })
     }
 

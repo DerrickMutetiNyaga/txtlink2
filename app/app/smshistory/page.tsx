@@ -176,7 +176,7 @@ function getFallbackBadgeLabel(
     case 'phone_requires_topup':
       return 'Phone Needs Reload'
     case 'phone_failed':
-      return requiresPhoneTopUp ? 'Phone Send Failed - Reload SMS' : 'Phone Send Failed'
+      return requiresPhoneTopUp ? 'Failed via Phone — Reload SMS' : 'Failed via Phone'
     case 'cancelled':
       return 'Cancelled Fallback'
     default:
@@ -184,7 +184,17 @@ function getFallbackBadgeLabel(
   }
 }
 
+function isFailedViaPhone(sms: SMSMessage): boolean {
+  return (
+    sms.fallbackStatus === 'phone_failed' ||
+    sms.deliveryMethod === 'android_phone_gateway_failed'
+  )
+}
+
 function getPrimaryStatusLabel(sms: SMSMessage): string {
+  if (isFailedViaPhone(sms)) {
+    return sms.requiresPhoneTopUp ? 'Failed via Phone — Reload SMS' : 'Failed via Phone'
+  }
   if (sms.displayStatus) return sms.displayStatus
   if (sms.status === 'delivered' && sms.deliveryMethod === 'android_phone_gateway') {
     return 'Delivered via Phone'
@@ -509,7 +519,15 @@ export default function SMSHistoryPage() {
   }, [liveState, fetchSMSHistory])
 
   const getStatusBadge = (sms: SMSMessage) => {
-    if (sms.status === 'delivered' && sms.deliveryMethod === 'android_phone_gateway') {
+    if (isFailedViaPhone(sms)) {
+      return 'bg-red-100 text-red-700'
+    }
+    if (
+      sms.status === 'delivered' &&
+      (sms.deliveryMethod === 'android_phone_gateway' ||
+        sms.fallbackStatus === 'delivered_via_phone' ||
+        sms.fallbackStatus === 'sent_via_phone')
+    ) {
       return 'bg-emerald-100 text-emerald-700'
     }
     switch (sms.status) {
@@ -844,7 +862,7 @@ export default function SMSHistoryPage() {
               <option value="queued_for_phone">Queued for Phone</option>
               <option value="retrying_provider">Retrying Provider</option>
               <option value="retry_waiting_delivery">Retry Waiting Delivery</option>
-              <option value="phone_failed">Phone Failed</option>
+              <option value="phone_failed">Failed via Phone</option>
               <option value="phone_requires_topup">Phone Needs Reload</option>
             </select>
 
@@ -1085,12 +1103,13 @@ export default function SMSHistoryPage() {
                           <td className="px-5 py-3">
                             <div className="flex flex-col gap-1 items-start">
                               <span
-                                key={`${sms.id}-${sms.status}`}
+                                key={`${sms.id}-${sms.status}-${sms.fallbackStatus || ''}`}
                                 className={`rounded-full px-2.5 py-1 text-xs font-medium ${getStatusBadge(sms)}`}
                               >
                                 {getPrimaryStatusLabel(sms)}
                               </span>
                               {sms.fallbackStatus &&
+                                !isFailedViaPhone(sms) &&
                                 getFallbackBadgeLabel(sms.fallbackStatus, sms.requiresPhoneTopUp) &&
                                 sms.deliveryMethod !== 'android_phone_gateway' && (
                                   <span
@@ -1102,12 +1121,22 @@ export default function SMSHistoryPage() {
                             </div>
                           </td>
                           <td className="px-5 py-3 text-right">
-                            <button 
-                              onClick={() => handleViewSms(sms)}
-                              className="text-emerald-600 hover:text-emerald-700 hover:underline text-xs font-medium"
-                            >
-                              View
-                            </button>
+                            <div className="inline-flex items-center gap-3 justify-end">
+                              {isFailedViaPhone(sms) && (
+                                <button
+                                  onClick={() => handleFallbackAction(sms.id, 'retry-phone')}
+                                  className="text-sky-600 hover:text-sky-700 hover:underline text-xs font-medium"
+                                >
+                                  Resend
+                                </button>
+                              )}
+                              <button 
+                                onClick={() => handleViewSms(sms)}
+                                className="text-emerald-600 hover:text-emerald-700 hover:underline text-xs font-medium"
+                              >
+                                View
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -1275,6 +1304,7 @@ export default function SMSHistoryPage() {
                     {getPrimaryStatusLabel(selectedSms)}
                   </Badge>
                   {selectedSms.fallbackStatus &&
+                    !isFailedViaPhone(selectedSms) &&
                     getFallbackBadgeLabel(
                       selectedSms.fallbackStatus,
                       selectedSms.requiresPhoneTopUp
@@ -1288,7 +1318,7 @@ export default function SMSHistoryPage() {
                         )}
                       </Badge>
                     )}
-                  {selectedSms.fallbackStatus === 'phone_failed' &&
+                  {isFailedViaPhone(selectedSms) &&
                     selectedSms.fallbackFailureReason && (
                       <div className="flex-1 p-3 bg-red-50 border border-red-200 rounded-xl">
                         <p className="text-xs font-semibold text-red-900 mb-0.5">Phone Failure</p>
@@ -1401,55 +1431,16 @@ export default function SMSHistoryPage() {
                 {/* Section Divider */}
                 <div className="border-t border-slate-100"></div>
 
-                {/* Phone fallback actions */}
+                {/* Phone fallback / resend actions */}
                 {selectedSms.status !== 'delivered' &&
-                  selectedSms.deliveryMethod !== 'android_phone_gateway' && (
+                  selectedSms.fallbackStatus !== 'delivered_via_phone' &&
+                  selectedSms.fallbackStatus !== 'sent_via_phone' && (
                     <div className="space-y-2">
                       <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                        Fallback Actions
+                        {isFailedViaPhone(selectedSms) ? 'Resend' : 'Fallback Actions'}
                       </label>
                       <div className="flex flex-wrap gap-2">
-                        {!selectedSms.providerRetryAttempted && (
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            className={SMS_HISTORY_BTN.sheetOutline}
-                            onClick={() =>
-                              handleFallbackAction(selectedSms.id, 'retry-provider')
-                            }
-                          >
-                            Retry Provider Now
-                          </Button>
-                        )}
-                        {!['queued_for_phone', 'sending_via_phone', 'sent_via_phone', 'delivered_via_phone'].includes(
-                          selectedSms.fallbackStatus || ''
-                        ) && (
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            className={SMS_HISTORY_BTN.sheetOutline}
-                            onClick={() =>
-                              handleFallbackAction(selectedSms.id, 'queue-phone')
-                            }
-                          >
-                            Queue for Phone
-                          </Button>
-                        )}
-                        {['queued_for_phone', 'sending_via_phone'].includes(
-                          selectedSms.fallbackStatus || ''
-                        ) && (
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            className="text-xs border-red-200 bg-white text-red-700 hover:bg-red-50 hover:text-red-800 hover:border-red-300"
-                            onClick={() =>
-                              handleFallbackAction(selectedSms.id, 'cancel')
-                            }
-                          >
-                            Cancel Phone Fallback
-                          </Button>
-                        )}
-                        {selectedSms.fallbackStatus === 'phone_failed' && (
+                        {isFailedViaPhone(selectedSms) ? (
                           <Button
                             size="sm"
                             variant="secondary"
@@ -1458,8 +1449,53 @@ export default function SMSHistoryPage() {
                               handleFallbackAction(selectedSms.id, 'retry-phone')
                             }
                           >
-                            Retry Phone Fallback
+                            Resend via Phone
                           </Button>
+                        ) : (
+                          <>
+                            {!selectedSms.providerRetryAttempted &&
+                              selectedSms.deliveryMethod !== 'android_phone_gateway' && (
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                className={SMS_HISTORY_BTN.sheetOutline}
+                                onClick={() =>
+                                  handleFallbackAction(selectedSms.id, 'retry-provider')
+                                }
+                              >
+                                Retry Provider Now
+                              </Button>
+                            )}
+                            {!['queued_for_phone', 'sending_via_phone', 'sent_via_phone', 'delivered_via_phone'].includes(
+                              selectedSms.fallbackStatus || ''
+                            ) &&
+                              selectedSms.deliveryMethod !== 'android_phone_gateway' && (
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                className={SMS_HISTORY_BTN.sheetOutline}
+                                onClick={() =>
+                                  handleFallbackAction(selectedSms.id, 'queue-phone')
+                                }
+                              >
+                                Queue for Phone
+                              </Button>
+                            )}
+                            {['queued_for_phone', 'sending_via_phone'].includes(
+                              selectedSms.fallbackStatus || ''
+                            ) && (
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                className="text-xs border-red-200 bg-white text-red-700 hover:bg-red-50 hover:text-red-800 hover:border-red-300"
+                                onClick={() =>
+                                  handleFallbackAction(selectedSms.id, 'cancel')
+                                }
+                              >
+                                Cancel Phone Fallback
+                              </Button>
+                            )}
+                          </>
                         )}
                       </div>
                     </div>

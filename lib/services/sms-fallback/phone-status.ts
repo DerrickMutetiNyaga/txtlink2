@@ -44,7 +44,7 @@ export function getPhoneJobStatusLabel(status: string, phoneStatus?: string | nu
     case 'blocked':
       return 'Phone Needs Reload'
     case 'failed':
-      return 'Phone Failed'
+      return 'Failed via Phone'
     case 'cancelled':
       return 'Cancelled'
     default:
@@ -68,7 +68,7 @@ export function getFallbackStatusLabel(status?: string | null, requiresPhoneTopU
     case 'phone_requires_topup':
       return 'Phone Needs Reload'
     case 'phone_failed':
-      return requiresPhoneTopUp ? 'Phone Send Failed - Reload SMS' : 'Phone Send Failed'
+      return requiresPhoneTopUp ? 'Failed via Phone — Reload SMS' : 'Failed via Phone'
     default:
       return status || ''
   }

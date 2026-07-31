@@ -69,10 +69,17 @@ export async function resetStaleSendingJobs(): Promise<number> {
 
     if (!job.isTest) {
       await SmsMessage.findByIdAndUpdate(job.originalSmsId, {
+        status: 'failed',
         fallbackStatus: 'phone_failed',
         fallbackFailedAt: now,
         fallbackFailureReason: 'Sending timeout — device did not confirm sent or failed',
         fallbackFailureCode: 'SENDING_TIMEOUT',
+        deliveryMethod: 'android_phone_gateway_failed',
+        failedAt: now,
+        finalizedAt: now,
+        nextCheckAt: null,
+        errorMessage: 'Sending timeout — device did not confirm sent or failed',
+        errorCode: 'SENDING_TIMEOUT',
       })
     }
     return true

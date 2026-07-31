@@ -15,18 +15,26 @@ function normalizeFailureReason(baseReason?: string | null): string | undefined 
 }
 
 export function getDisplayStatus(msg: ISmsMessage): string {
+  // Phone failures must win over deliveryMethod=android_phone_gateway
+  // (set when queued to the gateway) so we never show "Delivered via Phone"
+  // for a message that actually failed on the phone.
+  if (msg.fallbackStatus === 'phone_failed') return 'Failed via Phone'
+  if (msg.deliveryMethod === 'android_phone_gateway_failed') return 'Failed via Phone'
+  if (msg.fallbackStatus === 'phone_requires_topup') return 'Phone Needs Reload'
   if (
-    msg.deliveryMethod === 'android_phone_gateway' ||
+    (msg.deliveryMethod === 'android_phone_gateway' &&
+      (msg.status === 'delivered' ||
+        msg.fallbackStatus === 'delivered_via_phone' ||
+        msg.fallbackStatus === 'sent_via_phone')) ||
     msg.fallbackStatus === 'delivered_via_phone' ||
     msg.fallbackStatus === 'sent_via_phone'
   ) {
     return 'Delivered via Phone'
   }
   if (msg.fallbackStatus === 'queued_for_phone') return 'Queued for Phone'
+  if (msg.fallbackStatus === 'sending_via_phone') return 'Sending via Phone'
   if (msg.fallbackStatus === 'retrying_provider') return 'Retrying Provider'
   if (msg.fallbackStatus === 'retry_waiting_delivery') return 'Retry Waiting Delivery'
-  if (msg.fallbackStatus === 'phone_requires_topup') return 'Phone Needs Reload'
-  if (msg.fallbackStatus === 'phone_failed') return 'Phone Failed'
   if (msg.status === 'delivered' && msg.deliveryCause === MANUAL_COMPLETED_CAUSE) {
     return 'Completed'
   }
