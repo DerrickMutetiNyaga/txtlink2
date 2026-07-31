@@ -57,6 +57,7 @@ export async function GET(request: NextRequest) {
           // Use creditsBalance (SMS credits) instead of legacy KSh wallet
           credits: user.creditsBalance ?? 0,
           isActive: user.isActive,
+          routeAllSmsViaPhoneGateway: user.routeAllSmsViaPhoneGateway === true,
           hpUserLoginName: hpAccount?.hpUserLoginName || null,
           senderIds,
           senderIdCount: senderIds.length,

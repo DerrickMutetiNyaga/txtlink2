@@ -85,6 +85,8 @@ interface Account {
   phone?: string
   credits: number
   isActive: boolean
+  /** When true, all SMS for this user skip HostPinnacle and use the phone gateway */
+  routeAllSmsViaPhoneGateway?: boolean
   hpUserLoginName?: string
   senderIds: Array<{
     id: string
@@ -136,12 +138,14 @@ function ActionsMenu({
   onManageSenderIds,
   onPricingOverride,
   onAdjustCredits,
+  onTogglePhoneGateway,
   onSuspend,
 }: {
   account: Account
   onManageSenderIds: () => void
   onPricingOverride: () => void
   onAdjustCredits: () => void
+  onTogglePhoneGateway: () => void
   onSuspend: () => void
 }) {
   return (
@@ -153,7 +157,7 @@ function ActionsMenu({
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align="end"
-        className="w-56 bg-white border border-slate-200 rounded-xl shadow-lg p-2 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 duration-150"
+        className="w-64 bg-white border border-slate-200 rounded-xl shadow-lg p-2 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 duration-150"
       >
         <DropdownMenuLabel className="px-3 py-2 text-sm font-semibold text-slate-900">
           Actions
@@ -179,6 +183,17 @@ function ActionsMenu({
         >
           <Wallet className="w-4 h-4 text-slate-500 group-hover:text-slate-900 transition-colors" />
           <span>Adjust Credits</span>
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onClick={onTogglePhoneGateway}
+          className="flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer text-slate-700 hover:bg-slate-100 hover:text-slate-900 focus:bg-slate-100 focus:text-slate-900 transition-colors group"
+        >
+          <Phone className="w-4 h-4 text-slate-500 group-hover:text-slate-900 transition-colors" />
+          <span>
+            {account.routeAllSmsViaPhoneGateway
+              ? 'Use HostPinnacle (provider)'
+              : 'Route all SMS via Phone'}
+          </span>
         </DropdownMenuItem>
         <DropdownMenuSeparator className="bg-slate-200 my-1" />
         <DropdownMenuItem
@@ -706,6 +721,40 @@ export default function SuperAdminAccounts() {
     }
   }
 
+  const handleTogglePhoneGateway = async (
+    accountId: string,
+    currentlyEnabled: boolean
+  ) => {
+    const enabling = !currentlyEnabled
+    const confirmed = window.confirm(
+      enabling
+        ? 'Route ALL SMS for this user through their Android phone gateway?\n\nHostPinnacle will be skipped. The phone gateway app must be online.'
+        : 'Switch this user back to HostPinnacle (provider) for SMS sending?'
+    )
+    if (!confirmed) return
+
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch(`/api/super-admin/accounts/${accountId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ routeAllSmsViaPhoneGateway: enabling }),
+      })
+
+      if (response.ok) {
+        await fetchAccounts()
+      } else {
+        const error = await response.json()
+        alert(error.error || 'Failed to update phone gateway routing')
+      }
+    } catch {
+      alert('Failed to update phone gateway routing')
+    }
+  }
+
   const handleExportCSV = () => {
     const headers = ['Company', 'Email', 'Phone', 'Credits', 'Status', 'Sender IDs', 'Pricing']
     const rows = filteredAccounts.map((acc) => [
@@ -990,7 +1039,15 @@ export default function SuperAdminAccounts() {
                         {account.credits.toLocaleString()}
                       </td>
                       <td className="text-center py-3 px-6">
-                        <StatusPill isActive={account.isActive} />
+                        <div className="flex flex-col items-center gap-1">
+                          <StatusPill isActive={account.isActive} />
+                          {account.routeAllSmsViaPhoneGateway && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-sky-50 text-sky-700 border border-sky-200">
+                              <Phone className="w-2.5 h-2.5" />
+                              Phone gateway
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="py-3 px-6 text-sm text-slate-500">
                         {account.lastActivity
@@ -1014,6 +1071,12 @@ export default function SuperAdminAccounts() {
                             setCreditReason('')
                             setCreditsDrawerOpen(true)
                           }}
+                          onTogglePhoneGateway={() =>
+                            handleTogglePhoneGateway(
+                              account.id,
+                              !!account.routeAllSmsViaPhoneGateway
+                            )
+                          }
                           onSuspend={() => handleSuspend(account.id, account.isActive)}
                         />
                       </td>
@@ -1055,9 +1118,15 @@ export default function SuperAdminAccounts() {
               <Card key={account.id} className="p-4 bg-white border border-slate-200 rounded-2xl shadow-sm">
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <h3 className="font-semibold text-slate-900">{account.name}</h3>
                       <StatusPill isActive={account.isActive} />
+                      {account.routeAllSmsViaPhoneGateway && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-sky-50 text-sky-700 border border-sky-200">
+                          <Phone className="w-2.5 h-2.5" />
+                          Phone gateway
+                        </span>
+                      )}
                     </div>
                     <p className="text-sm text-slate-500">{account.email}</p>
                     {account.phone && (
@@ -1078,6 +1147,12 @@ export default function SuperAdminAccounts() {
                       setCreditReason('')
                       setCreditsDrawerOpen(true)
                     }}
+                    onTogglePhoneGateway={() =>
+                      handleTogglePhoneGateway(
+                        account.id,
+                        !!account.routeAllSmsViaPhoneGateway
+                      )
+                    }
                     onSuspend={() => handleSuspend(account.id, account.isActive)}
                   />
                 </div>

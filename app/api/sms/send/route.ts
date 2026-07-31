@@ -16,6 +16,10 @@ import { initialNextCheckAt } from '@/lib/services/sms-status/build-synchronizer
 import { postSendStatusFields } from '@/lib/services/sms-status/auto-delivered'
 import { syncSmsMessageById } from '@/lib/services/sms-status/sync-user-pending'
 import { buildMessageBodyFields, logSmsMessageCreateDebug } from '@/lib/services/sms/message-body'
+import {
+  isPhoneGatewayRoutingEnabled,
+  routeSmsViaPhoneGateway,
+} from '@/lib/services/sms-fallback/route-via-phone'
 import { maskPhone } from '@/lib/utils/log-sanitize'
 
 // Format phone number to E.164
@@ -149,9 +153,13 @@ export async function POST(request: NextRequest) {
     // Log phone number formatting for debugging (masked - phone numbers are PII)
     console.log('Phone number formatted:', maskPhone(formattedPhone))
 
+    // Per-user routing: skip HostPinnacle entirely and use the phone gateway
+    const usePhoneGateway = await isPhoneGatewayRoutingEnabled(userObjectId)
+
     // HostPinnacle credentials: user sub-account → SystemSettings → env vars
-    const hpCreds = await resolveHostPinnacleCredentials(userObjectId)
-    if (!hpCreds) {
+    // (not required when the user is routed via the phone gateway)
+    const hpCreds = usePhoneGateway ? null : await resolveHostPinnacleCredentials(userObjectId)
+    if (!usePhoneGateway && !hpCreds) {
       return NextResponse.json(
         {
           error:
@@ -161,7 +169,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { userId: hpUserId, password, apiKey } = hpCreds
+    const hpUserId = hpCreds?.userId
+    const password = hpCreds?.password
+    const apiKey = hpCreds?.apiKey
 
     // Use MongoDB transaction for atomicity
     const session = await mongoose.startSession()
@@ -209,7 +219,7 @@ export async function POST(request: NextRequest) {
         status: 'queued',
         providerStatus: 'PROCESSING',
         deliveryStatus: 'queued',
-        deliveryMethod: 'provider',
+        deliveryMethod: usePhoneGateway ? 'android_phone_gateway' : 'provider',
         source: 'dashboard',
         authMethod: 'session',
         clientId: userObjectId,
@@ -217,7 +227,8 @@ export async function POST(request: NextRequest) {
         clientName: dbUser.name,
         // Delivery-status worker scheduling: even if the async send below dies,
         // the background worker will pick this message up at nextCheckAt.
-        nextCheckAt: initialNextCheckAt(),
+        // Phone-gateway-routed messages are never polled against HostPinnacle.
+        nextCheckAt: usePhoneGateway ? null : initialNextCheckAt(),
         lastCheckedAt: null,
         statusCheckAttempts: 0,
         finalizedAt: null,
@@ -244,6 +255,26 @@ export async function POST(request: NextRequest) {
       // Use Promise.resolve().then() for cross-platform compatibility
       Promise.resolve().then(async () => {
         try {
+          // Per-user routing: queue straight to the Android phone gateway
+          if (usePhoneGateway) {
+            const routed = await routeSmsViaPhoneGateway(String(smsMessage._id))
+            console.log('SMS routed to phone gateway:', {
+              messageId: smsMessage._id?.toString(),
+              recipient: maskPhone(formattedPhone),
+              ok: routed.ok,
+              jobId: routed.jobId,
+              error: routed.error || undefined,
+            })
+            if (!routed.ok) {
+              // Refund credits — the message could not be queued anywhere
+              await User.findByIdAndUpdate(userObjectId, {
+                $inc: { creditsBalance: requiredCredits },
+              })
+              await SmsMessage.findByIdAndUpdate(smsMessage._id, { refunded: true })
+            }
+            return
+          }
+
           // Log the request details for debugging (phone masked - PII)
           console.log('Sending SMS via HostPinnacle:', {
             mobile: maskPhone(formattedPhone),

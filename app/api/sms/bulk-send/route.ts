@@ -14,6 +14,10 @@ import { resolvePricePerCreditKes } from '@/lib/utils/resolve-price-per-credit'
 import { advancedSmsQueue } from '@/lib/services/sms/advanced-queue'
 import { initialNextCheckAt } from '@/lib/services/sms-status/build-synchronizer'
 import { buildMessageBodyFields, renderBulkTemplate, logSmsMessageCreateDebug } from '@/lib/services/sms/message-body'
+import {
+  isPhoneGatewayRoutingEnabled,
+  routeSmsViaPhoneGateway,
+} from '@/lib/services/sms-fallback/route-via-phone'
 import mongoose from 'mongoose'
 
 // Format phone number to E.164
@@ -116,6 +120,9 @@ export async function POST(request: NextRequest) {
     // Format phone numbers
     const formattedPhones = recipients.map(formatPhoneNumber)
 
+    // Per-user routing: skip HostPinnacle and queue straight to phone gateway
+    const usePhoneGateway = await isPhoneGatewayRoutingEnabled(userObjectId)
+
     // Deduct credits and create message records in a transaction
     const session = await mongoose.startSession()
     session.startTransaction()
@@ -174,14 +181,14 @@ export async function POST(request: NextRequest) {
             status: 'queued' as const,
             providerStatus: 'PROCESSING',
             deliveryStatus: 'queued',
-            deliveryMethod: 'provider' as const,
+            deliveryMethod: usePhoneGateway ? ('android_phone_gateway' as const) : ('provider' as const),
             source: 'bulk' as const,
             authMethod: 'session' as const,
             clientId: userObjectId,
             clientUsername: dbUser.email,
             clientName: dbUser.name,
             campaignName: campaignName || undefined,
-            nextCheckAt: initialNextCheckAt(),
+            nextCheckAt: usePhoneGateway ? null : initialNextCheckAt(),
             lastCheckedAt: null,
             statusCheckAttempts: 0,
             finalizedAt: null,
@@ -205,12 +212,35 @@ export async function POST(request: NextRequest) {
         totalCostKes,
         newBalance,
         status: 'queued',
+        routedVia: usePhoneGateway ? 'phone_gateway' : 'provider',
       })
 
       // Enqueue for background processing (fire and forget - non-blocking)
       Promise.resolve().then(async () => {
         try {
-          // Create queue items
+          if (usePhoneGateway) {
+            let queued = 0
+            let failed = 0
+            for (const smsMsg of smsMessages) {
+              const routed = await routeSmsViaPhoneGateway(String(smsMsg._id))
+              if (routed.ok) queued++
+              else {
+                failed++
+                // Refund this message's credits — could not be queued to phone
+                const msgCredits = smsMsg.segments || segments
+                await User.findByIdAndUpdate(userObjectId, {
+                  $inc: { creditsBalance: msgCredits },
+                })
+                await SmsMessage.findByIdAndUpdate(smsMsg._id, { refunded: true })
+              }
+            }
+            console.log(
+              `Bulk send routed to phone gateway: ${queued} queued, ${failed} failed for user ${userObjectId}`
+            )
+            return
+          }
+
+          // Create queue items for HostPinnacle advanced queue
           const queueItems = smsMessages.map((smsMsg, index) => ({
             messageId: smsMsg._id!.toString(),
             phoneNumber: formattedPhones[index],

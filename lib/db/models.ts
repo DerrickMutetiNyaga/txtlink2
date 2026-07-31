@@ -21,6 +21,8 @@ export interface IUser {
   smsHistoryRetentionLimit?: number | null
   /** Completed phone fallback queue jobs auto-delete after this many days (max 3) */
   smsFallbackRetentionDays?: number
+  /** When true, ALL SMS for this user skip HostPinnacle and are queued straight to the Android phone gateway */
+  routeAllSmsViaPhoneGateway?: boolean
   /** Google OAuth subject ID */
   googleId?: string
   /** Auth methods linked to this account, e.g. ["password", "google"] */
@@ -56,6 +58,7 @@ const UserSchema = new Schema<IUser>(
     isActive: { type: Boolean, default: true },
     smsHistoryRetentionLimit: { type: Number, default: 10000 },
     smsFallbackRetentionDays: { type: Number, default: 3, min: 1, max: 3 },
+    routeAllSmsViaPhoneGateway: { type: Boolean, default: false },
   },
   { timestamps: true }
 )

@@ -13,6 +13,7 @@ import { logAudit } from '@/lib/utils/audit'
 import { adjustUserCredits } from '@/lib/services/credits/adjust-balance'
 import { convertKesToCredits } from '@/lib/utils/credits'
 import { resolvePricePerCreditKes } from '@/lib/utils/resolve-price-per-credit'
+import { clearPhoneGatewayRoutingCache } from '@/lib/services/sms-fallback/route-via-phone'
 
 export async function PUT(
   request: NextRequest,
@@ -24,7 +25,7 @@ export async function PUT(
     const resolvedParams = await Promise.resolve(params)
     const userId = resolvedParams.id
 
-    const { name, email, phone, isActive } = await request.json()
+    const { name, email, phone, isActive, routeAllSmsViaPhoneGateway } = await request.json()
     const mongoose = require('mongoose')
     const userObjectId = new mongoose.Types.ObjectId(userId)
 
@@ -38,13 +39,29 @@ export async function PUT(
     if (email !== undefined && email !== user.email) changes.email = { from: user.email, to: email }
     if (phone !== undefined && phone !== user.phone) changes.phone = { from: user.phone, to: phone }
     if (isActive !== undefined && isActive !== user.isActive) changes.isActive = { from: user.isActive, to: isActive }
+    if (
+      routeAllSmsViaPhoneGateway !== undefined &&
+      !!routeAllSmsViaPhoneGateway !== !!user.routeAllSmsViaPhoneGateway
+    ) {
+      changes.routeAllSmsViaPhoneGateway = {
+        from: !!user.routeAllSmsViaPhoneGateway,
+        to: !!routeAllSmsViaPhoneGateway,
+      }
+    }
 
     await User.findByIdAndUpdate(userObjectId, {
       ...(name && { name }),
       ...(email && { email }),
       ...(phone !== undefined && { phone }),
       ...(isActive !== undefined && { isActive }),
+      ...(routeAllSmsViaPhoneGateway !== undefined && {
+        routeAllSmsViaPhoneGateway: !!routeAllSmsViaPhoneGateway,
+      }),
     })
+
+    if (routeAllSmsViaPhoneGateway !== undefined) {
+      clearPhoneGatewayRoutingCache(userObjectId)
+    }
 
     await logAudit('UPDATE_ACCOUNT', 'user', owner.userId, owner.email, {
       resourceId: userId,

@@ -18,6 +18,10 @@ import { resolvePricePerCreditKes } from '@/lib/utils/resolve-price-per-credit'
 import { initialNextCheckAt } from '@/lib/services/sms-status/build-synchronizer'
 import { postSendStatusFields } from '@/lib/services/sms-status/auto-delivered'
 import { syncSmsMessageById } from '@/lib/services/sms-status/sync-user-pending'
+import {
+  isPhoneGatewayRoutingEnabled,
+  routeSmsViaPhoneGateway,
+} from '@/lib/services/sms-fallback/route-via-phone'
 import { maskPhone } from '@/lib/utils/log-sanitize'
 import {
   normalizeOutgoingSmsPayload,
@@ -372,9 +376,13 @@ export async function POST(request: NextRequest) {
       )
     }
     
+    // Per-user routing: skip HostPinnacle entirely and use the phone gateway
+    const usePhoneGateway = await isPhoneGatewayRoutingEnabled(userObjectId)
+
     // HostPinnacle credentials: user sub-account → SystemSettings → env vars
-    const hpCreds = await resolveHostPinnacleCredentials(userObjectId)
-    if (!hpCreds) {
+    // (not required when the user is routed via the phone gateway)
+    const hpCreds = usePhoneGateway ? null : await resolveHostPinnacleCredentials(userObjectId)
+    if (!usePhoneGateway && !hpCreds) {
       return NextResponse.json(
         {
           error:
@@ -384,7 +392,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { userId: hpUserId, password, apiKey: hpApiKey } = hpCreds
+    const hpUserId = hpCreds?.userId
+    const password = hpCreds?.password
+    const hpApiKey = hpCreds?.apiKey
     
     // Use MongoDB transaction for atomicity
     const session = await mongoose.startSession()
@@ -418,7 +428,7 @@ export async function POST(request: NextRequest) {
         chargedKes: totalCostKes,
         status: 'queued',
         deliveryStatus: 'queued',
-        deliveryMethod: 'provider',
+        deliveryMethod: usePhoneGateway ? 'android_phone_gateway' : 'provider',
         source: smsSource,
         authMethod: smsAuthMethod,
         apiKeyId: auth.apiKeyId ? new mongoose.Types.ObjectId(auth.apiKeyId) : undefined,
@@ -426,7 +436,7 @@ export async function POST(request: NextRequest) {
         clientId: isUsernamePasswordAuth ? userObjectId : undefined,
         clientUsername: isUsernamePasswordAuth ? user.email : undefined,
         clientName: isUsernamePasswordAuth ? user.name : undefined,
-        nextCheckAt: initialNextCheckAt(),
+        nextCheckAt: usePhoneGateway ? null : initialNextCheckAt(),
         lastCheckedAt: null,
         statusCheckAttempts: 0,
         finalizedAt: null,
@@ -446,6 +456,25 @@ export async function POST(request: NextRequest) {
       // Send SMS asynchronously
       Promise.resolve().then(async () => {
         try {
+          // Per-user routing: queue straight to the Android phone gateway
+          if (usePhoneGateway) {
+            const routed = await routeSmsViaPhoneGateway(String(smsMessage._id))
+            console.log('SMS routed to phone gateway:', {
+              messageId: smsMessage._id?.toString(),
+              recipient: maskPhone(formattedPhone),
+              ok: routed.ok,
+              jobId: routed.jobId,
+              error: routed.error || undefined,
+            })
+            if (!routed.ok) {
+              await User.findByIdAndUpdate(userObjectId, {
+                $inc: { creditsBalance: requiredCredits },
+              })
+              await SmsMessage.findByIdAndUpdate(smsMessage._id, { refunded: true })
+            }
+            return
+          }
+
           console.log('Sending SMS via HostPinnacle:', {
             mobile: maskPhone(formattedPhone),
             senderid: senderIdObj.senderName,
