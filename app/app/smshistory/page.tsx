@@ -998,7 +998,13 @@ export default function SMSHistoryPage() {
           </DialogContent>
         </Dialog>
 
-        <SmsRetryDesk onMessagePatched={applyMessagePatches} />
+        <div id="sms-retry-desk">
+          <SmsRetryDesk
+            onMessagePatched={applyMessagePatches}
+            failedCount={deliveryStats.failed.count}
+            pendingCount={deliveryStats.pending.count}
+          />
+        </div>
 
         {/* Main Content - 2-column layout */}
         <div className="grid grid-cols-12 gap-6">

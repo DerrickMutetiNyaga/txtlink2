@@ -22,7 +22,11 @@ export function normalizeActionableView(value: unknown): ActionableView {
   return 'all'
 }
 
-/** Same match criteria as GET /api/user/sms/history/actionable — covers every undelivered / fallback-stuck SMS */
+/**
+ * Pending / failed SMS eligible for manual retry.
+ * Do NOT exclude android_phone_gateway — phone-gateway failures use that
+ * deliveryMethod and were previously hidden (0 in Retry desk while KPIs showed hundreds).
+ */
 export function buildActionableSmsFilter(
   userId: mongoose.Types.ObjectId,
   view: ActionableView = 'all'
@@ -30,32 +34,36 @@ export function buildActionableSmsFilter(
   if (view === 'pending') {
     return {
       userId,
-      deliveryMethod: { $ne: 'android_phone_gateway' },
-      status: { $in: [...SMS_PENDING_STATUSES] },
+      status: { $ne: 'delivered' },
+      $or: [
+        { status: { $in: [...SMS_PENDING_STATUSES] } },
+        { fallbackStatus: { $in: [...ACTIVE_FALLBACK_STATUSES] } },
+        { fallbackQueued: true },
+      ],
     }
   }
 
   if (view === 'failed') {
     return {
       userId,
-      deliveryMethod: { $ne: 'android_phone_gateway' },
       status: { $ne: 'delivered' },
       $or: [
         { status: { $in: [...FAILED_LIKE_STATUSES] } },
         { fallbackStatus: { $in: [...PHONE_ATTENTION_STATUSES] } },
+        { deliveryMethod: 'android_phone_gateway_failed' },
       ],
     }
   }
 
   return {
     userId,
-    deliveryMethod: { $ne: 'android_phone_gateway' },
     status: { $ne: 'delivered' },
     $or: [
       { status: { $in: [...SMS_PENDING_STATUSES] } },
       { status: { $in: [...FAILED_LIKE_STATUSES] } },
       { fallbackStatus: { $in: [...ACTIONABLE_FALLBACK_STATUSES] } },
       { fallbackQueued: true },
+      { deliveryMethod: 'android_phone_gateway_failed' },
     ],
   }
 }

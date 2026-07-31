@@ -358,26 +358,44 @@ export async function retryProviderForMessage(
 
   const sms = await SmsMessage.findOne({ _id: messageId, userId }).lean()
   if (!sms) return { success: false, error: 'Message not found' }
-  if (shouldSkipProviderRetry(sms as ISmsMessage)) {
-    if (isSmsDelivered(sms as ISmsMessage)) {
-      return { success: false, error: 'Message already delivered' }
-    }
-    if (sms.providerRetryAttempted) {
-      return { success: false, error: 'Provider retry already attempted' }
-    }
-    return { success: false, error: 'Message not eligible for retry' }
+
+  if (isSmsDelivered(sms as ISmsMessage)) {
+    return { success: false, error: 'Message already delivered' }
   }
 
-  // Manual UI retries may re-send failed SMS via the same Sender ID even when
-  // the automatic scanner would prefer phone fallback immediately.
+  // Manual UI / bulk retries: allow failed + previously attempted messages via HostPinnacle.
+  // Automatic scanner still uses eligibility rules below.
   if (!options?.forceManual) {
+    if (shouldSkipProviderRetry(sms as ISmsMessage)) {
+      if (sms.providerRetryAttempted) {
+        return { success: false, error: 'Provider retry already attempted' }
+      }
+      return { success: false, error: 'Message not eligible for retry' }
+    }
+
     const staleCutoff = minutesAgo(getFallbackStaleMinutes())
     const eligibility = evaluateProviderRetryEligibility(sms as ISmsMessage, staleCutoff)
     if (!eligibility.eligible) {
       return { success: false, error: 'Message not eligible for retry' }
     }
+  } else if (sms.providerRetryAttempted) {
+    // Reset so retrySingleMessage can claim another HostPinnacle send
+    await SmsMessage.findByIdAndUpdate(sms._id, {
+      providerRetryAttempted: false,
+      providerRetryStatus: 'not_started',
+      providerRetryFailureReason: undefined,
+      failedAt: undefined,
+      finalizedAt: undefined,
+      nextCheckAt: null,
+    })
   }
 
-  const ok = await retrySingleMessage(sms as ISmsMessage & { _id: unknown })
+  const fresh = options?.forceManual
+    ? ((await SmsMessage.findById(sms._id).lean()) as (ISmsMessage & { _id: unknown }) | null)
+    : (sms as ISmsMessage & { _id: unknown })
+
+  if (!fresh) return { success: false, error: 'Message not found' }
+
+  const ok = await retrySingleMessage(fresh)
   return ok ? { success: true } : { success: false, error: 'Provider retry failed' }
 }

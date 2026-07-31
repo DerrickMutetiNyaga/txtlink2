@@ -80,12 +80,14 @@ function stillActionable(sms: ActionableSms) {
 
 function canRetryViaSenderId(sms: ActionableSms) {
   if (sms.status === 'delivered') return false
-  if (sms.providerRetryAttempted) return false
-  if (sms.fallbackStatus === 'retrying_provider' || sms.fallbackStatus === 'retry_waiting_delivery') {
+  // Manual retries may re-hit HostPinnacle even after a prior attempt
+  if (sms.fallbackStatus === 'retrying_provider') {
     return false
   }
   return true
 }
+
+type RetryChannel = 'provider' | 'phone'
 
 function canRetryViaPhone(sms: ActionableSms) {
   if (sms.status === 'delivered') return false
@@ -122,9 +124,12 @@ function recount(list: ActionableSms[]) {
 type Props = {
   /** Patch a single history row — never reload the whole table */
   onMessagePatched?: (updates: Array<Partial<ActionableSms> & { id: string }>) => void
+  /** KPI totals from history page (so Retry All stays visible even if list is still loading) */
+  failedCount?: number
+  pendingCount?: number
 }
 
-export function SmsRetryDesk({ onMessagePatched }: Props) {
+export function SmsRetryDesk({ onMessagePatched, failedCount = 0, pendingCount = 0 }: Props) {
   const { toast } = useToast()
   const [open, setOpen] = useState(true)
   const [view, setView] = useState<ViewFilter>('all')
@@ -135,6 +140,11 @@ export function SmsRetryDesk({ onMessagePatched }: Props) {
   const [busyAction, setBusyAction] = useState<ActionKind | null>(null)
   const [markingCompleted, setMarkingCompleted] = useState(false)
   const [clearingQueue, setClearingQueue] = useState(false)
+  const [retryingAll, setRetryingAll] = useState(false)
+  const [bulkBusy, setBulkBusy] = useState<string | null>(null)
+
+  const displayFailed = Math.max(counts.failed, failedCount)
+  const displayPending = Math.max(counts.pending, pendingCount)
 
   const applyLocalPatches = useCallback(
     (updates: Array<Partial<ActionableSms> & { id: string }>) => {
@@ -162,7 +172,7 @@ export function SmsRetryDesk({ onMessagePatched }: Props) {
       if (showSpinner) setLoading(true)
       const token = localStorage.getItem('token')
       const response = await fetch(
-        `/api/user/sms/history/actionable?view=${view}&limit=50`,
+        `/api/user/sms/history/actionable?view=${view}&limit=100`,
         { headers: { Authorization: `Bearer ${token}` } }
       )
       if (!response.ok) throw new Error('Failed to load')
@@ -356,6 +366,69 @@ export function SmsRetryDesk({ onMessagePatched }: Props) {
     }
   }
 
+  const handleRetryAll = async (channel: RetryChannel, targetView: ViewFilter) => {
+    const targetLabel =
+      targetView === 'all' ? 'pending + failed' : targetView === 'pending' ? 'pending' : 'failed'
+    const channelLabel =
+      channel === 'provider' ? 'HostPinnacle / Sender ID (API)' : 'Android phone gateway'
+    const busyKey = `${targetView}:${channel}`
+
+    if (
+      !confirm(
+        `Retry ALL ${targetLabel} SMS via ${channelLabel}?\n\nUp to 500 messages will be retried.`
+      )
+    ) {
+      return
+    }
+
+    setRetryingAll(true)
+    setBulkBusy(busyKey)
+    setView(targetView)
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch('/api/user/sms-fallback/retry-all', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          channel,
+          view: targetView,
+          limit: 500,
+        }),
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        throw new Error(data.error || 'Bulk retry failed')
+      }
+
+      toast({
+        title: 'Retry all started',
+        description: data.message || `Retried ${data.succeeded ?? 0} message(s).`,
+      })
+
+      const patches = items.map((sms) => ({
+        id: sms.id,
+        status: channel === 'provider' ? 'retrying' : 'queued',
+        displayStatus: channel === 'provider' ? 'Retrying Provider' : 'Queued for Phone',
+        fallbackStatus: channel === 'provider' ? 'retrying_provider' : 'queued_for_phone',
+        providerRetryAttempted: channel === 'provider' ? true : sms.providerRetryAttempted,
+      }))
+      applyLocalPatches(patches)
+      await fetchActionable(true)
+    } catch (err) {
+      toast({
+        title: 'Retry all failed',
+        description: err instanceof Error ? err.message : 'Could not start bulk retry',
+        variant: 'destructive',
+      })
+    } finally {
+      setRetryingAll(false)
+      setBulkBusy(null)
+    }
+  }
+
   const handleClearEntireQueue = async () => {
     if (
       !confirm(
@@ -437,7 +510,7 @@ export function SmsRetryDesk({ onMessagePatched }: Props) {
 
           <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
             <span className="hidden text-xs font-medium text-[#64748B] sm:inline">
-              {summaryLabel}
+              {displayFailed} failed · {displayPending} pending
             </span>
             <select
               value={view}
@@ -454,7 +527,7 @@ export function SmsRetryDesk({ onMessagePatched }: Props) {
               variant="secondary"
               size="sm"
               onClick={handleClearEntireQueue}
-              disabled={loading || markingCompleted || clearingQueue}
+              disabled={loading || markingCompleted || clearingQueue || retryingAll}
               className="h-10 rounded-xl border border-red-200 bg-white px-3 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
               title="Delete all phone fallback queue jobs"
             >
@@ -470,7 +543,13 @@ export function SmsRetryDesk({ onMessagePatched }: Props) {
               variant="secondary"
               size="sm"
               onClick={handleMarkAllCompleted}
-              disabled={loading || markingCompleted || clearingQueue || counts.total === 0}
+              disabled={
+                loading ||
+                markingCompleted ||
+                clearingQueue ||
+                retryingAll ||
+                displayFailed + displayPending === 0
+              }
               className="h-10 rounded-xl border border-emerald-200 bg-white px-3 text-xs font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
               title="Mark all pending/failed SMS as completed and clear phone fallback queue"
             >
@@ -486,7 +565,7 @@ export function SmsRetryDesk({ onMessagePatched }: Props) {
               variant="secondary"
               size="sm"
               onClick={() => fetchActionable(true)}
-              disabled={loading || markingCompleted || clearingQueue}
+              disabled={loading || markingCompleted || clearingQueue || retryingAll}
               className="h-10 rounded-xl border border-[#E2E8F0] bg-white px-3 text-[#2F9B73] hover:bg-[#ECFDF5]"
             >
               <RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} />
@@ -495,7 +574,100 @@ export function SmsRetryDesk({ onMessagePatched }: Props) {
         </div>
 
         <CollapsibleContent>
-          <div className="px-4 py-3 sm:px-5">
+          <div className="space-y-4 px-4 py-4 sm:px-5">
+            {/* Always-visible bulk retry controls */}
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="rounded-2xl border border-red-200 bg-red-50/60 p-4">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-semibold text-red-800">Retry all failed</p>
+                    <p className="text-xs text-red-700/80">
+                      {displayFailed} failed SMS — resend via API or phone gateway
+                    </p>
+                  </div>
+                  <Badge className="rounded-full bg-red-600 text-white hover:bg-red-600">
+                    {displayFailed}
+                  </Badge>
+                </div>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={retryingAll || displayFailed === 0}
+                    onClick={() => void handleRetryAll('provider', 'failed')}
+                    className="h-10 flex-1 rounded-xl bg-[#2F9B73] text-xs font-medium text-white hover:bg-[#267D5E] disabled:opacity-50"
+                  >
+                    {bulkBusy === 'failed:provider' ? (
+                      <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Radio className="mr-1.5 h-4 w-4" />
+                    )}
+                    Via Sender ID / API
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    disabled={retryingAll || displayFailed === 0}
+                    onClick={() => void handleRetryAll('phone', 'failed')}
+                    className="h-10 flex-1 rounded-xl border border-[#E2E8F0] bg-white text-xs font-medium text-[#0F172A] hover:bg-white disabled:opacity-50"
+                  >
+                    {bulkBusy === 'failed:phone' ? (
+                      <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Phone className="mr-1.5 h-4 w-4 text-[#2F9B73]" />
+                    )}
+                    Via Phone Gateway
+                  </Button>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-semibold text-amber-900">Retry all pending</p>
+                    <p className="text-xs text-amber-800/80">
+                      {displayPending} pending SMS — trigger via API or phone gateway
+                    </p>
+                  </div>
+                  <Badge className="rounded-full bg-amber-600 text-white hover:bg-amber-600">
+                    {displayPending}
+                  </Badge>
+                </div>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={retryingAll || displayPending === 0}
+                    onClick={() => void handleRetryAll('provider', 'pending')}
+                    className="h-10 flex-1 rounded-xl bg-[#2F9B73] text-xs font-medium text-white hover:bg-[#267D5E] disabled:opacity-50"
+                  >
+                    {bulkBusy === 'pending:provider' ? (
+                      <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Radio className="mr-1.5 h-4 w-4" />
+                    )}
+                    Via Sender ID / API
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    disabled={retryingAll || displayPending === 0}
+                    onClick={() => void handleRetryAll('phone', 'pending')}
+                    className="h-10 flex-1 rounded-xl border border-[#E2E8F0] bg-white text-xs font-medium text-[#0F172A] hover:bg-white disabled:opacity-50"
+                  >
+                    {bulkBusy === 'pending:phone' ? (
+                      <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Phone className="mr-1.5 h-4 w-4 text-[#2F9B73]" />
+                    )}
+                    Via Phone Gateway
+                  </Button>
+                </div>
+              </div>
+            </div>
+
             {loading ? (
               <div className="flex items-center justify-center gap-2 py-10 text-sm text-[#64748B]">
                 <Loader2 className="h-4 w-4 animate-spin" />

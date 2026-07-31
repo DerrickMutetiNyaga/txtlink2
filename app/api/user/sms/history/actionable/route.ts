@@ -21,8 +21,8 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url)
     const view = normalizeActionableView(searchParams.get('view'))
-    const limitRaw = parseInt(searchParams.get('limit') || '50', 10)
-    const limit = Math.min(Math.max(Number.isFinite(limitRaw) ? limitRaw : 50, 1), 100)
+    const limitRaw = parseInt(searchParams.get('limit') || '100', 10)
+    const limit = Math.min(Math.max(Number.isFinite(limitRaw) ? limitRaw : 100, 1), 200)
 
     const query = buildActionableSmsFilter(userId, view)
 
