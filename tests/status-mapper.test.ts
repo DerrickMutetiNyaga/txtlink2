@@ -3,6 +3,9 @@ import {
   mapProviderStatus,
   parseProviderStatusResponse,
   isFinalStatus,
+  isApiEnvelopeStatus,
+  isFailureProviderStatus,
+  resolveHostPinnacleDlrStatus,
 } from '@/lib/services/sms-status/status-mapper'
 
 describe('mapProviderStatus', () => {
@@ -16,6 +19,13 @@ describe('mapProviderStatus', () => {
     const result = mapProviderStatus('SUBMITTED')
     expect(result.status).toBe('sent')
     expect(result.isFinal).toBe(false)
+  })
+
+  it('maps SUCCESS/OK to pending sent (API accept, not handset delivery)', () => {
+    expect(mapProviderStatus('SUCCESS').status).toBe('sent')
+    expect(mapProviderStatus('SUCCESS').isFinal).toBe(false)
+    expect(mapProviderStatus('OK').status).toBe('sent')
+    expect(mapProviderStatus('ok').isFinal).toBe(false)
   })
 
   it('maps FAILED with cause to final failed', () => {
@@ -55,9 +65,55 @@ describe('parseProviderStatusResponse', () => {
     expect(result?.cause).toBe('Success')
   })
 
+  it('parses FAILED from reports_statusList', () => {
+    const result = parseProviderStatusResponse({
+      response: {
+        reports_statusList: [{ status: { Status: 'FAILED', Cause: 'Absent Subscriber' } }],
+      },
+    })
+    expect(result?.status).toBe('failed')
+    expect(result?.cause).toBe('Absent Subscriber')
+  })
+
+  it('parses SUBMITTED / PENDING from reports_statusList', () => {
+    expect(
+      parseProviderStatusResponse({
+        response: { reports_statusList: [{ status: { Status: 'SUBMITTED' } }] },
+      })?.status
+    ).toBe('sent')
+    expect(
+      parseProviderStatusResponse({
+        response: { reports_statusList: [{ status: { Status: 'PENDING' } }] },
+      })?.status
+    ).toBe('processing')
+  })
+
   it('parses fallback flat shapes', () => {
     expect(parseProviderStatusResponse({ response: { Status: 'FAILED' } })?.status).toBe('failed')
     expect(parseProviderStatusResponse({ status: 'SUBMITTED' })?.status).toBe('sent')
+  })
+
+  it('does not treat API envelope status:success as delivered', () => {
+    expect(parseProviderStatusResponse({ status: 'success' })).toBeNull()
+    expect(parseProviderStatusResponse({ status: 'ok' })).toBeNull()
+    expect(parseProviderStatusResponse({ response: { status: 'success' } })).toBeNull()
+    expect(
+      parseProviderStatusResponse({
+        status: 'success',
+        response: { reports_statusList: [] },
+      })
+    ).toBeNull()
+  })
+
+  it('still reads real delivery status when wrapped in a success envelope', () => {
+    const result = parseProviderStatusResponse({
+      status: 'success',
+      response: {
+        reports_statusList: [{ status: { Status: 'FAILED', Cause: 'Rejected' } }],
+      },
+    })
+    expect(result?.status).toBe('failed')
+    expect(result?.cause).toBe('Rejected')
   })
 
   it('returns null when the provider has no report yet', () => {
@@ -74,5 +130,59 @@ describe('isFinalStatus', () => {
     expect(isFinalStatus('provider_timeout')).toBe(true)
     expect(isFinalStatus('sent')).toBe(false)
     expect(isFinalStatus('retrying')).toBe(false)
+  })
+})
+
+describe('isApiEnvelopeStatus / isFailureProviderStatus', () => {
+  it('detects API envelopes', () => {
+    expect(isApiEnvelopeStatus('success')).toBe(true)
+    expect(isApiEnvelopeStatus('OK')).toBe(true)
+    expect(isApiEnvelopeStatus('DELIVERED')).toBe(false)
+  })
+
+  it('detects failure vocabulary', () => {
+    expect(isFailureProviderStatus('FAILED')).toBe(true)
+    expect(isFailureProviderStatus('UNDELIV')).toBe(true)
+    expect(isFailureProviderStatus('DELIVERED')).toBe(false)
+    expect(isFailureProviderStatus('SUBMITTED')).toBe(false)
+  })
+})
+
+describe('resolveHostPinnacleDlrStatus', () => {
+  it('uses Status=FAILED even when DeliveredTime is set (HostPinnacle portal shape)', () => {
+    expect(
+      resolveHostPinnacleDlrStatus({
+        status: 'FAILED',
+        cause: 'Other',
+        deliveredTime: '2026-07-31 16:50:01',
+      })
+    ).toBe('FAILED')
+  })
+
+  it('uses Status=DELIVERED when HostPinnacle says delivered', () => {
+    expect(
+      resolveHostPinnacleDlrStatus({
+        status: 'DELIVERED',
+        deliveredTime: '2026-07-31 16:50:01',
+      })
+    ).toBe('DELIVERED')
+  })
+
+  it('does not treat DeliveredTime alone as delivered', () => {
+    expect(
+      resolveHostPinnacleDlrStatus({
+        deliveredTime: '2026-07-31 16:50:01',
+      })
+    ).toBe('SUBMITTED')
+  })
+
+  it('maps non-zero ErrorCode to FAILED', () => {
+    expect(resolveHostPinnacleDlrStatus({ errorCode: '1' })).toBe('FAILED')
+    expect(resolveHostPinnacleDlrStatus({ errorCode: '0' })).toBe('SUBMITTED')
+  })
+
+  it('ignores status:success envelope on webhook', () => {
+    expect(resolveHostPinnacleDlrStatus({ status: 'success' })).toBe('SUBMITTED')
+    expect(resolveHostPinnacleDlrStatus({ status: 'success', errorCode: '12' })).toBe('FAILED')
   })
 })

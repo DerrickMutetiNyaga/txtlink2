@@ -13,7 +13,7 @@
 import { SystemSettings } from '@/lib/db/models'
 import { initialNextCheckAt } from './build-synchronizer'
 
-const CACHE_TTL_MS = 30_000
+const CACHE_TTL_MS = 5_000
 
 let cache: { value: boolean; expiresAt: number } | null = null
 
@@ -24,13 +24,15 @@ export async function isAutoMarkDeliveredEnabled(): Promise<boolean> {
 
   try {
     const settings = await SystemSettings.findOne().select('autoMarkSentAsDelivered').lean()
+    // Strict true only — missing/undefined/false must never auto-deliver.
     const value = settings?.autoMarkSentAsDelivered === true
     cache = { value, expiresAt: now + CACHE_TTL_MS }
     return value
   } catch (error) {
-    // On a read failure, fall back to the last known value (or the safe default: off)
+    // On a read failure, prefer the safe default (off) so we never invent
+    // "delivered" without a HostPinnacle DLR / status poll.
     console.error('Failed to read autoMarkSentAsDelivered setting:', error)
-    return cache?.value ?? false
+    return false
   }
 }
 
@@ -64,6 +66,10 @@ export async function postSendStatusFields(now: Date = new Date()): Promise<Reco
     status: 'sent',
     providerStatus: 'SUBMITTED',
     sentAt: now,
+    // Clear any stale auto-mark fields if a previous code path set them
+    deliveredAt: null,
+    finalizedAt: null,
+    deliveryStatus: 'sent',
     nextCheckAt: initialNextCheckAt(),
   }
 }

@@ -9,6 +9,10 @@ import { getSharedSynchronizer } from './build-synchronizer'
 import type { ClaimedMessage } from './status-repository'
 import { formatSmsHistoryRow, type FormattedSmsHistoryRow } from '@/lib/services/sms-history/format'
 
+/** Provider statuses that mean real handset delivery — anything else on a
+ *  "delivered" row is suspicious (API success / auto-mark / DeliveredTime bug). */
+const REAL_DELIVERED_PROVIDER = new Set(['DELIVERED', 'DELIVRD', 'DLVRD', 'DLV'])
+
 function toClaimedMessage(doc: Record<string, unknown>): ClaimedMessage {
   return {
     _id: doc._id as mongoose.Types.ObjectId,
@@ -25,6 +29,17 @@ function toClaimedMessage(doc: Record<string, unknown>): ClaimedMessage {
     toNumbers: (doc.toNumbers as string[]) ?? [],
     senderName: (doc.senderName as string) ?? '',
   }
+}
+
+/** True when a delivered row likely never got a real HostPinnacle DELIVERED DLR. */
+export function looksFalselyDelivered(doc: {
+  status?: string
+  providerStatus?: string | null
+}): boolean {
+  if (doc.status !== 'delivered') return false
+  const raw = (doc.providerStatus || '').trim().toUpperCase()
+  if (!raw) return true
+  return !REAL_DELIVERED_PROVIDER.has(raw)
 }
 
 export type SyncPendingResult = {
@@ -64,21 +79,37 @@ export async function syncUserPendingMessages(
     docs = (await SmsMessage.find({
       _id: { $in: objectIds },
       userId: userObjectId,
-      status: { $in: [...SMS_PENDING_STATUSES] },
     }).lean()) as Record<string, unknown>[]
   } else {
     docs = (await SmsMessage.find({
       userId: userObjectId,
-      status: { $in: [...SMS_PENDING_STATUSES] },
       createdAt: { $gte: since },
+      $or: [
+        { status: { $in: [...SMS_PENDING_STATUSES] } },
+        // Re-check rows marked delivered without a real HostPinnacle DELIVERED
+        {
+          status: 'delivered',
+          $or: [
+            { providerStatus: { $exists: false } },
+            { providerStatus: null },
+            { providerStatus: '' },
+            { providerStatus: { $nin: ['DELIVERED', 'DELIVRD', 'DLVRD', 'DLV'] } },
+          ],
+        },
+      ],
     })
       .sort({ createdAt: -1 })
       .limit(Math.min(Math.max(limit, 1), 50))
       .lean()) as Record<string, unknown>[]
   }
 
+  docs = docs.filter(
+    (doc) =>
+      (SMS_PENDING_STATUSES as readonly string[]).includes(String(doc.status)) ||
+      looksFalselyDelivered(doc as { status?: string; providerStatus?: string | null })
+  )
+
   if (docs.length === 0) {
-    // Still return current rows for requested IDs (may already be final)
     const updates = messageIds?.length
       ? await loadFormattedByIds(userObjectId, messageIds)
       : []
@@ -97,7 +128,12 @@ export async function syncUserPendingMessages(
 
     checked++
     try {
-      const outcome = await synchronizer.syncClaimedMessage(toClaimedMessage(doc))
+      // Treat falsely-delivered as pending so HostPinnacle FAILED can correct it.
+      const claimed = toClaimedMessage(doc)
+      if (looksFalselyDelivered(doc as { status?: string; providerStatus?: string | null })) {
+        claimed.status = 'sent'
+      }
+      const outcome = await synchronizer.syncClaimedMessage(claimed)
       if (outcome === 'finalized') finalized++
     } catch (error) {
       console.error('syncUserPendingMessages failed:', {
@@ -120,12 +156,14 @@ export async function syncUserPendingMessages(
 export async function syncSmsMessageById(messageId: string): Promise<boolean> {
   const doc = await SmsMessage.findById(messageId).lean()
   if (!doc) return false
-  if (!(SMS_PENDING_STATUSES as readonly string[]).includes(doc.status)) return false
+  const pending = (SMS_PENDING_STATUSES as readonly string[]).includes(doc.status)
+  const falseDelivered = looksFalselyDelivered(doc)
+  if (!pending && !falseDelivered) return false
   if (!doc.externalMsgId && !doc.hpTransactionId) return false
 
   const { synchronizer } = await getSharedSynchronizer()
-  const outcome = await synchronizer.syncClaimedMessage(
-    toClaimedMessage(doc as Record<string, unknown>)
-  )
+  const claimed = toClaimedMessage(doc as Record<string, unknown>)
+  if (falseDelivered) claimed.status = 'sent'
+  const outcome = await synchronizer.syncClaimedMessage(claimed)
   return outcome === 'finalized'
 }

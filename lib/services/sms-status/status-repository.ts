@@ -127,8 +127,13 @@ export class StatusRepository {
       update.deliveredAt = now
       update.deliveryStatus = 'delivered'
       update.deliveryMethod = 'provider'
+      update.failedAt = null
+    } else {
+      // HostPinnacle may later correct a wrong "delivered" — clear delivery stamp
+      update.failedAt = now
+      update.deliveredAt = null
+      update.deliveryStatus = params.status
     }
-    if (params.status !== 'delivered') update.failedAt = now
 
     await SmsMessage.updateOne({ _id: params.messageId }, { $set: update })
   }

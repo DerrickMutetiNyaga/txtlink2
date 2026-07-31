@@ -14,6 +14,7 @@ import connectDB from '@/lib/db/connect'
 import { SmsMessage, WebhookLog, UserWebhook } from '@/lib/db/models'
 import { sendWebhook } from '@/lib/services/webhook/delivery'
 import { getSharedSynchronizer } from '@/lib/services/sms-status/build-synchronizer'
+import { resolveHostPinnacleDlrStatus } from '@/lib/services/sms-status/status-mapper'
 import { maskPhone } from '@/lib/utils/log-sanitize'
 
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET
@@ -45,6 +46,13 @@ export async function POST(request: NextRequest) {
     MobileNumber: 'mobileNumber',
     ReceivedTime: 'receivedTime',
     DeliveredTime: 'deliveredTime',
+    // HostPinnacle portal columns / alternate webhook param names
+    Status: 'status',
+    DLRStatus: 'status',
+    dlrstatus: 'status',
+    Cause: 'cause',
+    ErrorCause: 'cause',
+    errorCause: 'cause',
   }
   const out = { ...data }
   for (const [k, v] of Object.entries(keyMap)) {
@@ -96,6 +104,13 @@ export async function POST(request: NextRequest) {
 
     const deliveredTime = data.deliveredTime ?? data.DeliveredTime
     const errorCode = data.errorCode ?? data.ErrorCode
+    const cause =
+      data.cause ??
+      data.Cause ??
+      data.errorMessage ??
+      data.errormessage ??
+      data.message ??
+      undefined
 
     try {
       await WebhookLog.create({
@@ -147,7 +162,7 @@ export async function POST(request: NextRequest) {
         smsMessage = await SmsMessage.findOne({
           toNumbers: { $in: phoneVariations },
           createdAt: { $gte: sevenDaysAgo },
-          status: { $in: ['queued', 'sent'] },
+          status: { $in: ['queued', 'sent', 'processing', 'retrying', 'delivered'] },
         }).sort({ createdAt: -1 })
       }
 
@@ -182,20 +197,15 @@ export async function POST(request: NextRequest) {
       }).catch(() => {})
     }
 
-    // Derive the raw provider status string from the DLR payload.
-    // Priority: explicit deliveredTime -> DELIVERED; error code -> FAILED;
-    // otherwise use the status field verbatim (the shared StatusMapper
-    // normalizes provider vocabulary like DLVRD/UNDELIV/EXPIRED).
-    let providerStatusRaw: string
-    if (deliveredTime != null && deliveredTime !== '' && deliveredTime !== '0' && deliveredTime !== 'null') {
-      providerStatusRaw = 'DELIVERED'
-    } else if (errorCode != null && errorCode !== '' && errorCode !== '0' && errorCode !== 'null') {
-      providerStatusRaw = 'FAILED'
-    } else {
-      providerStatusRaw = String(status || 'SUBMITTED')
-    }
-
-    const cause = data.errorMessage ?? data.errormessage ?? data.message ?? undefined
+    // HostPinnacle Status is authoritative. Their portal fills Delivered Time
+    // even on FAILED rows (often same as Submitted Time) — never infer
+    // DELIVERED from DeliveredTime alone.
+    const providerStatusRaw = resolveHostPinnacleDlrStatus({
+      status: status != null ? String(status) : null,
+      errorCode,
+      cause: cause != null ? String(cause) : null,
+      deliveredTime,
+    })
 
     // Apply the status through the shared synchronizer - the same code path
     // used by the background worker and admin manual sync (refund rules,

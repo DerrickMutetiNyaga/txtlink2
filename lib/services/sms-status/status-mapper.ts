@@ -18,6 +18,8 @@ import type { ProviderStatusResult } from './types'
  *   EXPIRED              -> expired (final)
  *   REJECTED / REJECTD   -> rejected (final)
  *   UNDELIV / UNDELIVERED / UNDELIVERABLE -> undeliverable (final)
+ *   SUCCESS / OK         -> sent (NOT delivered — HostPinnacle uses these as
+ *                          API envelope / accept acknowledgements, not handset DLR)
  *   anything else        -> processing (pending, keep checking)
  */
 const PROVIDER_STATUS_MAP: Record<string, SmsStatus> = {
@@ -25,7 +27,11 @@ const PROVIDER_STATUS_MAP: Record<string, SmsStatus> = {
   DELIVRD: 'delivered',
   DLVRD: 'delivered',
   DLV: 'delivered',
-  SUCCESS: 'delivered',
+  // HostPinnacle send/status APIs often return status:"success" meaning the
+  // HTTP/API call succeeded or the message was accepted — NOT that the handset
+  // received it. Treat as pending so we keep polling for real DLR vocabulary.
+  SUCCESS: 'sent',
+  OK: 'sent',
   SUBMITTED: 'sent',
   SENT: 'sent',
   ACCEPTED: 'sent',
@@ -44,9 +50,79 @@ const PROVIDER_STATUS_MAP: Record<string, SmsStatus> = {
   UNDELIVERABLE: 'undeliverable',
 }
 
+/** API-level envelopes that are not a delivery report by themselves. */
+const API_ENVELOPE_STATUSES = new Set(['SUCCESS', 'OK'])
+
+/** Delivery-failure vocabulary used when prioritizing DLR payload fields. */
+const FAILURE_PROVIDER_STATUSES = new Set([
+  'FAILED',
+  'FAIL',
+  'ERROR',
+  'EXPIRED',
+  'REJECTED',
+  'REJECTD',
+  'BLACKLISTED',
+  'UNDELIV',
+  'UNDELIVERED',
+  'UNDELIVERABLE',
+])
+
 export function isFinalStatus(status: SmsStatus): boolean {
   return (SMS_FINAL_STATUSES as readonly string[]).includes(status)
 }
+
+export function isFailureProviderStatus(providerStatusRaw: string): boolean {
+  return FAILURE_PROVIDER_STATUSES.has(providerStatusRaw.trim().toUpperCase())
+}
+
+export function isApiEnvelopeStatus(providerStatusRaw: string): boolean {
+  return API_ENVELOPE_STATUSES.has(providerStatusRaw.trim().toUpperCase())
+}
+
+/**
+ * Resolve HostPinnacle DLR webhook fields into a provider status string.
+ *
+ * HostPinnacle's portal often fills "Delivered Time" even when Status is
+ * FAILED (same timestamp as Submitted Time). DeliveredTime alone must NEVER
+ * imply handset delivery — Status and ErrorCode/Cause are authoritative.
+ */
+export function resolveHostPinnacleDlrStatus(fields: {
+  status?: string | null
+  errorCode?: string | number | null
+  cause?: string | null
+  deliveredTime?: string | number | null
+}): string {
+  const statusStr =
+    fields.status != null && String(fields.status).trim() !== ''
+      ? String(fields.status).trim()
+      : ''
+  const errorCode = fields.errorCode
+  const hasErrorCode =
+    errorCode != null &&
+    errorCode !== '' &&
+    errorCode !== '0' &&
+    errorCode !== 0 &&
+    String(errorCode).toLowerCase() !== 'null'
+
+  // 1. Explicit Status from HostPinnacle (FAILED / DELIVERED / SUBMITTED / …)
+  if (statusStr) {
+    if (isApiEnvelopeStatus(statusStr)) {
+      // status:"success" on a webhook is not a handset DLR
+      if (hasErrorCode) return 'FAILED'
+      return 'SUBMITTED'
+    }
+    return statusStr
+  }
+
+  // 2. Non-zero ErrorCode ⇒ failed (HostPinnacle webhook param)
+  if (hasErrorCode) return 'FAILED'
+
+  // 3. Do NOT promote DeliveredTime → DELIVERED. HostPinnacle sets Delivered
+  //    Time on FAILED rows too. Without an explicit status, stay pending and
+  //    let status polling / a later DLR with Status settle it.
+  return 'SUBMITTED'
+}
+
 
 /**
  * Map a raw provider status string to the internal status model.
@@ -71,6 +147,10 @@ export function mapProviderStatus(providerStatusRaw: string, cause?: string): Pr
  * Expected shape (per HostPinnacle docs / prior PHP integration):
  *   { response: { reports_statusList: [ { status: { Status, Cause } } ] } }
  * with several observed fallback shapes handled defensively.
+ *
+ * Important: a top-level `{ status: "success" }` only means the API call
+ * succeeded — it is NOT a delivery report. Those envelopes return null so
+ * the worker keeps polling until a real Status (DELIVERED/FAILED/…) appears.
  */
 export function parseProviderStatusResponse(data: unknown): ProviderStatusResult | null {
   if (!data || typeof data !== 'object') return null
@@ -79,6 +159,7 @@ export function parseProviderStatusResponse(data: unknown): ProviderStatusResult
 
   let rawStatus: string | null = null
   let cause = ''
+  let fromReportList = false
 
   const list = response?.reports_statusList
   if (Array.isArray(list) && list.length > 0) {
@@ -86,16 +167,33 @@ export function parseProviderStatusResponse(data: unknown): ProviderStatusResult
     if (report?.status) {
       rawStatus = report.status.Status ?? report.status.status ?? null
       cause = report.status.Cause ?? report.status.cause ?? ''
+      fromReportList = true
+    } else if (typeof report?.Status === 'string') {
+      rawStatus = report.Status
+      cause = report.Cause ?? report.cause ?? ''
+      fromReportList = true
     }
-  } else {
-    rawStatus =
-      response?.status?.Status ??
-      response?.status?.status ??
-      (typeof response?.Status === 'string' ? response.Status : null) ??
-      (typeof response?.status === 'string' ? response.status : null)
-    cause = response?.status?.Cause ?? response?.status?.cause ?? response?.Cause ?? response?.cause ?? ''
+  } else if (Array.isArray(list) && list.length === 0) {
+    // Explicit empty report list = no delivery status yet
+    return null
+  } else if (response?.status && typeof response.status === 'object') {
+    rawStatus = response.status.Status ?? response.status.status ?? null
+    cause = response.status.Cause ?? response.status.cause ?? ''
+  } else if (typeof response?.Status === 'string') {
+    rawStatus = response.Status
+    cause = response.Cause ?? response.cause ?? ''
+  } else if (typeof response?.status === 'string') {
+    // Flat delivery status, or an API envelope like status:"success"
+    rawStatus = response.status
+    cause = response.Cause ?? response.cause ?? ''
   }
 
   if (!rawStatus || typeof rawStatus !== 'string') return null
+
+  // Bare API envelopes without a real reports_statusList entry are not DLRs.
+  if (!fromReportList && isApiEnvelopeStatus(rawStatus)) {
+    return null
+  }
+
   return mapProviderStatus(rawStatus, cause)
 }

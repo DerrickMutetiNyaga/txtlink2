@@ -654,7 +654,7 @@ export default function SuperAdminSettingsPage() {
                 <div>
                   <Label className="text-sm font-medium text-[#020617]">Auto-Mark Sent Messages as Delivered</Label>
                   <p className="text-xs text-[#64748B] mt-1">
-                    When enabled, messages accepted by the provider are saved as delivered immediately instead of waiting for a delivery report (DLR)
+                    Off (recommended): status follows HostPinnacle — Sent / Pending until a real DLR shows Delivered or Failed. On: every accepted send is saved as Delivered immediately (skips HostPinnacle delivery checks). Click Save after changing.
                   </p>
                 </div>
                 <Switch
