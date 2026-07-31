@@ -5,17 +5,16 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import connectDB from '@/lib/db/connect'
-import { Transaction, User } from '@/lib/db/models'
+import { SmsMessage, Transaction, User } from '@/lib/db/models'
 import { requireAuth } from '@/lib/auth/middleware'
 import { resolvePricePerCreditKes } from '@/lib/utils/resolve-price-per-credit'
+import mongoose from 'mongoose'
 
 export async function GET(request: NextRequest) {
   try {
     await connectDB()
     const user = requireAuth(request)
 
-    // Get user from database
-    const mongoose = require('mongoose')
     const userObjectId = new mongoose.Types.ObjectId(user.userId)
     const userDoc = await User.findById(userObjectId)
 
@@ -54,17 +53,45 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    console.log('Balance debug for user:', {
-      userId: user.userId,
-      email: user.email,
-      creditsBalance,
-    })
+    // Last-7-day delivery rate for the navbar widget (real data, not placeholders)
+    const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+    const [delivered7d, total7d] = await Promise.all([
+      SmsMessage.countDocuments({
+        userId: userObjectId,
+        createdAt: { $gte: since },
+        status: 'delivered',
+      }),
+      SmsMessage.countDocuments({
+        userId: userObjectId,
+        createdAt: { $gte: since },
+        status: {
+          $in: [
+            'delivered',
+            'failed',
+            'expired',
+            'rejected',
+            'undeliverable',
+            'sent',
+            'queued',
+            'processing',
+            'retrying',
+            'pending',
+            'provider_timeout',
+          ],
+        },
+      }),
+    ])
+    const deliveryRate7d =
+      total7d > 0 ? Math.round((delivered7d / total7d) * 1000) / 10 : null
 
     return NextResponse.json({
       success: true,
       // Wallet balance in credits (integer)
       balance: creditsBalance,
       balanceType: 'credits',
+      deliveryRate7d,
+      delivered7d,
+      total7d,
       // Pricing info for UI estimates (KES-only) — from PricingRule
       pricePerCreditKes: await resolvePricePerCreditKes(user.userId),
     })

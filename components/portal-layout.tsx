@@ -28,7 +28,6 @@ import {
   CheckCircle2,
   User,
   Plus,
-  TrendingUp,
   History,
   FileBarChart,
   Smartphone,
@@ -267,28 +266,8 @@ export function PortalLayout({ children, activeSection }: PortalLayoutProps) {
           ))}
         </nav>
 
-        {/* Bottom Section */}
+        {/* Bottom Section — credits live in the top navbar (real balance) */}
         <div className="p-3 space-y-3 border-t border-slate-700/50">
-          {/* Usage Card */}
-          {sidebarOpen && (
-            <div className="p-3 rounded-xl bg-slate-800/50 border border-slate-700/50">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-medium text-slate-400">SMS Credits</span>
-                <TrendingUp size={12} className="text-[#0F766E]" />
-              </div>
-              <div className="text-lg font-bold text-white mb-1">12,450</div>
-              <div className="text-[10px] text-slate-500 mb-3">98.2% delivery rate</div>
-              <Button
-                size="sm"
-                className="w-full h-8 bg-[#0F766E] hover:bg-[#115E59] text-white text-xs font-medium rounded-lg"
-              >
-                <Plus size={12} className="mr-1.5" />
-                Top up
-              </Button>
-            </div>
-          )}
-
-          {/* Support Status */}
           {sidebarOpen && (
             <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-800/30 border border-slate-700/30">
               <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />

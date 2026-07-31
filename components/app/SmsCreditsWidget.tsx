@@ -7,11 +7,11 @@ import { Plus } from 'lucide-react'
 
 export function SmsCreditsWidget() {
   const [credits, setCredits] = useState<number>(0)
-  const [deliveryRate] = useState(92.2) // TODO: Calculate from actual SMS stats
+  const [deliveryRate, setDeliveryRate] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const isLowBalance = credits < 500
 
-  // Fetch real credits from API
+  // Fetch real credits + delivery rate from API
   useEffect(() => {
     const fetchCredits = async () => {
       try {
@@ -29,17 +29,16 @@ export function SmsCreditsWidget() {
 
         if (response.ok) {
           const data = await response.json()
-          setCredits(data.balance || 0)
+          setCredits(typeof data.balance === 'number' ? data.balance : 0)
+          setDeliveryRate(
+            typeof data.deliveryRate7d === 'number' ? data.deliveryRate7d : null
+          )
         } else if (response.status === 401) {
-          // Unauthorized - token expired or invalid, silently handle
           setLoading(false)
           return
         }
       } catch (error) {
-        // Only log non-network errors
-        if (error instanceof TypeError && error.message.includes('fetch')) {
-          // Network error, don't log
-        } else {
+        if (!(error instanceof TypeError && error.message.includes('fetch'))) {
           console.error('Failed to fetch credits:', error)
         }
       } finally {
@@ -49,7 +48,6 @@ export function SmsCreditsWidget() {
 
     fetchCredits()
 
-    // Listen for real-time balance updates
     const handleBalanceUpdate = (event: CustomEvent) => {
       if (event.detail?.newBalance !== undefined) {
         setCredits(event.detail.newBalance)
@@ -61,6 +59,12 @@ export function SmsCreditsWidget() {
       window.removeEventListener('balanceUpdated', handleBalanceUpdate as EventListener)
     }
   }, [])
+
+  const subtitle = isLowBalance
+    ? 'Low balance'
+    : deliveryRate != null
+      ? `${deliveryRate}% delivery (7d)`
+      : 'No sends in last 7d'
 
   return (
     <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 shrink">
@@ -77,7 +81,7 @@ export function SmsCreditsWidget() {
             {loading ? '…' : credits.toLocaleString()}
           </p>
           <p className={`text-[11px] ${isLowBalance ? 'text-amber-600' : 'text-slate-400'}`}>
-            {isLowBalance ? 'Low balance' : `${deliveryRate}% delivery rate`}
+            {loading ? '…' : subtitle}
           </p>
         </div>
 
