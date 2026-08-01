@@ -5,15 +5,26 @@
 export async function register() {
   if (process.env.NEXT_RUNTIME !== 'nodejs') return
 
-  // Defer so boot is not blocked; only run in production / when explicitly enabled
   const enabled =
     process.env.AUTO_RESEND_PROVIDER_OUTAGES !== '0' &&
     (process.env.NODE_ENV === 'production' || process.env.AUTO_RESEND_PROVIDER_OUTAGES === '1')
 
-  if (!enabled) return
-
   setTimeout(() => {
     void (async () => {
+      try {
+        const { repairAllGatewayDevices } = await import(
+          '@/lib/services/sms-gateway/migrate-config'
+        )
+        const repair = await repairAllGatewayDevices(500)
+        if (repair.repairedConfig > 0 || repair.clearedPause > 0) {
+          console.log('[instrumentation] gateway config/pause repair:', repair)
+        }
+      } catch (err) {
+        console.error('[instrumentation] gateway repair failed:', err)
+      }
+
+      if (!enabled) return
+
       try {
         const { resendProviderOutageFailures } = await import(
           '@/lib/services/sms/resend-provider-outages'

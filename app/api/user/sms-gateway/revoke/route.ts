@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import connectDB from '@/lib/db/connect'
 import { SmsGatewayDevice } from '@/lib/db/models'
 import { requireAuth } from '@/lib/auth/middleware'
+import { clearGatewayTokenActivationFields } from '@/lib/services/sms-gateway/auth'
+import { logGatewayAudit } from '@/lib/services/sms-gateway/audit'
 import mongoose from 'mongoose'
 
 export async function POST(request: NextRequest) {
@@ -19,18 +21,22 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Invalidate immediately — hash stays so old token cannot authenticate
+    const oldHashPrefix = device.tokenHash?.slice(0, 12)
     device.isActive = false
-    device.boundDeviceFingerprint = undefined
-    device.boundDeviceName = undefined
-    device.boundSimLabel = undefined
-    device.lastHeartbeatAt = undefined
-    device.lastSyncAt = undefined
-    device.isGatewayRunning = false
+    clearGatewayTokenActivationFields(device)
+    device.tokenHash = `revoked_${device.tokenHash}`
+    device.serviceState = 'STOPPED_BY_USER'
     await device.save()
+
+    await logGatewayAudit(user.userId, 'GATEWAY_TOKEN_REVOKED', String(device._id), {
+      tokenHashPrefix: oldHashPrefix,
+    })
 
     return NextResponse.json({
       success: true,
-      message: 'Device token revoked. Generate a new token to reconnect.',
+      message:
+        'Device token revoked and invalidated immediately. Generate a new connection code to reconnect.',
     })
   } catch (error: any) {
     if (error.message === 'Unauthorized') {

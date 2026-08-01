@@ -14,6 +14,8 @@ import {
   resolveGatewayApiBaseUrl,
   resolvePublicOriginFromRequest,
 } from '@/lib/services/sms-gateway/connection-code'
+import { GATEWAY_SETUP_DEFAULTS, resolveGatewaySetupConfig } from '@/lib/services/sms-gateway/config'
+import { logGatewayAudit } from '@/lib/services/sms-gateway/audit'
 import mongoose from 'mongoose'
 
 export async function POST(request: NextRequest) {
@@ -41,32 +43,78 @@ export async function POST(request: NextRequest) {
     const publicOrigin = resolvePublicOriginFromRequest(request, body.publicOrigin)
     const apiBaseUrl = resolveGatewayApiBaseUrl(publicOrigin)
 
+    const configOverrides = resolveGatewaySetupConfig({
+      deviceName: typeof body.deviceName === 'string' ? body.deviceName : undefined,
+      pollIntervalSeconds: body.pollIntervalSeconds,
+      smsDelaySeconds: body.smsDelaySeconds,
+      hourlyLimit: body.hourlyLimit ?? existing?.hourlyLimit,
+      dailyLimit: body.dailyLimit ?? existing?.dailyLimit,
+      pauseOnFailure:
+        typeof body.pauseOnFailure === 'boolean'
+          ? body.pauseOnFailure
+          : GATEWAY_SETUP_DEFAULTS.pauseOnFailure,
+      maxFailuresBeforePause:
+        body.maxFailuresBeforePause ?? GATEWAY_SETUP_DEFAULTS.maxFailuresBeforePause,
+    })
+
     const plainToken = generateGatewayToken()
     const tokenHash = hashGatewayToken(plainToken)
 
+    let deviceId: string
     if (existing) {
       existing.tokenHash = tokenHash
       existing.isActive = true
       clearGatewayTokenActivationFields(existing)
+      existing.hourlyLimit = configOverrides.hourlyLimit
+      existing.dailyLimit = configOverrides.dailyLimit
+      existing.clientPauseOnFailure = configOverrides.pauseOnFailure
+      existing.clientMaxFailuresBeforePause = configOverrides.maxFailuresBeforePause
+      existing.configMigratedAt = new Date()
+      existing.configMigrationNote = 'Generated with safe pause defaults'
       await existing.save()
+      deviceId = String(existing._id)
     } else {
-      await SmsGatewayDevice.create({
+      const created = await SmsGatewayDevice.create({
         userId,
         tokenHash,
         label: 'Phone Gateway',
         simLabel: '',
         isActive: true,
+        hourlyLimit: configOverrides.hourlyLimit,
+        dailyLimit: configOverrides.dailyLimit,
+        clientPauseOnFailure: configOverrides.pauseOnFailure,
+        clientMaxFailuresBeforePause: configOverrides.maxFailuresBeforePause,
+        configMigratedAt: new Date(),
+        configMigrationNote: 'Generated with safe pause defaults',
       })
+      deviceId = String(created._id)
     }
 
-    const payload = buildGatewaySetupPayload(apiBaseUrl, plainToken)
+    const payload = buildGatewaySetupPayload(apiBaseUrl, plainToken, configOverrides)
     const connectionCode = encodeConnectionCode(payload)
+
+    await logGatewayAudit(user.userId, 'GATEWAY_SETUP_GENERATED', deviceId, {
+      apiBaseUrl,
+      pauseOnFailure: configOverrides.pauseOnFailure,
+      maxFailuresBeforePause: configOverrides.maxFailuresBeforePause,
+    })
+    await logGatewayAudit(user.userId, 'GATEWAY_TOKEN_GENERATED', deviceId, {
+      replaced: Boolean(existing),
+    })
 
     return NextResponse.json({
       success: true,
       connectionCode,
       apiBaseUrl,
-      message: 'Connection code generated. Copy it now.',
+      defaults: {
+        pauseOnFailure: configOverrides.pauseOnFailure,
+        maxFailuresBeforePause: configOverrides.maxFailuresBeforePause,
+        pollIntervalSeconds: configOverrides.pollIntervalSeconds,
+        smsDelaySeconds: configOverrides.smsDelaySeconds,
+        hourlyLimit: configOverrides.hourlyLimit,
+        dailyLimit: configOverrides.dailyLimit,
+      },
+      message: 'Connection code generated. Copy it now — the token is shown only once.',
     })
   } catch (error: any) {
     if (error.message === 'Unauthorized') {

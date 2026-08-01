@@ -38,7 +38,18 @@ interface GatewayStatus {
   hasToken: boolean
   isActive: boolean
   isOnline: boolean
-  connectionStatus: 'online' | 'offline' | 'stopped' | 'waiting' | 'not_connected'
+  deviceOnline?: boolean
+  deviceSynchronized?: boolean
+  connectionStatus:
+    | 'online'
+    | 'offline'
+    | 'stopped'
+    | 'waiting'
+    | 'not_connected'
+    | 'synchronizing'
+    | 'waiting_for_network'
+  serviceState?: string
+  syncHealth?: string
   latestActivityAt?: string | null
   tokenStatus: 'active' | 'revoked' | 'none'
   label?: string
@@ -46,6 +57,9 @@ interface GatewayStatus {
   boundSimLabel?: string | null
   lastHeartbeatAt?: string | null
   lastSyncAt?: string | null
+  lastJobFetchedAt?: string | null
+  lastPhoneSendAt?: string | null
+  lastSuccessfulStatusAt?: string | null
   lastIp?: string | null
   lastUserAgent?: string | null
   appVersion?: string | null
@@ -57,8 +71,20 @@ interface GatewayStatus {
   lastFailureAt?: string | null
   lastFailureReason?: string | null
   lastFailureCode?: string | null
+  lastTransientError?: string | null
   pendingPhoneJobs?: number
   blockedTopUpJobs?: number
+  sentViaPhone?: number
+  deliveredViaPhone?: number
+  awaitingDelivery?: number
+  manualReview?: number
+  pauseScope?: 'GATEWAY' | 'SIM' | null
+  pausedSubscriptionId?: string | null
+  pauseReason?: string | null
+  clientPauseOnFailure?: boolean
+  clientMaxFailuresBeforePause?: number
+  liveUpdateNote?: string
+  sims?: Array<{ subscriptionId: string; label: string; state: string }>
 }
 
 interface FallbackJobRow {
@@ -246,9 +272,44 @@ export default function SmsGatewayPage() {
 
   useEffect(() => {
     fetchStatus()
-    const interval = setInterval(fetchStatus, 30000)
+    // Polling fallback — near-real-time while connected, with automatic recovery
+    const interval = setInterval(fetchStatus, 15000)
     return () => clearInterval(interval)
   }, [fetchStatus])
+
+  // Live SSE for gateway counters/status (falls back to polling above)
+  useEffect(() => {
+    const token = localStorage.getItem('token')
+    if (!token) return
+
+    let es: EventSource | null = null
+    let closed = false
+
+    try {
+      es = new EventSource(`/api/user/sms-gateway/live?token=${encodeURIComponent(token)}`)
+      es.onmessage = (event) => {
+        try {
+          const payload = JSON.parse(event.data)
+          if (payload?.type === 'gateway' && payload.gateway) {
+            setGateway((prev) => ({ ...(prev || {}), ...payload.gateway }))
+          }
+        } catch {
+          // ignore malformed
+        }
+      }
+      es.onerror = () => {
+        // Automatic recovery via polling; EventSource reconnects on its own
+      }
+    } catch {
+      // SSE unavailable — polling continues
+    }
+
+    return () => {
+      closed = true
+      if (es && !closed) es.close()
+      es?.close()
+    }
+  }, [])
 
   const handleCopy = async (text: string, field: string) => {
     try {
@@ -454,13 +515,17 @@ export default function SmsGatewayPage() {
     }
   }
 
-  const handleResumeGateway = async () => {
+  const handleResumeGateway = async (scope: 'all' | 'transient' | 'sim' = 'all', subscriptionId?: string) => {
     setResumingGateway(true)
     try {
       const token = localStorage.getItem('token')
       const response = await fetch('/api/user/sms-gateway/resume', {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ scope, subscriptionId }),
       })
       const data = await response.json()
       if (response.ok) {
@@ -814,13 +879,16 @@ export default function SmsGatewayPage() {
   const connectionBadge = (compact = false) => {
     switch (gateway?.connectionStatus) {
       case 'online':
-        return <StatusBadge label="Online" variant="green" compact={compact} />
+        return <StatusBadge label="Device Online" variant="green" compact={compact} />
+      case 'synchronizing':
+        return <StatusBadge label="Syncing" variant="blue" compact={compact} />
       case 'offline':
         return <StatusBadge label="Offline" variant="red" compact={compact} />
       case 'stopped':
-        return <StatusBadge label="Stopped" variant="gray" compact={compact} />
+        return <StatusBadge label="Stopped by user" variant="gray" compact={compact} />
       case 'waiting':
-        return <StatusBadge label="Waiting" variant="amber" compact={compact} />
+      case 'waiting_for_network':
+        return <StatusBadge label="Waiting for network" variant="amber" compact={compact} />
       default:
         return <StatusBadge label="Not connected" variant="gray" compact={compact} />
     }
@@ -829,13 +897,16 @@ export default function SmsGatewayPage() {
   const connectionStatusText = () => {
     switch (gateway?.connectionStatus) {
       case 'online':
-        return 'Online'
+        return gateway.deviceSynchronized === false ? 'Online · sync pending' : 'Online'
+      case 'synchronizing':
+        return 'Synchronizing'
       case 'offline':
         return 'Offline'
       case 'stopped':
-        return 'Stopped'
+        return 'Stopped by user'
       case 'waiting':
-        return 'Waiting'
+      case 'waiting_for_network':
+        return 'Waiting for network'
       default:
         return 'Not connected'
     }
@@ -853,23 +924,27 @@ export default function SmsGatewayPage() {
   }
 
   const gatewayRunningBadge = () => {
-    if (gateway?.requiresTopUp) {
+    if (gateway?.pauseScope === 'SIM' && gateway?.requiresTopUp) {
+      return <StatusBadge label="SIM paused (top-up)" variant="amber" />
+    }
+    if (gateway?.requiresTopUp && gateway?.pauseScope === 'GATEWAY') {
       return <StatusBadge label="Paused" variant="amber" />
     }
-    if (gateway?.isGatewayRunning == null) {
-      return <StatusBadge label="Unknown" variant="gray" />
+    if (gateway?.serviceState === 'RUNNING' || gateway?.isGatewayRunning) {
+      return <StatusBadge label="Gateway running" variant="green" />
     }
-    return gateway.isGatewayRunning ? (
-      <StatusBadge label="Running" variant="green" />
-    ) : (
-      <StatusBadge label="Stopped" variant="gray" />
-    )
+    if (gateway?.isGatewayRunning === false) {
+      return <StatusBadge label="Stopped by user" variant="gray" />
+    }
+    return <StatusBadge label="Unknown" variant="gray" />
   }
 
   const gatewayRunningText = () => {
-    if (gateway?.requiresTopUp) return 'Paused'
-    if (gateway?.isGatewayRunning == null) return 'Unknown'
-    return gateway.isGatewayRunning ? 'Running' : 'Stopped'
+    if (gateway?.pauseScope === 'SIM') return 'Running (SIM paused)'
+    if (gateway?.requiresTopUp && gateway?.pauseScope === 'GATEWAY') return 'Paused'
+    if (gateway?.serviceState === 'RUNNING' || gateway?.isGatewayRunning) return 'Running'
+    if (gateway?.isGatewayRunning === false) return 'Stopped by user'
+    return 'Unknown'
   }
 
   const tokenBadge = () => {
@@ -972,7 +1047,11 @@ export default function SmsGatewayPage() {
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">
-                <Button className={BTN.primary} onClick={handleResumeGateway} disabled={resumingGateway}>
+                <Button
+                  className={BTN.primary}
+                  onClick={() => handleResumeGateway('all')}
+                  disabled={resumingGateway}
+                >
                   {resumingGateway ? 'Resuming…' : 'Mark Reloaded / Resume'}
                 </Button>
                 <Button
@@ -1126,6 +1205,120 @@ export default function SmsGatewayPage() {
             {/* Gateway Health Summary */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
               <Card className={`p-4 ${CARD}`}>
+                <p className="text-xs font-medium text-[#64748B] mb-2">Device Online</p>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-lg font-semibold text-[#0F172A] truncate">
+                    {gateway?.deviceOnline ? 'Online' : connectionStatusText()}
+                  </p>
+                  {connectionBadge(true)}
+                </div>
+              </Card>
+              <Card className={`p-4 ${CARD}`}>
+                <p className="text-xs font-medium text-[#64748B] mb-2">Device Synchronized</p>
+                <p className="text-sm font-semibold text-[#0F172A] leading-snug">
+                  {gateway?.syncHealth === 'UP_TO_DATE'
+                    ? 'Up to date'
+                    : gateway?.syncHealth === 'RETRYING'
+                      ? 'Retrying sync'
+                      : gateway?.syncHealth === 'PENDING'
+                        ? 'Pending'
+                        : 'Unknown'}
+                </p>
+                <p className="text-[11px] text-[#94A3B8] mt-1">
+                  {gateway?.liveUpdateNote ||
+                    'Near-real-time while connected, with automatic recovery.'}
+                </p>
+              </Card>
+              <Card className={`p-4 ${CARD}`}>
+                <p className="text-xs font-medium text-[#64748B] mb-2">Gateway Running</p>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-lg font-semibold text-[#0F172A] truncate">
+                    {gatewayRunningText()}
+                  </p>
+                  {gatewayRunningBadge()}
+                </div>
+              </Card>
+              <Card className={`p-4 ${CARD}`}>
+                <p className="text-xs font-medium text-[#64748B] mb-2">Last Heartbeat</p>
+                <p className="text-sm font-semibold text-[#0F172A] leading-snug">
+                  {formatDate(gateway?.lastHeartbeatAt)}
+                </p>
+              </Card>
+            </div>
+
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+              <Card className={`p-4 ${CARD}`}>
+                <p className="text-xs font-medium text-[#64748B] mb-1">Pending phone jobs</p>
+                <p className="text-xl font-semibold text-[#0F172A]">{gateway?.pendingPhoneJobs ?? 0}</p>
+              </Card>
+              <Card className={`p-4 ${CARD}`}>
+                <p className="text-xs font-medium text-[#64748B] mb-1">Sent via phone</p>
+                <p className="text-xl font-semibold text-[#0F172A]">{gateway?.sentViaPhone ?? 0}</p>
+              </Card>
+              <Card className={`p-4 ${CARD}`}>
+                <p className="text-xs font-medium text-[#64748B] mb-1">Delivered via phone</p>
+                <p className="text-xl font-semibold text-[#0F172A]">{gateway?.deliveredViaPhone ?? 0}</p>
+              </Card>
+              <Card className={`p-4 ${CARD}`}>
+                <p className="text-xs font-medium text-[#64748B] mb-1">Awaiting delivery / review</p>
+                <p className="text-xl font-semibold text-[#0F172A]">
+                  {(gateway?.awaitingDelivery ?? 0) + (gateway?.manualReview ?? 0)}
+                </p>
+              </Card>
+            </div>
+
+            {gateway?.sims && gateway.sims.length > 0 && (
+              <Card className={`p-4 ${CARD}`}>
+                <p className="text-xs font-medium text-[#64748B] mb-3">Per-SIM status</p>
+                <div className="flex flex-wrap gap-2">
+                  {gateway.sims.map((sim) => (
+                    <StatusBadge
+                      key={sim.subscriptionId}
+                      label={`${sim.label}: ${sim.state.replace(/_/g, ' ')}`}
+                      variant={
+                        sim.state === 'ACTIVE'
+                          ? 'green'
+                          : sim.state.startsWith('PAUSED') || sim.state === 'SIM_UNAVAILABLE'
+                            ? 'amber'
+                            : 'gray'
+                      }
+                    />
+                  ))}
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button
+                    className={BTN.secondary}
+                    onClick={() => handleResumeGateway('transient')}
+                    disabled={resumingGateway}
+                  >
+                    {resumingGateway ? 'Resuming…' : 'Clear transient pause'}
+                  </Button>
+                  {gateway.sims
+                    .filter((sim) => sim.state !== 'ACTIVE' && sim.state !== 'INACTIVE')
+                    .map((sim) => (
+                      <Button
+                        key={`resume-${sim.subscriptionId}`}
+                        className={BTN.secondary}
+                        onClick={() => handleResumeGateway('sim', sim.subscriptionId)}
+                        disabled={resumingGateway}
+                      >
+                        Resume {sim.label}
+                      </Button>
+                    ))}
+                  <Button
+                    className={BTN.secondary}
+                    onClick={() => handleResumeGateway('all')}
+                    disabled={resumingGateway}
+                  >
+                    Resume all
+                  </Button>
+                </div>
+              </Card>
+            )}
+
+            {/* legacy health cards continue */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+              <Card className={`p-4 ${CARD}`}>
                 <p className="text-xs font-medium text-[#64748B] mb-2">Gateway Status</p>
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-lg font-semibold text-[#0F172A] truncate">
@@ -1154,13 +1347,10 @@ export default function SmsGatewayPage() {
                 </div>
               </Card>
               <Card className={`p-4 ${CARD}`}>
-                <p className="text-xs font-medium text-[#64748B] mb-2">Gateway Running</p>
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-lg font-semibold text-[#0F172A] truncate">
-                    {gatewayRunningText()}
-                  </p>
-                  {gatewayRunningBadge()}
-                </div>
+                <p className="text-xs font-medium text-[#64748B] mb-2">Last phone send</p>
+                <p className="text-sm font-semibold text-[#0F172A] leading-snug">
+                  {formatDate(gateway?.lastPhoneSendAt || gateway?.lastSuccessfulStatusAt)}
+                </p>
               </Card>
             </div>
 

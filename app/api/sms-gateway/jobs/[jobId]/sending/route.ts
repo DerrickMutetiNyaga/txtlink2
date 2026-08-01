@@ -40,12 +40,16 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return gatewayAuthErrorResponse(auth)
     }
 
-    if (auth.device.requiresTopUp) {
+    // Whole-gateway top-up pause only. SIM-scoped pause must not block other SIMs.
+    if (auth.device.requiresTopUp && auth.device.pauseScope !== 'SIM') {
       return NextResponse.json(
         {
           success: false,
           code: 'GATEWAY_REQUIRES_TOPUP',
           message: 'Phone gateway paused — reload SMS bundle or airtime before claiming jobs',
+          keepRunning: true,
+          gatewayPaused: false,
+          pauseScope: auth.device.pauseScope || null,
         },
         { status: 403 }
       )

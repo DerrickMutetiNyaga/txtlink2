@@ -148,15 +148,20 @@ export async function GET(request: NextRequest) {
 
     await connectDB()
 
-    if (auth.device.requiresTopUp) {
+    if (auth.device.requiresTopUp && auth.device.pauseScope !== 'SIM') {
       return NextResponse.json({
         success: true,
         jobs: [],
-        gatewayPaused: true,
+        gatewayPaused: false,
+        simPaused: true,
         requiresTopUp: true,
-        message: 'Phone gateway paused — reload SMS bundle or airtime on the device',
+        message: 'Phone gateway SIM paused — reload SMS bundle or airtime on the device',
+        keepRunning: true,
       })
     }
+
+    // SIM-scoped top-up: still return jobs (other SIMs may handle them)
+    // Android assigns by available SIM; website does not pause whole gateway.
 
     const { searchParams } = new URL(request.url)
     // Higher default so a connected phone can drain a surge / backlog faster
@@ -168,19 +173,8 @@ export async function GET(request: NextRequest) {
       { $set: { status: 'pending', phoneStatus: 'pending' } }
     )
 
-    // Normalize legacy "sent" jobs that already have a sent timestamp
-    await SmsFallbackJob.updateMany(
-      { userId, status: 'sent', sentAt: { $ne: null } },
-      [
-        {
-          $set: {
-            status: 'delivered',
-            phoneStatus: 'delivered',
-            deliveredAt: { $ifNull: ['$deliveredAt', '$sentAt'] },
-          },
-        },
-      ]
-    )
+    // Do NOT promote status "sent" → "delivered" here.
+    // Sent via phone without a delivery report must remain sent (delivery unconfirmed).
 
     const reclaimed = await reclaimStuckPhoneJobs(userId)
 
@@ -196,26 +190,29 @@ export async function GET(request: NextRequest) {
     for (const job of jobs) {
       if (activeJobs.length >= limit) break
       if (job.status !== 'pending') continue
-      if (job.phoneStatus === 'delivered') continue
-      if (job.deliveredAt || job.sentAt) {
-        // Only finalize if the original SMS is actually delivered; otherwise clear stamps
+      // Confirmed delivery stamp only — sentAt alone means delivery unconfirmed
+      if (job.phoneStatus === 'delivered' || job.deliveredAt) {
         if (!job.isTest && job.originalSmsId) {
           const smsCheck = await SmsMessage.findById(job.originalSmsId)
             .select('status fallbackStatus deliveredAt')
             .lean()
           if (smsCheck && !isSmsFullyDelivered(smsCheck as ISmsMessage)) {
             await SmsFallbackJob.findByIdAndUpdate(job._id, {
-              $unset: { deliveredAt: 1, sentAt: 1 },
-              $set: { phoneStatus: 'pending' },
+              $unset: { deliveredAt: 1 },
+              $set: { phoneStatus: job.sentAt ? 'sent' : 'pending' },
             })
           } else {
-            await finalizeDeliveredJob(job._id, job.deliveredAt || job.sentAt || new Date())
+            await finalizeDeliveredJob(job._id, job.deliveredAt || new Date())
             continue
           }
         } else {
-          await finalizeDeliveredJob(job._id, job.deliveredAt || job.sentAt || new Date())
+          await finalizeDeliveredJob(job._id, job.deliveredAt || new Date())
           continue
         }
+      }
+      // Stale pending row with a send stamp should not re-enter the send queue
+      if (job.sentAt) {
+        continue
       }
 
       let jobMessage = job.message
@@ -280,6 +277,7 @@ export async function GET(request: NextRequest) {
     }
 
     auth.device.lastSyncAt = new Date()
+    auth.device.lastJobFetchedAt = new Date()
     await auth.device.save()
 
     logGatewayJobAction({
@@ -295,11 +293,23 @@ export async function GET(request: NextRequest) {
       success: true,
       jobs: activeJobs,
       reclaimed,
+      gatewayPaused: false,
+      keepRunning: true,
+      requiresTopUp: Boolean(auth.device.requiresTopUp),
+      pauseScope: auth.device.pauseScope || null,
+      pausedSubscriptionId: auth.device.pausedSubscriptionId || null,
     })
   } catch (error: any) {
     console.error('SMS gateway pending jobs error:', error)
+    // Fetch failure must never pause the gateway or fail jobs
     return NextResponse.json(
-      { success: false, message: 'Internal server error' },
+      {
+        success: false,
+        message: 'Internal server error',
+        jobs: [],
+        gatewayPaused: false,
+        keepRunning: true,
+      },
       { status: 500 }
     )
   }
