@@ -283,7 +283,6 @@ export interface ISmsMessage {
     | 'phone_requires_topup'
     | 'fallback_error_missing_message_body'
     | 'cancelled'
-    | 'submission_unknown'
   fallbackJobId?: string
   fallbackQueuedAt?: Date
   fallbackSentAt?: Date
@@ -1178,35 +1177,9 @@ export interface ISmsGatewayDevice {
   lastFailureCode?: string
   pausedAt?: Date
   pauseReason?: string
-  /** GATEWAY = whole device; SIM = only one subscription paused */
-  pauseScope?: 'GATEWAY' | 'SIM' | null
-  pausedSubscriptionId?: string | null
-  failureCategory?: string | null
-  consecutiveFailureCount?: number
-  consecutiveTransientFailures?: number
-  resumedAt?: Date
-  resumedBy?: string
-  lastTransientError?: string
-  lastSuccessfulStatusAt?: Date
-  lastJobFetchedAt?: Date
-  lastPhoneSendAt?: Date
-  serviceState?: string
-  syncHealth?: string
-  /** Mirrored Android client config (for migration / UI) */
-  clientPauseOnFailure?: boolean
-  clientMaxFailuresBeforePause?: number
-  configMigratedAt?: Date
-  configMigrationNote?: string
-  activeSubscriptions?: Array<{
-    subscriptionId: string
-    label?: string
-    state?: string
-  }>
   createdAt: Date
   updatedAt: Date
 }
-
-// Widen serviceState/syncHealth in helpers via casting where needed — stored as string.
 
 const SmsGatewayDeviceSchema = new Schema<ISmsGatewayDevice>(
   {
@@ -1235,81 +1208,12 @@ const SmsGatewayDeviceSchema = new Schema<ISmsGatewayDevice>(
     lastFailureCode: { type: String },
     pausedAt: { type: Date },
     pauseReason: { type: String },
-    pauseScope: { type: String, enum: ['GATEWAY', 'SIM', null], default: null },
-    pausedSubscriptionId: { type: String },
-    failureCategory: { type: String },
-    consecutiveFailureCount: { type: Number, default: 0 },
-    consecutiveTransientFailures: { type: Number, default: 0 },
-    resumedAt: { type: Date },
-    resumedBy: { type: String },
-    lastTransientError: { type: String },
-    lastSuccessfulStatusAt: { type: Date },
-    lastJobFetchedAt: { type: Date },
-    lastPhoneSendAt: { type: Date },
-    serviceState: { type: String },
-    syncHealth: { type: String },
-    clientPauseOnFailure: { type: Boolean },
-    clientMaxFailuresBeforePause: { type: Number },
-    configMigratedAt: { type: Date },
-    configMigrationNote: { type: String },
-    activeSubscriptions: [
-      {
-        subscriptionId: { type: String },
-        label: { type: String },
-        state: { type: String },
-      },
-    ],
   },
   { timestamps: true }
 )
 
 SmsGatewayDeviceSchema.index({ isActive: 1 })
 SmsGatewayDeviceSchema.index({ lastHeartbeatAt: 1 })
-
-/** Idempotent Android status event records (optional eventId / idempotencyKey). */
-export interface ISmsGatewayStatusEvent {
-  _id?: string
-  userId: mongoose.Types.ObjectId
-  jobId: string
-  key: string
-  eventId?: string
-  idempotencyKey?: string
-  attemptId?: string
-  eventType?: string
-  eventTimestamp?: Date
-  partIndex?: number
-  totalParts?: number
-  payloadSummary?: Record<string, unknown>
-  status: 'processing' | 'completed'
-  response?: Record<string, unknown>
-  completedAt?: Date
-  createdAt: Date
-  updatedAt: Date
-}
-
-const SmsGatewayStatusEventSchema = new Schema<ISmsGatewayStatusEvent>(
-  {
-    userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-    jobId: { type: String, required: true },
-    key: { type: String, required: true },
-    eventId: { type: String },
-    idempotencyKey: { type: String },
-    attemptId: { type: String },
-    eventType: { type: String },
-    eventTimestamp: { type: Date },
-    partIndex: { type: Number },
-    totalParts: { type: Number },
-    payloadSummary: { type: Schema.Types.Mixed },
-    status: { type: String, enum: ['processing', 'completed'], default: 'processing' },
-    response: { type: Schema.Types.Mixed },
-    completedAt: { type: Date },
-  },
-  { timestamps: true }
-)
-
-SmsGatewayStatusEventSchema.index({ userId: 1, key: 1 }, { unique: true })
-SmsGatewayStatusEventSchema.index({ jobId: 1, createdAt: -1 })
-SmsGatewayStatusEventSchema.index({ createdAt: 1 }, { expireAfterSeconds: 60 * 60 * 24 * 30 })
 
 // SMS Fallback Job Model (phone gateway queue)
 export interface ISmsFallbackJob {
@@ -1348,7 +1252,6 @@ export interface ISmsFallbackJob {
   phoneStatus?:
     | 'pending'
     | 'sending'
-    | 'sent'
     | 'delivered'
     | 'failed'
     | 'requires_topup'
@@ -1422,7 +1325,7 @@ const SmsFallbackJobSchema = new Schema<ISmsFallbackJob>(
     },
     phoneStatus: {
       type: String,
-      enum: ['pending', 'sending', 'sent', 'delivered', 'failed', 'requires_topup', 'cancelled'],
+      enum: ['pending', 'sending', 'delivered', 'failed', 'requires_topup', 'cancelled'],
     },
     source: {
       type: String,
@@ -1545,9 +1448,6 @@ export const SenderIdPricing: Model<ISenderIdPricing> =
 export const SmsGatewayDevice: Model<ISmsGatewayDevice> =
   mongoose.models.SmsGatewayDevice ||
   mongoose.model<ISmsGatewayDevice>('SmsGatewayDevice', SmsGatewayDeviceSchema)
-export const SmsGatewayStatusEvent: Model<ISmsGatewayStatusEvent> =
-  mongoose.models.SmsGatewayStatusEvent ||
-  mongoose.model<ISmsGatewayStatusEvent>('SmsGatewayStatusEvent', SmsGatewayStatusEventSchema)
 export const SmsFallbackJob: Model<ISmsFallbackJob> =
   mongoose.models.SmsFallbackJob ||
   mongoose.model<ISmsFallbackJob>('SmsFallbackJob', SmsFallbackJobSchema)

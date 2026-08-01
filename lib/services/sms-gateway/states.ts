@@ -61,12 +61,9 @@ export function deriveGatewayServiceState(device: {
   pausedAt?: Date | string | null
   pauseScope?: PauseScope
   pauseReason?: string | null
-  serviceState?: string | null
+  serviceState?: GatewayServiceState | null
 }): GatewayServiceState {
-  if (
-    device.serviceState &&
-    (GATEWAY_SERVICE_STATES as readonly string[]).includes(device.serviceState)
-  ) {
+  if (device.serviceState && (GATEWAY_SERVICE_STATES as readonly string[]).includes(device.serviceState)) {
     // Prefer live derivation over stale stored values for online/offline
   }
 

@@ -1,7 +1,6 @@
 import crypto from 'crypto'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import type { HydratedDocument } from 'mongoose'
 import connectDB from '@/lib/db/connect'
 import { SmsGatewayDevice, ISmsGatewayDevice } from '@/lib/db/models'
 
@@ -102,7 +101,7 @@ export type GatewayAuthCode =
 export type GatewayAuthResult =
   | {
       ok: true
-      device: HydratedDocument<ISmsGatewayDevice>
+      device: ISmsGatewayDevice & { _id: unknown }
       identity: GatewayDeviceIdentity
     }
   | {

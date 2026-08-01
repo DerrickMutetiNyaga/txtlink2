@@ -62,14 +62,11 @@ export function getFallbackStatusLabel(status?: string | null, requiresPhoneTopU
       return 'Queued for Phone'
     case 'sending_via_phone':
       return 'Sending via Phone'
-    case 'sent_via_phone':
-      return 'Sent via Phone'
     case 'delivered_via_phone':
+    case 'sent_via_phone':
       return 'Delivered via Phone'
-    case 'submission_unknown':
-      return 'Submission result unknown'
     case 'phone_requires_topup':
-      return 'Top Up Required'
+      return 'Phone Needs Reload'
     case 'phone_failed':
       return requiresPhoneTopUp ? 'Failed via Phone — Reload SMS' : 'Failed via Phone'
     default:
