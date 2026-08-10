@@ -1,11 +1,14 @@
 /** Phone gateway / fallback status helpers — shared across API and UI. */
 
-export const PHONE_DELIVERED_FALLBACK_STATUSES = [
-  'delivered_via_phone',
-  'sent_via_phone',
-] as const
+/** Confirmed handset delivery only — SENT_VIA_PHONE is not DELIVERED. */
+export const PHONE_DELIVERED_FALLBACK_STATUSES = ['delivered_via_phone'] as const
 
-export const ACTIVE_FALLBACK_JOB_STATUSES = ['pending', 'sending'] as const
+export const ACTIVE_FALLBACK_JOB_STATUSES = [
+  'pending',
+  'claimed',
+  'sending',
+  'submission_unknown',
+] as const
 
 export const COMPLETED_FALLBACK_JOB_STATUSES = [
   'delivered',
@@ -34,18 +37,34 @@ export function getPhoneJobStatusLabel(status: string, phoneStatus?: string | nu
   const ps = phoneStatus || status
   switch (ps) {
     case 'pending':
+    case 'QUEUED_FOR_PHONE':
       return 'Pending'
+    case 'claimed':
+    case 'CLAIMED_FOR_PHONE':
+      return 'Claimed'
     case 'sending':
+    case 'SUBMISSION_STARTED':
       return 'Sending'
-    case 'delivered':
+    case 'submission_unknown':
+    case 'SUBMISSION_UNKNOWN':
+      return 'Submission Unknown'
     case 'sent':
+    case 'SENT_VIA_PHONE':
+    case 'sent_via_phone':
+      return 'Sent via Phone'
+    case 'delivered':
+    case 'DELIVERED_VIA_PHONE':
+    case 'delivered_via_phone':
       return 'Delivered via Phone'
     case 'requires_topup':
     case 'blocked':
+    case 'TOP_UP_REQUIRED':
       return 'Phone Needs Reload'
     case 'failed':
+    case 'PHONE_SEND_FAILED':
       return 'Failed via Phone'
     case 'cancelled':
+    case 'CANCELLED':
       return 'Cancelled'
     default:
       return status
@@ -62,8 +81,9 @@ export function getFallbackStatusLabel(status?: string | null, requiresPhoneTopU
       return 'Queued for Phone'
     case 'sending_via_phone':
       return 'Sending via Phone'
-    case 'delivered_via_phone':
     case 'sent_via_phone':
+      return 'Sent via Phone'
+    case 'delivered_via_phone':
       return 'Delivered via Phone'
     case 'phone_requires_topup':
       return 'Phone Needs Reload'

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import connectDB from '@/lib/db/connect'
-import { SmsFallbackJob, SmsMessage, ISmsMessage } from '@/lib/db/models'
+import { SmsFallbackJob, SmsMessage, ISmsMessage, SmsGatewayDevice } from '@/lib/db/models'
 import {
   validateGatewayDevice,
   gatewayAuthErrorResponse,
@@ -14,293 +14,305 @@ import {
   buildMetadataFromSms,
   isMetadataUsedAsMessageBody,
 } from '@/lib/services/sms/message-body'
+import { reclaimExpiredClaims } from '@/lib/services/sms-gateway/claim-recovery'
+import {
+  clampPendingJobLimit,
+  pendingClaimAttemptBudget,
+} from '@/lib/services/sms-gateway/pending-query'
+import {
+  atomicClaimNextPendingJob,
+  formatClaimedJobForAndroid,
+  releaseClaimedJobToPending,
+} from '@/lib/services/sms-gateway/atomic-claim'
+import { recordGatewayConnectionDiagnostic } from '@/lib/services/sms-gateway/diagnostics'
+import { buildServerTimingHeader, elapsedMs, nowMs } from '@/lib/services/sms-gateway/timing'
+import { getClaimLeaseSeconds } from '@/lib/services/sms-gateway/claim-lease'
 
 const ROUTE = 'GET /api/sms-gateway/jobs/pending'
 
-/** Stuck "sending" jobs older than this are re-queued immediately on poll. */
-const STALE_SENDING_RECLAIM_MS = 90 * 1000
-
-async function finalizeDeliveredJob(jobId: unknown, deliveredAt: Date): Promise<void> {
-  await SmsFallbackJob.findByIdAndUpdate(jobId, {
-    status: 'delivered',
-    phoneStatus: 'delivered',
-    deliveredAt,
-    sentAt: deliveredAt,
-  })
+function jsonWithTiming(
+  body: Record<string, unknown>,
+  status: number,
+  timing: { totalMs: number; dbMs: number }
+) {
+  const response = NextResponse.json(body, { status })
+  response.headers.set(
+    'Server-Timing',
+    buildServerTimingHeader({ db: timing.dbMs, total: timing.totalMs })
+  )
+  response.headers.set('X-Gateway-Db-Ms', String(timing.dbMs))
+  response.headers.set('X-Gateway-Total-Ms', String(timing.totalMs))
+  return response
 }
 
 /**
- * Unstick older jobs so the phone can drain the queue oldest-first:
- * - reclaim stale "sending" claims
- * - reopen jobs wrongly cancelled/closed while the SMS still needs phone send
+ * Atomic pending acquisition:
+ * for each slot in the batch, findOneAndUpdate one eligible pending job → CLAIMED_FOR_PHONE.
+ * Concurrent polls cannot claim the same job.
  */
-async function reclaimStuckPhoneJobs(userId: unknown): Promise<number> {
-  const now = new Date()
-  const staleCutoff = new Date(now.getTime() - STALE_SENDING_RECLAIM_MS)
-
-  const staleSending = await SmsFallbackJob.updateMany(
-    {
-      userId,
-      status: 'sending',
-      sendingAt: { $lte: staleCutoff },
-    },
-    {
-      $set: {
-        status: 'pending',
-        phoneStatus: 'pending',
-        resetReason: 'reclaimed_on_pending_poll',
-      },
-      $unset: { sendingAt: 1, lockedAt: 1, lockedBy: 1 },
-    }
-  )
-
-  // Jobs closed as "delivered/cancelled" while the SMS was only queued to phone
-  // (deliveryMethod was set at queue time — not confirmation).
-  const candidates = await SmsFallbackJob.find({
-    userId,
-    status: { $in: ['cancelled', 'delivered', 'failed'] },
-    isTest: { $ne: true },
-    $or: [
-      { cancelReason: /delivered before phone/i },
-      { resetReason: 'reclaimed_on_pending_poll' },
-      {
-        status: 'delivered',
-        phoneStatus: { $in: ['delivered', 'pending', 'sending', null] },
-      },
-      { status: 'failed', failureCode: 'SENDING_TIMEOUT' },
-    ],
-  })
-    .sort({ createdAt: 1 })
-    .limit(150)
-    .select('_id originalSmsId status')
-    .lean()
-
-  let reopened = 0
-  for (const job of candidates) {
-    if (!job.originalSmsId) continue
-    const sms = await SmsMessage.findById(job.originalSmsId)
-      .select('status deliveryStatus deliveryMethod fallbackStatus deliveredAt')
-      .lean()
-    if (!sms) continue
-    if (isSmsFullyDelivered(sms as ISmsMessage)) continue
-
-    // Still needs phone send
-    const needsPhone =
-      sms.fallbackStatus === 'queued_for_phone' ||
-      sms.fallbackStatus === 'sending_via_phone' ||
-      sms.fallbackStatus === 'phone_failed' ||
-      sms.deliveryMethod === 'android_phone_gateway' ||
-      sms.deliveryMethod === 'android_phone_gateway_failed' ||
-      (sms.status !== 'delivered' &&
-        ['queued', 'sent', 'failed', 'processing', 'retrying'].includes(String(sms.status)))
-
-    if (!needsPhone) continue
-
-    await SmsFallbackJob.findByIdAndUpdate(job._id, {
-      $set: {
-        status: 'pending',
-        phoneStatus: 'pending',
-        resetReason: 'reopened_undelivered_queue',
-      },
-      $unset: {
-        sendingAt: 1,
-        lockedAt: 1,
-        lockedBy: 1,
-        failedAt: 1,
-        failureReason: 1,
-        failureCode: 1,
-        cancelReason: 1,
-        deliveredAt: 1,
-        sentAt: 1,
-      },
-    })
-
-    await SmsMessage.findByIdAndUpdate(job.originalSmsId, {
-      $set: {
-        status: sms.status === 'delivered' ? 'queued' : sms.status,
-        fallbackStatus: 'queued_for_phone',
-        fallbackQueued: true,
-        deliveryMethod: 'android_phone_gateway',
-        nextCheckAt: null,
-      },
-      $unset: {
-        fallbackFailedAt: 1,
-        fallbackFailureReason: 1,
-        fallbackFailureCode: 1,
-        failedAt: 1,
-        finalizedAt: 1,
-        requiresPhoneTopUp: 1,
-      },
-    })
-
-    reopened++
-  }
-
-  return (staleSending.modifiedCount || 0) + reopened
-}
-
 export async function GET(request: NextRequest) {
+  const startedAt = nowMs()
+  let dbMs = 0
+  let deviceId: unknown = null
+  let gatewayDeviceIdHeader: string | null = request.headers.get('x-gateway-device-id')
+
   try {
     const auth = await validateGatewayDevice(request, { route: ROUTE })
     if (!auth.ok) {
+      const totalMs = elapsedMs(startedAt)
+      await recordGatewayConnectionDiagnostic({
+        deviceId: null,
+        route: ROUTE,
+        httpStatus: auth.status,
+        durationMs: totalMs,
+        dbQueryDurationMs: dbMs,
+        jobsReturned: 0,
+        kind: 'pending',
+        gatewayDeviceIdHeader,
+      }).catch(() => undefined)
       return gatewayAuthErrorResponse(auth)
     }
+
+    deviceId = auth.device._id
+    const claimedByDeviceId = String(auth.device._id)
+    gatewayDeviceIdHeader =
+      auth.identity.deviceId || request.headers.get('x-gateway-device-id')
 
     await connectDB()
 
     if (auth.device.requiresTopUp) {
-      return NextResponse.json({
-        success: true,
-        jobs: [],
-        gatewayPaused: true,
-        requiresTopUp: true,
-        message: 'Phone gateway paused — reload SMS bundle or airtime on the device',
+      const totalMs = elapsedMs(startedAt)
+      await recordGatewayConnectionDiagnostic({
+        deviceId,
+        route: ROUTE,
+        httpStatus: 200,
+        durationMs: totalMs,
+        dbQueryDurationMs: dbMs,
+        jobsReturned: 0,
+        kind: 'pending',
+        gatewayDeviceIdHeader,
       })
+      return jsonWithTiming(
+        {
+          success: true,
+          jobs: [],
+          gatewayPaused: true,
+          requiresTopUp: true,
+          message: 'Phone gateway paused — reload SMS bundle or airtime on the device',
+          timing: { dbMs, totalMs },
+          claimLeaseSeconds: getClaimLeaseSeconds(),
+        },
+        200,
+        { dbMs, totalMs }
+      )
     }
 
     const { searchParams } = new URL(request.url)
-    // Higher default so a connected phone can drain a surge / backlog faster
-    const limit = Math.min(parseInt(searchParams.get('limit') || '40', 10) || 40, 100)
+    const limit = clampPendingJobLimit(searchParams.get('limit'))
     const userId = auth.device.userId
+    const assignedSubscriptionId =
+      searchParams.get('subscriptionId') ||
+      searchParams.get('assignedSubscriptionId') ||
+      auth.device.boundSimLabel ||
+      null
 
+    // Cheap maintenance: notified → pending; safe expired reclaim only
+    const maintStart = nowMs()
     await SmsFallbackJob.updateMany(
       { userId, status: 'notified' },
-      { $set: { status: 'pending', phoneStatus: 'pending' } }
-    )
-
-    // Normalize legacy "sent" jobs that already have a sent timestamp
-    await SmsFallbackJob.updateMany(
-      { userId, status: 'sent', sentAt: { $ne: null } },
-      [
-        {
-          $set: {
-            status: 'delivered',
-            phoneStatus: 'delivered',
-            deliveredAt: { $ifNull: ['$deliveredAt', '$sentAt'] },
-          },
+      {
+        $set: {
+          status: 'pending',
+          phoneStatus: 'pending',
+          canonicalStatus: 'QUEUED_FOR_PHONE',
         },
-      ]
+      }
     )
-
-    const reclaimed = await reclaimStuckPhoneJobs(userId)
-
-    // Over-fetch: some candidates get skipped (delivered SMS, bad body) —
-    // keep scanning oldest-first until we fill `limit` or run out.
-    const fetchLimit = Math.min(Math.max(limit * 3, 60), 200)
-    const jobs = await SmsFallbackJob.find({ userId, status: 'pending' })
-      .sort({ createdAt: 1 })
-      .limit(fetchLimit)
-      .lean()
+    const recovery = await reclaimExpiredClaims(userId)
+    dbMs += elapsedMs(maintStart)
 
     const activeJobs = []
-    for (const job of jobs) {
-      if (activeJobs.length >= limit) break
-      if (job.status !== 'pending') continue
-      if (job.phoneStatus === 'delivered') continue
-      if (job.deliveredAt || job.sentAt) {
-        // Only finalize if the original SMS is actually delivered; otherwise clear stamps
-        if (!job.isTest && job.originalSmsId) {
-          const smsCheck = await SmsMessage.findById(job.originalSmsId)
-            .select('status fallbackStatus deliveredAt')
-            .lean()
-          if (smsCheck && !isSmsFullyDelivered(smsCheck as ISmsMessage)) {
-            await SmsFallbackJob.findByIdAndUpdate(job._id, {
-              $unset: { deliveredAt: 1, sentAt: 1 },
-              $set: { phoneStatus: 'pending' },
-            })
-          } else {
-            await finalizeDeliveredJob(job._id, job.deliveredAt || job.sentAt || new Date())
-            continue
-          }
-        } else {
-          await finalizeDeliveredJob(job._id, job.deliveredAt || job.sentAt || new Date())
-          continue
-        }
-      }
+    const excludeJobIds: unknown[] = []
+    const budget = pendingClaimAttemptBudget(limit)
 
-      let jobMessage = job.message
-      let smsForBody: ISmsMessage | null = null
+    for (let i = 0; i < budget && activeJobs.length < limit; i++) {
+      const claimStart = nowMs()
+      const job = await atomicClaimNextPendingJob({
+        userId,
+        deviceId: claimedByDeviceId,
+        deviceName: auth.device.boundDeviceName,
+        simLabel: auth.device.boundSimLabel,
+        assignedSubscriptionId,
+        excludeJobIds,
+      })
+      dbMs += elapsedMs(claimStart)
 
-      if (!job.isTest) {
+      if (!job) break
+
+      excludeJobIds.push(job._id)
+
+      // Eligibility / body checks after atomic claim — release if unusable
+      if (!job.isTest && job.originalSmsId) {
         const cancelled = await cancelFallbackJobIfDelivered(
           job.originalSmsId,
           'Original SMS delivered before phone fallback'
         )
-        if (cancelled) continue
+        if (cancelled) {
+          await releaseClaimedJobToPending(
+            job._id,
+            job.claimToken || '',
+            'released_provider_already_delivered'
+          )
+          // cancelFallbackJobIfDelivered may have cancelled — ensure not left claimed
+          await SmsFallbackJob.findOneAndUpdate(
+            { _id: job._id, status: 'claimed' },
+            {
+              $set: {
+                status: 'cancelled',
+                phoneStatus: 'cancelled',
+                canonicalStatus: 'CANCELLED',
+                cancelReason: 'Original SMS delivered before phone fallback',
+              },
+              $unset: {
+                claimToken: 1,
+                attemptId: 1,
+                claimExpiresAt: 1,
+                claimedAt: 1,
+                claimedByDeviceId: 1,
+              },
+            }
+          )
+          continue
+        }
 
-        const sms = await SmsMessage.findById(job.originalSmsId).lean()
+        const sms = await SmsMessage.findById(job.originalSmsId)
+          .select(
+            'status deliveryStatus deliveryMethod fallbackStatus deliveredAt message messageBody renderedMessageBody originalMessageBody messageRedacted apiKeyName clientUsername clientName campaignName senderName email'
+          )
+          .lean()
+
         if (!sms) {
           await SmsFallbackJob.findByIdAndUpdate(job._id, {
-            status: 'cancelled',
-            phoneStatus: 'cancelled',
-            cancelReason: 'Original SMS not found',
+            $set: {
+              status: 'cancelled',
+              phoneStatus: 'cancelled',
+              canonicalStatus: 'CANCELLED',
+              cancelReason: 'Original SMS not found',
+            },
+            $unset: {
+              claimToken: 1,
+              attemptId: 1,
+              claimExpiresAt: 1,
+            },
           })
           continue
         }
-        smsForBody = sms as ISmsMessage
 
-        // Only skip when delivery is confirmed — NOT when merely queued to phone
-        if (isSmsFullyDelivered(smsForBody) || isPhoneDeliveredFallbackStatus(sms.fallbackStatus)) {
+        const smsDoc = sms as ISmsMessage
+        if (isSmsFullyDelivered(smsDoc) || isPhoneDeliveredFallbackStatus(sms.fallbackStatus)) {
           await SmsFallbackJob.findByIdAndUpdate(job._id, {
             status: 'cancelled',
             phoneStatus: 'cancelled',
+            canonicalStatus: 'CANCELLED',
             cancelReason: 'Original SMS delivered before phone fallback',
           })
           continue
         }
-      }
 
-      if (smsForBody) {
-        const resolved = resolveFallbackMessageForSms(smsForBody)
+        const resolved = resolveFallbackMessageForSms(smsDoc)
         if (resolved) {
-          jobMessage = resolved.body
           if (job.message !== resolved.body) {
+            job.message = resolved.body
             await SmsFallbackJob.findByIdAndUpdate(job._id, { message: resolved.body })
           }
-        } else if (isMetadataUsedAsMessageBody(job.message, buildMetadataFromSms(smsForBody))) {
-          console.error('Pending job has invalid message body — skipping', {
-            jobId: String(job._id),
-            originalSmsId: job.originalSmsId,
-          })
+        } else if (isMetadataUsedAsMessageBody(job.message, buildMetadataFromSms(smsDoc))) {
+          await releaseClaimedJobToPending(
+            job._id,
+            job.claimToken || '',
+            'released_invalid_message_body'
+          )
           continue
         }
+
+        await SmsMessage.findByIdAndUpdate(job.originalSmsId, {
+          fallbackStatus: 'sending_via_phone',
+        })
       }
 
-      if (!jobMessage?.trim()) continue
+      if (!job.message?.trim()) {
+        await releaseClaimedJobToPending(
+          job._id,
+          job.claimToken || '',
+          'released_empty_message'
+        )
+        continue
+      }
 
-      activeJobs.push({
-        id: String(job._id),
-        recipientPhone: job.normalizedPhone || job.recipientPhone,
-        message: jobMessage,
-        status: 'pending',
-        isTest: Boolean(job.isTest),
-        createdAt: job.createdAt,
-        attempts: job.attempts || 0,
-      })
+      activeJobs.push(formatClaimedJobForAndroid(job))
     }
 
-    auth.device.lastSyncAt = new Date()
-    await auth.device.save()
+    const syncStart = nowMs()
+    await SmsGatewayDevice.updateOne({ _id: deviceId }, { $set: { lastSyncAt: new Date() } })
+    dbMs += elapsedMs(syncStart)
+
+    const totalMs = elapsedMs(startedAt)
+    await recordGatewayConnectionDiagnostic({
+      deviceId,
+      route: ROUTE,
+      httpStatus: 200,
+      durationMs: totalMs,
+      dbQueryDurationMs: dbMs,
+      jobsReturned: activeJobs.length,
+      kind: 'pending',
+      gatewayDeviceIdHeader,
+    })
 
     logGatewayJobAction({
       route: ROUTE,
       jobId: '-',
       deviceName: auth.device.boundDeviceName,
       responseCode: 200,
-      message: `Returned ${activeJobs.length} pending jobs`,
-      extra: { returned: activeJobs.length, reclaimed, limit },
+      message: `Atomically claimed ${activeJobs.length} jobs`,
+      extra: {
+        returned: activeJobs.length,
+        safeReclaimed: recovery.safeReclaimed,
+        markedUnknown: recovery.markedUnknown,
+        limit,
+        dbMs,
+        totalMs,
+        claimLeaseSeconds: getClaimLeaseSeconds(),
+      },
     })
 
-    return NextResponse.json({
-      success: true,
-      jobs: activeJobs,
-      reclaimed,
-    })
+    return jsonWithTiming(
+      {
+        success: true,
+        jobs: activeJobs,
+        reclaimed: recovery.safeReclaimed,
+        markedUnknown: recovery.markedUnknown,
+        claimLeaseSeconds: getClaimLeaseSeconds(),
+        timing: { dbMs, totalMs },
+      },
+      200,
+      { dbMs, totalMs }
+    )
   } catch (error: any) {
     console.error('SMS gateway pending jobs error:', error)
-    return NextResponse.json(
-      { success: false, message: 'Internal server error' },
-      { status: 500 }
+    const totalMs = elapsedMs(startedAt)
+    await recordGatewayConnectionDiagnostic({
+      deviceId,
+      route: ROUTE,
+      httpStatus: 500,
+      durationMs: totalMs,
+      dbQueryDurationMs: dbMs,
+      jobsReturned: 0,
+      kind: 'pending',
+      gatewayDeviceIdHeader,
+    }).catch(() => undefined)
+    return jsonWithTiming(
+      { success: false, message: 'Internal server error', timing: { dbMs, totalMs } },
+      500,
+      { dbMs, totalMs }
     )
   }
 }

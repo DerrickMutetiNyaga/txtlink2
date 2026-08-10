@@ -1161,7 +1161,22 @@ export interface ISmsGatewayDevice {
   boundDeviceName?: string
   boundSimLabel?: string
   lastHeartbeatAt?: Date
+  lastSeenAt?: Date
   lastSyncAt?: Date
+  /** Last Android pending-job poll (any HTTP result). */
+  lastPendingRequestAt?: Date
+  /** Last successful pending-job response (2xx). */
+  lastPendingSuccessAt?: Date
+  /** Jobs returned in the last successful pending poll. */
+  lastPendingJobsReturned?: number
+  /** Last Android HTTPS interaction with this gateway API. */
+  lastHttpAt?: Date
+  lastHttpRoute?: string
+  lastHttpStatus?: number
+  lastHttpDurationMs?: number
+  lastDbQueryDurationMs?: number
+  /** Last successful SENT/FAILED status report from Android. */
+  lastStatusUpdateAt?: Date
   lastIp?: string
   lastUserAgent?: string
   appVersion?: string
@@ -1192,7 +1207,17 @@ const SmsGatewayDeviceSchema = new Schema<ISmsGatewayDevice>(
     boundDeviceName: { type: String },
     boundSimLabel: { type: String },
     lastHeartbeatAt: { type: Date },
+    lastSeenAt: { type: Date },
     lastSyncAt: { type: Date },
+    lastPendingRequestAt: { type: Date },
+    lastPendingSuccessAt: { type: Date },
+    lastPendingJobsReturned: { type: Number },
+    lastHttpAt: { type: Date },
+    lastHttpRoute: { type: String },
+    lastHttpStatus: { type: Number },
+    lastHttpDurationMs: { type: Number },
+    lastDbQueryDurationMs: { type: Number },
+    lastStatusUpdateAt: { type: Date },
     lastIp: { type: String },
     lastUserAgent: { type: String },
     appVersion: { type: String },
@@ -1214,6 +1239,8 @@ const SmsGatewayDeviceSchema = new Schema<ISmsGatewayDevice>(
 
 SmsGatewayDeviceSchema.index({ isActive: 1 })
 SmsGatewayDeviceSchema.index({ lastHeartbeatAt: 1 })
+SmsGatewayDeviceSchema.index({ lastSeenAt: 1 })
+SmsGatewayDeviceSchema.index({ lastHttpAt: 1 })
 
 // SMS Fallback Job Model (phone gateway queue)
 export interface ISmsFallbackJob {
@@ -1243,19 +1270,24 @@ export interface ISmsFallbackJob {
     | 'retrying_provider'
     | 'retry_sent_waiting_delivery'
     | 'pending'
+    | 'claimed'
     | 'sending'
     | 'delivered'
     | 'sent'
+    | 'submission_unknown'
     | 'failed'
     | 'blocked'
     | 'cancelled'
   phoneStatus?:
     | 'pending'
     | 'sending'
+    | 'sent'
     | 'delivered'
     | 'failed'
     | 'requires_topup'
     | 'cancelled'
+  /** Canonical phone pipeline status (see canonical-status.ts). */
+  canonicalStatus?: string
   source?: 'dashboard' | 'bulk' | 'api_key' | 'username_password' | 'external_client' | 'system' | 'test'
   authMethod?: 'api_key' | 'username_password' | 'session' | 'system'
   apiKeyId?: mongoose.Types.ObjectId
@@ -1272,6 +1304,18 @@ export interface ISmsFallbackJob {
   lockedAt?: Date
   lockedBy?: string
   sendingAt?: Date
+  /** Atomic claim fields */
+  claimToken?: string
+  attemptId?: string
+  claimedByDeviceId?: string
+  claimedAt?: Date
+  claimExpiresAt?: Date
+  assignedDeviceId?: string
+  assignedSubscriptionId?: string
+  submissionStartedAt?: Date | null
+  serverRevision?: number
+  phoneSentAt?: Date
+  phoneDeliveredAt?: Date
   sentAt?: Date
   deliveredAt?: Date
   failedAt?: Date
@@ -1314,9 +1358,11 @@ const SmsFallbackJobSchema = new Schema<ISmsFallbackJob>(
         'retrying_provider',
         'retry_sent_waiting_delivery',
         'pending',
+        'claimed',
         'sending',
         'delivered',
         'sent',
+        'submission_unknown',
         'failed',
         'blocked',
         'cancelled',
@@ -1325,8 +1371,9 @@ const SmsFallbackJobSchema = new Schema<ISmsFallbackJob>(
     },
     phoneStatus: {
       type: String,
-      enum: ['pending', 'sending', 'delivered', 'failed', 'requires_topup', 'cancelled'],
+      enum: ['pending', 'sending', 'sent', 'delivered', 'failed', 'requires_topup', 'cancelled'],
     },
+    canonicalStatus: { type: String },
     source: {
       type: String,
       enum: ['dashboard', 'bulk', 'api_key', 'username_password', 'external_client', 'system', 'test'],
@@ -1349,6 +1396,17 @@ const SmsFallbackJobSchema = new Schema<ISmsFallbackJob>(
     lockedAt: { type: Date },
     lockedBy: { type: String },
     sendingAt: { type: Date },
+    claimToken: { type: String },
+    attemptId: { type: String },
+    claimedByDeviceId: { type: String },
+    claimedAt: { type: Date },
+    claimExpiresAt: { type: Date },
+    assignedDeviceId: { type: String },
+    assignedSubscriptionId: { type: String },
+    submissionStartedAt: { type: Date },
+    serverRevision: { type: Number, default: 0 },
+    phoneSentAt: { type: Date },
+    phoneDeliveredAt: { type: Date },
     sentAt: { type: Date },
     deliveredAt: { type: Date },
     failedAt: { type: Date },
@@ -1366,6 +1424,15 @@ SmsFallbackJobSchema.index({ status: 1 })
 SmsFallbackJobSchema.index({ createdAt: -1 })
 SmsFallbackJobSchema.index({ retryStatus: 1 })
 SmsFallbackJobSchema.index({ userId: 1, status: 1 })
+// Pending poll: device assignment + pending status + oldest-first drain
+SmsFallbackJobSchema.index({ userId: 1, status: 1, createdAt: 1 })
+// Atomic claim expiry reclaim
+SmsFallbackJobSchema.index({ userId: 1, status: 1, claimExpiresAt: 1 })
+SmsFallbackJobSchema.index({ userId: 1, status: 1, sendingAt: 1 })
+// Device-specific assignment / claim ownership
+SmsFallbackJobSchema.index({ userId: 1, assignedDeviceId: 1, status: 1, createdAt: 1 })
+SmsFallbackJobSchema.index({ claimToken: 1 }, { sparse: true })
+SmsFallbackJobSchema.index({ attemptId: 1 }, { sparse: true })
 
 // Export models
 export const User: Model<IUser> = mongoose.models.User || mongoose.model<IUser>('User', UserSchema)

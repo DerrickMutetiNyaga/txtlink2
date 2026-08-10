@@ -10,19 +10,38 @@ import {
   isTerminalFallbackJobStatus,
   parseGatewayJobId,
 } from '@/lib/services/sms-gateway/job-lifecycle'
+import { computeClaimExpiresAt } from '@/lib/services/sms-gateway/claim-lease'
+import { recordGatewayConnectionDiagnostic } from '@/lib/services/sms-gateway/diagnostics'
+import { elapsedMs, nowMs } from '@/lib/services/sms-gateway/timing'
+import {
+  canTransitionCanonical,
+  toCanonicalStatus,
+} from '@/lib/services/sms-gateway/canonical-status'
 
 type RouteContext = { params: Promise<{ jobId: string }> }
 
 const ROUTE = 'POST /api/sms-gateway/jobs/[jobId]/sending'
 
+/**
+ * Mark modem submission started (CLAIMED → SUBMISSION_STARTED).
+ *
+ * New Android: requires claimToken + attemptId (idempotent for same attempt).
+ * Legacy Android: accepted without tokens while job is claimed/pending by this device.
+ */
 export async function POST(request: NextRequest, context: RouteContext) {
   const { jobId: rawJobId } = await context.params
   const jobId = parseGatewayJobId(rawJobId)
+  const startedAt = nowMs()
+  let deviceId: unknown = null
+  let gatewayDeviceIdHeader: string | null = request.headers.get('x-gateway-device-id')
 
   try {
     const body = await request.json().catch(() => ({}))
     const deviceName = body.deviceName || ''
     const simLabel = body.simLabel || ''
+    const claimToken = typeof body.claimToken === 'string' ? body.claimToken : null
+    const attemptId = typeof body.attemptId === 'string' ? body.attemptId : null
+    const legacyMode = !claimToken && !attemptId
 
     const auth = await validateGatewayDevice(request, {
       route: ROUTE,
@@ -40,6 +59,13 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return gatewayAuthErrorResponse(auth)
     }
 
+    deviceId = auth.device._id
+    const lockedBy = String(auth.device._id)
+    gatewayDeviceIdHeader =
+      (typeof body.deviceId === 'string' ? body.deviceId : null) ||
+      auth.identity.deviceId ||
+      gatewayDeviceIdHeader
+
     if (auth.device.requiresTopUp) {
       return NextResponse.json(
         {
@@ -52,13 +78,6 @@ export async function POST(request: NextRequest, context: RouteContext) {
     }
 
     if (!jobId) {
-      logGatewayJobAction({
-        route: ROUTE,
-        jobId: rawJobId,
-        deviceName,
-        responseCode: 400,
-        message: 'Invalid job ID',
-      })
       return NextResponse.json({ success: false, message: 'Invalid job ID' }, { status: 400 })
     }
 
@@ -67,87 +86,188 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const existing = await SmsFallbackJob.findOne({
       _id: jobId,
       userId: auth.device.userId,
-    })
-      .select('status lockedBy attempts')
-      .lean()
+    }).lean()
 
     const statusBefore = existing?.status ?? null
-    const lockedBy = String(auth.device._id)
+    const canonicalBefore = toCanonicalStatus(existing?.status, existing?.canonicalStatus)
 
-    if (existing && isTerminalFallbackJobStatus(existing.status)) {
-      logGatewayJobAction({
+    if (!existing) {
+      return NextResponse.json({ success: false, message: 'Job not found' }, { status: 404 })
+    }
+
+    // Idempotent: same attempt already in SUBMISSION_STARTED
+    if (
+      existing.status === 'sending' &&
+      (existing.claimedByDeviceId === lockedBy || existing.lockedBy === lockedBy)
+    ) {
+      if (!legacyMode) {
+        if (claimToken && existing.claimToken && existing.claimToken !== claimToken) {
+          return NextResponse.json(
+            { success: false, code: 'CLAIM_TOKEN_MISMATCH', message: 'Claim token mismatch' },
+            { status: 409 }
+          )
+        }
+        if (attemptId && existing.attemptId && existing.attemptId !== attemptId) {
+          return NextResponse.json(
+            { success: false, code: 'ATTEMPT_ID_MISMATCH', message: 'Attempt ID mismatch' },
+            { status: 409 }
+          )
+        }
+      }
+
+      await recordGatewayConnectionDiagnostic({
+        deviceId,
         route: ROUTE,
-        jobId: rawJobId,
-        deviceName: deviceName || auth.device.boundDeviceName,
-        statusBefore,
-        statusAfter: statusBefore,
-        responseCode: 409,
-        message: 'Already claimed or already processed',
+        httpStatus: 200,
+        durationMs: elapsedMs(startedAt),
+        kind: 'status',
+        gatewayDeviceIdHeader,
       })
+
+      return NextResponse.json({
+        success: true,
+        message: 'Job already marked as sending',
+        jobStatus: 'sending',
+        canonicalStatus: 'SUBMISSION_STARTED',
+        attemptId: existing.attemptId || null,
+        claimToken: existing.claimToken || null,
+        attemptNumber: existing.attempts || 0,
+        duplicate: true,
+        serverRevision: existing.serverRevision ?? null,
+      })
+    }
+
+    if (isTerminalFallbackJobStatus(existing.status) || existing.status === 'submission_unknown') {
+      // Allow recovery from submission_unknown only with matching attempt (report path)
+      if (existing.status !== 'submission_unknown') {
+        return NextResponse.json(
+          { success: false, message: 'Already claimed or already processed' },
+          { status: 409 }
+        )
+      }
+    }
+
+    if (!canTransitionCanonical(canonicalBefore, 'SUBMISSION_STARTED')) {
       return NextResponse.json(
-        { success: false, message: 'Already claimed or already processed' },
+        {
+          success: false,
+          code: 'STATUS_REGRESSION',
+          message: `Cannot transition ${canonicalBefore} → SUBMISSION_STARTED`,
+        },
         { status: 409 }
       )
     }
 
-    if (existing?.status === 'sending') {
-      if (existing.lockedBy === lockedBy) {
-        logGatewayJobAction({
-          route: ROUTE,
-          jobId: rawJobId,
-          deviceName: deviceName || auth.device.boundDeviceName,
-          statusBefore: 'sending',
-          statusAfter: 'sending',
-          responseCode: 200,
-          message: 'Already claimed by this device',
-        })
-        return NextResponse.json({
-          success: true,
-          message: 'Job already claimed by this device',
-          jobStatus: 'sending',
-        })
+    if (!legacyMode) {
+      if (!claimToken || !attemptId) {
+        return NextResponse.json(
+          {
+            success: false,
+            code: 'CLAIM_REQUIRED',
+            message: 'claimToken and attemptId are required',
+          },
+          { status: 400 }
+        )
       }
-
-      logGatewayJobAction({
-        route: ROUTE,
-        jobId: rawJobId,
-        deviceName: deviceName || auth.device.boundDeviceName,
-        statusBefore: 'sending',
-        statusAfter: 'sending',
-        responseCode: 409,
-        message: 'Already claimed or already processed',
-      })
-      return NextResponse.json(
-        { success: false, message: 'Already claimed or already processed' },
-        { status: 409 }
-      )
+      if (existing.claimToken !== claimToken) {
+        return NextResponse.json(
+          { success: false, code: 'CLAIM_TOKEN_MISMATCH', message: 'Claim token mismatch' },
+          { status: 409 }
+        )
+      }
+      if (existing.attemptId !== attemptId) {
+        return NextResponse.json(
+          { success: false, code: 'ATTEMPT_ID_MISMATCH', message: 'Attempt ID mismatch' },
+          { status: 409 }
+        )
+      }
+      const owner = existing.claimedByDeviceId || existing.lockedBy || existing.assignedDeviceId
+      if (owner && owner !== lockedBy) {
+        return NextResponse.json(
+          { success: false, code: 'WRONG_DEVICE', message: 'Job claimed by another device' },
+          { status: 403 }
+        )
+      }
+      if (existing.claimExpiresAt && new Date(existing.claimExpiresAt).getTime() < Date.now()) {
+        return NextResponse.json(
+          { success: false, code: 'CLAIM_EXPIRED', message: 'Claim expired' },
+          { status: 409 }
+        )
+      }
     }
 
     const now = new Date()
+    const claimExpiresAt = computeClaimExpiresAt(now)
+
+    // Atomic transition: claimed|pending → sending for this device.
+    // Does NOT $inc attempts again (attempt created at pending claim).
+    const filter: Record<string, unknown> = {
+      _id: jobId,
+      userId: auth.device.userId,
+      status: { $in: legacyMode ? ['claimed', 'pending'] : ['claimed'] },
+    }
+    if (!legacyMode) {
+      filter.claimToken = claimToken
+      filter.attemptId = attemptId
+      filter.$or = [
+        { claimedByDeviceId: lockedBy },
+        { lockedBy: lockedBy },
+        { assignedDeviceId: lockedBy },
+      ]
+    } else {
+      filter.$or = [
+        { claimedByDeviceId: lockedBy },
+        { lockedBy: lockedBy },
+        { assignedDeviceId: lockedBy },
+        { claimedByDeviceId: { $exists: false }, lockedBy: { $exists: false } },
+        { claimedByDeviceId: null },
+        { status: 'pending' },
+      ]
+    }
 
     const job = await SmsFallbackJob.findOneAndUpdate(
-      {
-        _id: jobId,
-        userId: auth.device.userId,
-        status: 'pending',
-      },
+      filter,
       {
         $set: {
           status: 'sending',
           phoneStatus: 'sending',
+          canonicalStatus: 'SUBMISSION_STARTED',
           sendingAt: now,
+          submissionStartedAt: now,
           lockedAt: now,
           lockedBy,
+          claimedByDeviceId: lockedBy,
+          assignedDeviceId: lockedBy,
+          claimExpiresAt,
           deviceId: lockedBy,
           deviceName: deviceName || auth.device.boundDeviceName,
           simLabel: simLabel || auth.device.boundSimLabel,
         },
-        $inc: { attempts: 1 },
+        $inc: { serverRevision: 1 },
       },
       { new: true }
     )
 
     if (!job) {
+      // Race: another request won, or already moved — re-read for idempotent success
+      const again = await SmsFallbackJob.findOne({ _id: jobId, userId: auth.device.userId }).lean()
+      if (
+        again?.status === 'sending' &&
+        (again.claimedByDeviceId === lockedBy || again.lockedBy === lockedBy) &&
+        (!attemptId || !again.attemptId || again.attemptId === attemptId)
+      ) {
+        return NextResponse.json({
+          success: true,
+          message: 'Job already marked as sending',
+          jobStatus: 'sending',
+          canonicalStatus: 'SUBMISSION_STARTED',
+          duplicate: true,
+          attemptId: again.attemptId || null,
+          attemptNumber: again.attempts || 0,
+          serverRevision: again.serverRevision ?? null,
+        })
+      }
+
       logGatewayJobAction({
         route: ROUTE,
         jobId: rawJobId,
@@ -173,16 +293,32 @@ export async function POST(request: NextRequest, context: RouteContext) {
       route: ROUTE,
       jobId: rawJobId,
       deviceName: job.deviceName,
-      statusBefore: 'pending',
+      statusBefore: statusBefore || 'claimed',
       statusAfter: 'sending',
       responseCode: 200,
-      extra: { attempts: job.attempts },
+      extra: { attempts: job.attempts, legacyMode },
+    })
+
+    await recordGatewayConnectionDiagnostic({
+      deviceId,
+      route: ROUTE,
+      httpStatus: 200,
+      durationMs: elapsedMs(startedAt),
+      kind: 'status',
+      gatewayDeviceIdHeader,
     })
 
     return NextResponse.json({
       success: true,
       message: 'Job marked as sending',
       jobStatus: 'sending',
+      canonicalStatus: 'SUBMISSION_STARTED',
+      attemptId: job.attemptId || null,
+      claimToken: job.claimToken || null,
+      attemptNumber: job.attempts || 0,
+      claimExpiresAt: job.claimExpiresAt,
+      serverRevision: job.serverRevision ?? null,
+      legacyMode,
     })
   } catch (error: any) {
     console.error('SMS gateway job sending error:', error)
@@ -192,6 +328,14 @@ export async function POST(request: NextRequest, context: RouteContext) {
       responseCode: 500,
       message: error?.message,
     })
+    await recordGatewayConnectionDiagnostic({
+      deviceId,
+      route: ROUTE,
+      httpStatus: 500,
+      durationMs: elapsedMs(startedAt),
+      kind: 'status',
+      gatewayDeviceIdHeader,
+    }).catch(() => undefined)
     return NextResponse.json(
       { success: false, message: 'Internal server error' },
       { status: 500 }

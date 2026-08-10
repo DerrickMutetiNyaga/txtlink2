@@ -40,12 +40,23 @@ interface GatewayStatus {
   isOnline: boolean
   connectionStatus: 'online' | 'offline' | 'stopped' | 'waiting' | 'not_connected'
   latestActivityAt?: string | null
+  secondsSinceLastContact?: number | null
   tokenStatus: 'active' | 'revoked' | 'none'
   label?: string
   boundDeviceName?: string | null
   boundSimLabel?: string | null
   lastHeartbeatAt?: string | null
+  lastSeenAt?: string | null
   lastSyncAt?: string | null
+  lastPendingRequestAt?: string | null
+  lastPendingSuccessAt?: string | null
+  lastPendingJobsReturned?: number | null
+  lastHttpAt?: string | null
+  lastHttpRoute?: string | null
+  lastHttpStatus?: number | null
+  lastHttpDurationMs?: number | null
+  lastDbQueryDurationMs?: number | null
+  lastStatusUpdateAt?: string | null
   lastIp?: string | null
   lastUserAgent?: string | null
   appVersion?: string | null
@@ -59,6 +70,21 @@ interface GatewayStatus {
   lastFailureCode?: string | null
   pendingPhoneJobs?: number
   blockedTopUpJobs?: number
+  diagnostics?: {
+    lastHeartbeatAt?: string | null
+    lastPendingRequestAt?: string | null
+    lastPendingSuccessAt?: string | null
+    lastHttpAt?: string | null
+    lastHttpRoute?: string | null
+    lastHttpStatus?: number | null
+    lastHttpDurationMs?: number | null
+    lastDbQueryDurationMs?: number | null
+    jobsReturnedLastPoll?: number | null
+    lastStatusUpdateAt?: string | null
+    isOnline?: boolean
+    connectionStatus?: string
+    secondsSinceLastContact?: number | null
+  } | null
 }
 
 interface FallbackJobRow {
@@ -808,7 +834,17 @@ export default function SmsGatewayPage() {
       year: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
+      second: '2-digit',
     })
+  }
+
+  const formatSecondsAgo = (seconds: number | null | undefined) => {
+    if (seconds == null) return '—'
+    if (seconds < 60) return `${seconds}s ago`
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${seconds % 60}s ago`
+    const hours = Math.floor(seconds / 3600)
+    const mins = Math.floor((seconds % 3600) / 60)
+    return `${hours}h ${mins}m ago`
   }
 
   const connectionBadge = (compact = false) => {
@@ -1164,7 +1200,7 @@ export default function SmsGatewayPage() {
               </Card>
             </div>
 
-            {/* Status Details + Fallback Flow */}
+            {/* Gateway status + connection diagnostics */}
             <div className="grid gap-6 lg:grid-cols-2 min-w-0">
               <Card className={`p-5 ${CARD}`}>
                 <div className="flex items-center gap-2 mb-4">
@@ -1204,6 +1240,88 @@ export default function SmsGatewayPage() {
               <Card className={`p-5 ${CARD}`}>
                 <div className="flex items-center gap-2 mb-4">
                   <div className="p-2 rounded-lg bg-[#ECFDF5] text-[#2F9B73]">
+                    <Activity size={18} />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-semibold text-[#0F172A]">
+                      Connection Diagnostics
+                    </h2>
+                    <p className="text-xs text-[#64748B]">
+                      Whether the phone is still reaching the server while locked
+                    </p>
+                  </div>
+                </div>
+                <dl className="divide-y divide-[#E2E8F0] text-sm">
+                  {[
+                    [
+                      'Device online/offline',
+                      null,
+                      connectionBadge(),
+                    ],
+                    [
+                      'Time since last contact',
+                      formatSecondsAgo(gateway?.secondsSinceLastContact),
+                      null,
+                    ],
+                    ['Last heartbeat', formatDate(gateway?.lastHeartbeatAt), null],
+                    [
+                      'Last pending-job request',
+                      formatDate(gateway?.lastPendingRequestAt),
+                      null,
+                    ],
+                    [
+                      'Last successful pending response',
+                      formatDate(gateway?.lastPendingSuccessAt),
+                      null,
+                    ],
+                    [
+                      'Jobs returned in last poll',
+                      gateway?.lastPendingJobsReturned != null
+                        ? String(gateway.lastPendingJobsReturned)
+                        : '—',
+                      null,
+                    ],
+                    ['Last HTTP interaction', formatDate(gateway?.lastHttpAt), null],
+                    [
+                      'Last HTTP route',
+                      gateway?.lastHttpRoute || '—',
+                      null,
+                    ],
+                    [
+                      'Last HTTP result',
+                      gateway?.lastHttpStatus != null
+                        ? `${gateway.lastHttpStatus}${
+                            gateway.lastHttpDurationMs != null
+                              ? ` · ${gateway.lastHttpDurationMs}ms`
+                              : ''
+                          }`
+                        : '—',
+                      null,
+                    ],
+                    [
+                      'Last DB query duration',
+                      gateway?.lastDbQueryDurationMs != null
+                        ? `${gateway.lastDbQueryDurationMs}ms`
+                        : '—',
+                      null,
+                    ],
+                    ['Last status update', formatDate(gateway?.lastStatusUpdateAt), null],
+                  ].map(([label, value, badge]) => (
+                    <div key={String(label)} className="flex items-center justify-between py-2.5 gap-3">
+                      <dt className="text-[#64748B] shrink-0">{label}</dt>
+                      <dd className="font-medium text-[#0F172A] text-right truncate min-w-0">
+                        {badge || value}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              </Card>
+            </div>
+
+            <div className="grid gap-6 lg:grid-cols-2 min-w-0">
+              <Card className={`p-5 ${CARD}`}>
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="p-2 rounded-lg bg-[#ECFDF5] text-[#2F9B73]">
                     <ListOrdered size={18} />
                   </div>
                   <div>
@@ -1230,6 +1348,26 @@ export default function SmsGatewayPage() {
                 <p className="mt-4 text-xs text-[#64748B] border-t border-[#E2E8F0] pt-3">
                   If the app is offline, jobs wait safely until the phone comes back online.
                 </p>
+              </Card>
+
+              <Card className={`p-5 ${CARD}`}>
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="p-2 rounded-lg bg-[#ECFDF5] text-[#2F9B73]">
+                    <Wifi size={18} />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-semibold text-[#0F172A]">HTTPS Polling</h2>
+                    <p className="text-xs text-[#64748B]">
+                      Phone talks only to the TXTLINK API — never MongoDB directly
+                    </p>
+                  </div>
+                </div>
+                <ul className="space-y-2 text-sm text-[#64748B]">
+                  <li>Android authenticates with a Bearer gateway token (no browser cookies).</li>
+                  <li>Pending jobs are fetched in batches of up to 50 with no server delay between polls.</li>
+                  <li>Heartbeat stays lightweight and updates last contact timestamps only.</li>
+                  <li>Status updates write to MongoDB even when this dashboard is closed.</li>
+                </ul>
               </Card>
             </div>
 

@@ -17,11 +17,11 @@ import {
 
 type RouteContext = { params: Promise<{ jobId: string }> }
 
-const ROUTE = 'POST /api/sms-gateway/jobs/[jobId]/sent'
+const ROUTE = 'POST /api/sms-gateway/jobs/[jobId]/delivered'
 
 /**
- * Report modem submission success → SENT_VIA_PHONE.
- * Does NOT mark DELIVERED — use /delivered for genuine delivery callbacks.
+ * Genuine SMS delivery callback → DELIVERED_VIA_PHONE.
+ * Distinct from /sent (modem submission success).
  */
 export async function POST(request: NextRequest, context: RouteContext) {
   const { jobId: rawJobId } = await context.params
@@ -43,14 +43,6 @@ export async function POST(request: NextRequest, context: RouteContext) {
       body: { deviceName, simLabel, deviceId: body.deviceId },
     })
     if (!auth.ok) {
-      logGatewayJobAction({
-        route: ROUTE,
-        jobId: rawJobId,
-        deviceName,
-        responseCode: auth.status,
-        message: auth.message,
-        extra: { code: auth.code },
-      })
       return gatewayAuthErrorResponse(auth)
     }
 
@@ -79,11 +71,15 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ success: false, message: 'Job not found' }, { status: 404 })
     }
 
-    // Idempotent SENT
-    if (existing.status === 'sent' || canonicalBefore === 'SENT_VIA_PHONE') {
+    // Idempotent DELIVERED
+    if (existing.status === 'delivered' || canonicalBefore === 'DELIVERED_VIA_PHONE') {
       if (attemptId && existing.attemptId && existing.attemptId !== attemptId) {
         return NextResponse.json(
-          { success: false, code: 'STALE_ATTEMPT', message: 'Stale attempt cannot overwrite SENT' },
+          {
+            success: false,
+            code: 'STALE_ATTEMPT',
+            message: 'Stale attempt cannot overwrite DELIVERED',
+          },
           { status: 409 }
         )
       }
@@ -97,33 +93,20 @@ export async function POST(request: NextRequest, context: RouteContext) {
       })
       return NextResponse.json({
         success: true,
-        message: 'SMS already marked sent via phone gateway',
-        jobStatus: 'sent',
-        canonicalStatus: 'SENT_VIA_PHONE',
+        message: 'SMS already marked delivered via phone gateway',
+        jobStatus: 'delivered',
+        canonicalStatus: 'DELIVERED_VIA_PHONE',
         duplicate: true,
         serverRevision: existing.serverRevision ?? null,
       })
     }
 
-    // DELIVERED cannot regress to SENT
-    if (existing.status === 'delivered' || canonicalBefore === 'DELIVERED_VIA_PHONE') {
+    if (!canTransitionCanonical(canonicalBefore, 'DELIVERED_VIA_PHONE')) {
       return NextResponse.json(
         {
           success: false,
           code: 'STATUS_REGRESSION',
-          message: 'Job already delivered — cannot regress to SENT',
-          canonicalStatus: 'DELIVERED_VIA_PHONE',
-        },
-        { status: 409 }
-      )
-    }
-
-    if (!canTransitionCanonical(canonicalBefore, 'SENT_VIA_PHONE')) {
-      return NextResponse.json(
-        {
-          success: false,
-          code: 'STATUS_REGRESSION',
-          message: `Cannot transition ${canonicalBefore} → SENT_VIA_PHONE`,
+          message: `Cannot transition ${canonicalBefore} → DELIVERED_VIA_PHONE`,
         },
         { status: 409 }
       )
@@ -151,28 +134,37 @@ export async function POST(request: NextRequest, context: RouteContext) {
       }
     }
 
-    const sentAt = body.sentAt ? new Date(body.sentAt) : new Date()
+    const deliveredAt = body.deliveredAt
+      ? new Date(body.deliveredAt)
+      : body.sentAt
+        ? new Date(body.sentAt)
+        : new Date()
 
     const job = await SmsFallbackJob.findOneAndUpdate(
       {
         _id: jobId,
         userId: auth.device.userId,
-        status: { $in: ['sending', 'claimed', 'pending', 'submission_unknown'] },
+        status: { $in: ['sending', 'claimed', 'pending', 'sent', 'submission_unknown'] },
       },
       {
         $set: {
-          status: 'sent',
-          phoneStatus: 'sent',
-          canonicalStatus: 'SENT_VIA_PHONE',
-          sentAt,
-          phoneSentAt: sentAt,
+          status: 'delivered',
+          phoneStatus: 'delivered',
+          canonicalStatus: 'DELIVERED_VIA_PHONE',
+          deliveredAt,
+          phoneDeliveredAt: deliveredAt,
+          sentAt: existing.sentAt || existing.phoneSentAt || deliveredAt,
+          phoneSentAt: existing.phoneSentAt || existing.sentAt || deliveredAt,
           deviceName: deviceName || auth.device.boundDeviceName,
           simLabel: simLabel || auth.device.boundSimLabel,
-          localMessageId: body.localMessageId,
+          localMessageId: body.localMessageId || existing.localMessageId,
         },
         $unset: {
           resetReason: 1,
           claimExpiresAt: 1,
+          claimToken: 1,
+          lockedAt: 1,
+          lockedBy: 1,
         },
         $inc: { serverRevision: 1 },
       },
@@ -181,15 +173,14 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     if (!job) {
       const again = await SmsFallbackJob.findOne({ _id: jobId, userId: auth.device.userId })
-        .select('status canonicalStatus serverRevision')
+        .select('status serverRevision')
         .lean()
-      if (again?.status === 'sent' || again?.status === 'delivered') {
+      if (again?.status === 'delivered') {
         return NextResponse.json({
           success: true,
-          message: 'SMS marked sent via phone gateway',
-          jobStatus: again.status === 'delivered' ? 'delivered' : 'sent',
-          canonicalStatus:
-            again.status === 'delivered' ? 'DELIVERED_VIA_PHONE' : 'SENT_VIA_PHONE',
+          message: 'SMS marked delivered via phone gateway',
+          jobStatus: 'delivered',
+          canonicalStatus: 'DELIVERED_VIA_PHONE',
           duplicate: true,
           serverRevision: again.serverRevision ?? null,
         })
@@ -202,21 +193,26 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     if (!job.isTest) {
       await SmsMessage.findByIdAndUpdate(job.originalSmsId, {
-        // SENT ≠ DELIVERED
-        status: 'sent',
-        deliveryStatus: 'sent',
+        status: 'delivered',
+        deliveryStatus: 'delivered',
+        deliveredAt,
         deliveryMethod: 'android_phone_gateway',
-        fallbackStatus: 'sent_via_phone',
-        fallbackSentAt: sentAt,
+        fallbackStatus: 'delivered_via_phone',
+        fallbackSentAt: job.phoneSentAt || job.sentAt || deliveredAt,
+        fallbackDeliveredAt: deliveredAt,
         fallbackProvider: 'android_phone_gateway',
         fallbackJobId: rawJobId,
+        fallbackFailedAt: null,
+        fallbackFailureReason: null,
+        fallbackFailureCode: null,
         requiresPhoneTopUp: false,
+        finalizedAt: deliveredAt,
         nextCheckAt: null,
       })
 
       await logAuditAction(
         String(auth.device.userId),
-        'PHONE_GATEWAY_SMS_SENT',
+        'PHONE_GATEWAY_SMS_DELIVERED',
         'SmsMessage',
         job.originalSmsId,
         {
@@ -234,8 +230,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
         $set: {
           requiresTopUp: false,
           topUpAlertDismissed: false,
-          isGatewayRunning:
-            body.isGatewayRunning !== false ? true : auth.device.isGatewayRunning,
+          isGatewayRunning: true,
         },
         $unset: { pausedAt: 1, pauseReason: 1 },
       }
@@ -245,8 +240,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
       route: ROUTE,
       jobId: rawJobId,
       deviceName: job.deviceName,
-      statusBefore: statusBefore || 'sending',
-      statusAfter: 'sent',
+      statusBefore: statusBefore || 'sent',
+      statusAfter: 'delivered',
       responseCode: 200,
     })
 
@@ -261,13 +256,13 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     return NextResponse.json({
       success: true,
-      message: 'SMS marked sent via phone gateway',
-      jobStatus: 'sent',
-      canonicalStatus: 'SENT_VIA_PHONE',
+      message: 'SMS marked delivered via phone gateway',
+      jobStatus: 'delivered',
+      canonicalStatus: 'DELIVERED_VIA_PHONE',
       serverRevision: job.serverRevision ?? null,
     })
   } catch (error: any) {
-    console.error('SMS gateway job sent error:', error)
+    console.error('SMS gateway job delivered error:', error)
     await recordGatewayConnectionDiagnostic({
       deviceId,
       route: ROUTE,

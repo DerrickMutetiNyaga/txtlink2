@@ -281,7 +281,17 @@ export function clearGatewayBindingFields(device: ISmsGatewayDevice) {
 export function clearGatewayTokenActivationFields(device: ISmsGatewayDevice) {
   clearGatewayBindingFields(device)
   device.lastHeartbeatAt = undefined
+  device.lastSeenAt = undefined
   device.lastSyncAt = undefined
+  device.lastPendingRequestAt = undefined
+  device.lastPendingSuccessAt = undefined
+  device.lastPendingJobsReturned = undefined
+  device.lastHttpAt = undefined
+  device.lastHttpRoute = undefined
+  device.lastHttpStatus = undefined
+  device.lastHttpDurationMs = undefined
+  device.lastDbQueryDurationMs = undefined
+  device.lastStatusUpdateAt = undefined
   device.lastIp = undefined
   device.lastUserAgent = undefined
   device.appVersion = undefined
