@@ -137,14 +137,26 @@ export async function POST(request: NextRequest, context: RouteContext) {
       })
     }
 
-    if (isTerminalFallbackJobStatus(existing.status) || existing.status === 'submission_unknown') {
-      // Allow recovery from submission_unknown only with matching attempt (report path)
-      if (existing.status !== 'submission_unknown') {
-        return NextResponse.json(
-          { success: false, message: 'Already claimed or already processed' },
-          { status: 409 }
-        )
-      }
+    // SUBMISSION_UNKNOWN is terminal for automatic resend — never start a new modem attempt.
+    // Late SENT/DELIVERED callbacks recover via /sent|/delivered with matching attemptId.
+    if (existing.status === 'submission_unknown' || canonicalBefore === 'SUBMISSION_UNKNOWN') {
+      return NextResponse.json(
+        {
+          success: false,
+          code: 'SUBMISSION_UNKNOWN',
+          message:
+            'Submission may have already occurred — awaiting late SENT/DELIVERED; no automatic resend',
+          canonicalStatus: 'SUBMISSION_UNKNOWN',
+        },
+        { status: 409 }
+      )
+    }
+
+    if (isTerminalFallbackJobStatus(existing.status)) {
+      return NextResponse.json(
+        { success: false, message: 'Already claimed or already processed' },
+        { status: 409 }
+      )
     }
 
     if (!canTransitionCanonical(canonicalBefore, 'SUBMISSION_STARTED')) {

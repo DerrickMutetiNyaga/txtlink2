@@ -118,7 +118,15 @@ const ALLOWED: Record<CanonicalPhoneStatus, ReadonlySet<CanonicalPhoneStatus>> =
     'CANCELLED',
     // NOT back to QUEUED_FOR_PHONE / CLAIMED automatically
   ]),
-  PHONE_SEND_FAILED: new Set(['PHONE_SEND_FAILED', 'QUEUED_FOR_PHONE', 'CANCELLED']),
+  PHONE_SEND_FAILED: new Set([
+    'PHONE_SEND_FAILED',
+    'QUEUED_FOR_PHONE', // explicit operator/manual requeue only
+    'CANCELLED',
+    // Legacy only: rows wrongly marked failed with SENDING_TIMEOUT may still
+    // recover via /sent|/delivered when attemptId matches (enforced in route).
+    'SENT_VIA_PHONE',
+    'DELIVERED_VIA_PHONE',
+  ]),
   TOP_UP_REQUIRED: new Set(['TOP_UP_REQUIRED', 'QUEUED_FOR_PHONE', 'CANCELLED']),
   CANCELLED: new Set(['CANCELLED', 'QUEUED_FOR_PHONE']), // reopen only via explicit ops
 }
