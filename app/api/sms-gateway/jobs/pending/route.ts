@@ -23,6 +23,7 @@ import {
   atomicClaimNextPendingJob,
   formatClaimedJobForAndroid,
   releaseClaimedJobToPending,
+  resolveAssignedSubscriptionIdFromParams,
 } from '@/lib/services/sms-gateway/atomic-claim'
 import { recordGatewayConnectionDiagnostic } from '@/lib/services/sms-gateway/diagnostics'
 import { buildServerTimingHeader, elapsedMs, nowMs } from '@/lib/services/sms-gateway/timing'
@@ -110,11 +111,9 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const limit = clampPendingJobLimit(searchParams.get('limit'))
     const userId = auth.device.userId
-    const assignedSubscriptionId =
-      searchParams.get('subscriptionId') ||
-      searchParams.get('assignedSubscriptionId') ||
-      auth.device.boundSimLabel ||
-      null
+    // Numeric Android subscription ID from query only — NEVER fall back to boundSimLabel
+    // (labels like "SIM 1 - Safaricom" caused NumberFormatException on Android).
+    const assignedSubscriptionId = resolveAssignedSubscriptionIdFromParams(searchParams)
 
     // Cheap maintenance: notified → pending; safe expired reclaim only
     const maintStart = nowMs()
@@ -141,6 +140,7 @@ export async function GET(request: NextRequest) {
         userId,
         deviceId: claimedByDeviceId,
         deviceName: auth.device.boundDeviceName,
+        // Display label stays on simLabel — not assignedSubscriptionId
         simLabel: auth.device.boundSimLabel,
         assignedSubscriptionId,
         excludeJobIds,

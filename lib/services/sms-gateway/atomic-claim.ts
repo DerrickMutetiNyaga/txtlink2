@@ -14,6 +14,33 @@ export function generateAttemptId(): string {
   return `att_${crypto.randomBytes(16).toString('hex')}`
 }
 
+/**
+ * Android telephony SubscriptionManager IDs are numeric integers.
+ * Human-readable SIM labels (e.g. "SIM 1 - Safaricom") must NEVER be treated
+ * as assignedSubscriptionId — Android parses that field as an int.
+ */
+export function normalizeAndroidSubscriptionId(
+  value: string | number | null | undefined
+): string | null {
+  if (value == null) return null
+  const trimmed = String(value).trim()
+  if (!trimmed) return null
+  if (!/^-?\d+$/.test(trimmed)) return null
+  return trimmed
+}
+
+/**
+ * Resolve an Android subscription ID from request query params only.
+ * Do not fall back to boundSimLabel / simLabel — those are display strings.
+ */
+export function resolveAssignedSubscriptionIdFromParams(
+  searchParams: URLSearchParams
+): string | null {
+  return normalizeAndroidSubscriptionId(
+    searchParams.get('subscriptionId') || searchParams.get('assignedSubscriptionId')
+  )
+}
+
 export interface AtomicClaimParams {
   userId: unknown
   deviceId: string
@@ -56,6 +83,10 @@ export async function atomicClaimNextPendingJob(
     filter._id = { $nin: params.excludeJobIds }
   }
 
+  const normalizedSubscriptionId = normalizeAndroidSubscriptionId(
+    params.assignedSubscriptionId
+  )
+
   const update = {
     $set: {
       status: JOB_STATUS_BY_CANONICAL.CLAIMED_FOR_PHONE,
@@ -70,9 +101,13 @@ export async function atomicClaimNextPendingJob(
       lockedBy: deviceId,
       deviceId,
       deviceName: params.deviceName || undefined,
+      // Human-readable SIM label only — never confuse with Android subscriptionId
       simLabel: params.simLabel || undefined,
       assignedDeviceId: deviceId,
-      assignedSubscriptionId: params.assignedSubscriptionId || undefined,
+      // Numeric Android subscription ID only (or omit when unknown)
+      ...(normalizedSubscriptionId
+        ? { assignedSubscriptionId: normalizedSubscriptionId }
+        : {}),
     },
     $inc: {
       attempts: 1,
@@ -85,6 +120,8 @@ export async function atomicClaimNextPendingJob(
       failedAt: 1,
       submissionStartedAt: 1,
       sendingAt: 1,
+      // Clear stale label-as-id pollution from older builds
+      ...(!normalizedSubscriptionId ? { assignedSubscriptionId: 1 } : {}),
     },
   }
 
@@ -146,12 +183,16 @@ export function formatClaimedJobForAndroid(job: ISmsFallbackJob) {
     claimToken: job.claimToken || null,
     attemptId: job.attemptId || null,
     attemptNumber: job.attempts || 0,
+    // ISO-8601 text (e.g. "2026-08-10T21:37:40.342Z") — never epoch ms
     claimExpiresAt: job.claimExpiresAt ? new Date(job.claimExpiresAt).toISOString() : null,
     serverJobId: String(job._id),
     originalSmsId: job.originalSmsId || null,
     canonicalStatus: job.canonicalStatus || 'CLAIMED_FOR_PHONE',
     assignedDeviceId: job.assignedDeviceId || job.claimedByDeviceId || null,
-    assignedSubscriptionId: job.assignedSubscriptionId || null,
+    // Human-readable SIM label (e.g. "SIM 1 - Safaricom") — String, not an ID
+    simLabel: job.simLabel || null,
+    // Numeric Android SubscriptionManager ID only; null when unknown / label pollution
+    assignedSubscriptionId: normalizeAndroidSubscriptionId(job.assignedSubscriptionId),
     serverRevision: job.serverRevision ?? null,
   }
 }

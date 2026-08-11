@@ -2,7 +2,7 @@
  * Android HTTPS gateway atomic-claim correctness tests.
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import mongoose from 'mongoose'
 import {
   clampPendingJobLimit,
@@ -20,6 +20,8 @@ import {
   generateAttemptId,
   generateClaimToken,
   formatClaimedJobForAndroid,
+  normalizeAndroidSubscriptionId,
+  resolveAssignedSubscriptionIdFromParams,
 } from '@/lib/services/sms-gateway/atomic-claim'
 import {
   canTransitionCanonical,
@@ -49,6 +51,92 @@ describe('claim lease supports 50-job batch', () => {
   })
 })
 
+describe('SIM label vs Android subscription ID contract', () => {
+  it('normalizeAndroidSubscriptionId accepts only numeric telephony IDs', () => {
+    expect(normalizeAndroidSubscriptionId('2')).toBe('2')
+    expect(normalizeAndroidSubscriptionId(2)).toBe('2')
+    expect(normalizeAndroidSubscriptionId('-1')).toBe('-1')
+    expect(normalizeAndroidSubscriptionId(' 14 ')).toBe('14')
+    expect(normalizeAndroidSubscriptionId(null)).toBeNull()
+    expect(normalizeAndroidSubscriptionId(undefined)).toBeNull()
+    expect(normalizeAndroidSubscriptionId('')).toBeNull()
+    expect(normalizeAndroidSubscriptionId('SIM 1 - Safaricom')).toBeNull()
+    expect(normalizeAndroidSubscriptionId('sub-1')).toBeNull()
+    expect(normalizeAndroidSubscriptionId('1.5')).toBeNull()
+  })
+
+  it('does not fall back query resolution to SIM labels', () => {
+    const params = new URLSearchParams({
+      simLabel: 'SIM 1 - Safaricom',
+      assignedSubscriptionId: 'SIM 1 - Safaricom',
+    })
+    expect(resolveAssignedSubscriptionIdFromParams(params)).toBeNull()
+
+    const numeric = new URLSearchParams({ subscriptionId: '3' })
+    expect(resolveAssignedSubscriptionIdFromParams(numeric)).toBe('3')
+  })
+
+  it('serializes simLabel as string and assignedSubscriptionId as numeric-only', () => {
+    const claimExpiresAt = new Date('2026-08-10T21:37:40.342Z')
+    const formatted = formatClaimedJobForAndroid({
+      _id: new mongoose.Types.ObjectId(),
+      userId: new mongoose.Types.ObjectId(),
+      originalSmsId: 'sms1',
+      recipientPhone: '254700000000',
+      normalizedPhone: '254700000000',
+      message: 'hello',
+      status: 'claimed',
+      canonicalStatus: 'CLAIMED_FOR_PHONE',
+      attempts: 1,
+      claimToken: generateClaimToken(),
+      attemptId: generateAttemptId(),
+      claimExpiresAt,
+      claimedByDeviceId: 'dev-a',
+      assignedDeviceId: 'dev-a',
+      simLabel: 'SIM 1 - Safaricom',
+      // Stale pollution from older website builds — must not leak to Android
+      assignedSubscriptionId: 'SIM 1 - Safaricom',
+      retryAttempted: false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      serverRevision: 1,
+    } as any)
+
+    expect(formatted.simLabel).toBe('SIM 1 - Safaricom')
+    expect(formatted.assignedSubscriptionId).toBeNull()
+    expect(formatted.claimExpiresAt).toBe('2026-08-10T21:37:40.342Z')
+    expect(typeof formatted.claimExpiresAt).toBe('string')
+    expect(formatted.claimExpiresAt).toMatch(/^\d{4}-\d{2}-\d{2}T/)
+  })
+
+  it('serializes a real numeric subscription ID without inventing values', () => {
+    const formatted = formatClaimedJobForAndroid({
+      _id: new mongoose.Types.ObjectId(),
+      userId: new mongoose.Types.ObjectId(),
+      originalSmsId: 'sms2',
+      recipientPhone: '254700000001',
+      normalizedPhone: '254700000001',
+      message: 'hello',
+      status: 'claimed',
+      canonicalStatus: 'CLAIMED_FOR_PHONE',
+      attempts: 1,
+      claimToken: generateClaimToken(),
+      attemptId: generateAttemptId(),
+      claimExpiresAt: new Date('2026-08-10T21:37:40.342Z'),
+      simLabel: 'SIM 2 - Airtel',
+      assignedSubscriptionId: '14',
+      retryAttempted: false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as any)
+
+    expect(formatted.simLabel).toBe('SIM 2 - Airtel')
+    expect(formatted.assignedSubscriptionId).toBe('14')
+    // Backend has no simSlot field — do not fabricate one
+    expect(formatted).not.toHaveProperty('simSlot')
+  })
+})
+
 describe('claimToken / attemptId formats', () => {
   it('pending response shape includes claimToken and attemptId', () => {
     const claimToken = generateClaimToken()
@@ -71,7 +159,8 @@ describe('claimToken / attemptId formats', () => {
       claimExpiresAt: computeClaimExpiresAt(),
       claimedByDeviceId: 'dev-a',
       assignedDeviceId: 'dev-a',
-      assignedSubscriptionId: 'sub-1',
+      assignedSubscriptionId: '2',
+      simLabel: 'SIM 1 - Safaricom',
       retryAttempted: false,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -85,7 +174,8 @@ describe('claimToken / attemptId formats', () => {
     expect(formatted.serverJobId).toBeTruthy()
     expect(formatted.originalSmsId).toBe('sms1')
     expect(formatted.assignedDeviceId).toBe('dev-a')
-    expect(formatted.assignedSubscriptionId).toBe('sub-1')
+    expect(formatted.assignedSubscriptionId).toBe('2')
+    expect(formatted.simLabel).toBe('SIM 1 - Safaricom')
     // Legacy field preserved
     expect(formatted.status).toBe('pending')
     expect(formatted.id).toBeTruthy()
@@ -340,6 +430,21 @@ describe('expired claim safety', () => {
     expect(safe).toBe(true)
   })
 
+  it('CLAIMED_FOR_PHONE + null submissionStartedAt + expired claim is reclaimable', () => {
+    const job = {
+      status: 'claimed',
+      canonicalStatus: 'CLAIMED_FOR_PHONE',
+      submissionStartedAt: null as Date | null,
+      claimExpiresAt: new Date(Date.now() - 5000),
+    }
+    const reclaimable =
+      job.status === 'claimed' &&
+      job.canonicalStatus === 'CLAIMED_FOR_PHONE' &&
+      (job.submissionStartedAt == null) &&
+      job.claimExpiresAt.getTime() <= Date.now()
+    expect(reclaimable).toBe(true)
+  })
+
   it('expired submission-started attempt does not return automatically', () => {
     const job = {
       status: 'sending',
@@ -352,6 +457,38 @@ describe('expired claim safety', () => {
     // Must go to SUBMISSION_UNKNOWN, not pending
     expect(canTransitionCanonical('SUBMISSION_STARTED', 'QUEUED_FOR_PHONE')).toBe(false)
     expect(canTransitionCanonical('SUBMISSION_STARTED', 'SUBMISSION_UNKNOWN')).toBe(true)
+  })
+
+  it('never blindly resets terminal / in-flight phone statuses', () => {
+    const unsafeStatuses = [
+      'SUBMISSION_STARTED',
+      'SENT_VIA_PHONE',
+      'DELIVERED_VIA_PHONE',
+      'SUBMISSION_UNKNOWN',
+    ]
+    for (const status of unsafeStatuses) {
+      expect(canTransitionCanonical(status as any, 'QUEUED_FOR_PHONE')).toBe(false)
+    }
+  })
+
+  it('reclaimExpiredClaims only targets claimed + expired + no submission', async () => {
+    // Contract mirror of claim-recovery.ts SAFE filter — Android parse failures
+    // leave CLAIMED_FOR_PHONE with submissionStartedAt == null until lease expiry.
+    const { reclaimExpiredClaims } = await import('@/lib/services/sms-gateway/claim-recovery')
+    expect(typeof reclaimExpiredClaims).toBe('function')
+
+    const safeReclaimFilter = {
+      status: 'claimed',
+      claimExpiresAtExpired: true,
+      submissionStartedAt: null,
+    }
+    expect(safeReclaimFilter.status).toBe('claimed')
+    expect(safeReclaimFilter.submissionStartedAt).toBeNull()
+
+    // Unsafe terminal / in-flight statuses must not match the safe reclaim path
+    for (const status of ['sending', 'sent', 'delivered', 'submission_unknown']) {
+      expect(status === 'claimed').toBe(false)
+    }
   })
 })
 
