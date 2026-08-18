@@ -80,10 +80,9 @@ export default function SenderIdLetterTemplatePage() {
         <div className="flex items-start justify-between gap-4">
           <div>
             <h1 className="text-2xl lg:text-3xl font-bold text-slate-900">Sender ID Letter</h1>
-            <p className="text-slate-600 mt-1">
-              Upload the blank authorization letter. It will appear on{' '}
-              <span className="font-medium">/app/sender-ids/request</span> for clients to download,
-              fill the red items, stamp, and re-upload.
+            <p className="text-slate-700 mt-1">
+              Upload the blank authorization letter (DOCX). It will appear on the customer application
+              page for them to download, fill the red items, stamp, and re-upload.
             </p>
           </div>
           <button
@@ -111,10 +110,10 @@ export default function SenderIdLetterTemplatePage() {
               <p className="font-medium text-slate-900">
                 {template?.hasTemplate ? template.fileName : 'No letter uploaded yet'}
               </p>
-              <p className="text-xs text-slate-500">
+              <p className="text-sm text-slate-700">
                 {template?.hasTemplate
-                  ? 'This file is what customers download on the application form.'
-                  : 'PDF, JPG, or PNG — max 5MB'}
+                  ? 'This Word/PDF file is what customers download on the application form.'
+                  : 'DOCX, DOC, PDF, JPG, or PNG — max 5MB'}
               </p>
             </div>
           </div>
@@ -122,7 +121,7 @@ export default function SenderIdLetterTemplatePage() {
           <input
             ref={fileInputRef}
             type="file"
-            accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+            accept=".docx,.doc,.pdf,.jpg,.jpeg,.png,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword,application/pdf,image/jpeg,image/png"
             className="hidden"
             onChange={(e) => upload(e.target.files?.[0] || null)}
           />

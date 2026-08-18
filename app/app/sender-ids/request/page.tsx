@@ -26,8 +26,8 @@ const selectClass =
   'w-full h-11 min-h-[44px] px-4 border border-[#E2E8F0] rounded-xl bg-white text-[#0F172A] text-sm focus:outline-none focus:ring-2 focus:ring-[#2F9B73]/15 focus:border-[#2F9B73]'
 
 const labelClass = 'block text-sm font-medium text-[#0F172A] mb-1.5'
-const helperClass = 'text-xs text-[#64748B] mt-1'
-const errorClass = 'text-xs text-[#EF4444] mt-1'
+const helperClass = 'text-sm text-[#0F172A] mt-1 leading-relaxed'
+const errorClass = 'text-sm font-medium text-[#B91C1C] mt-1'
 const cardClass =
   'rounded-[18px] border border-[#E2E8F0] bg-white p-4 sm:p-6 shadow-sm w-full max-w-full min-w-0'
 const primaryBtnClass =
@@ -36,7 +36,12 @@ const secondaryBtnClass =
   'inline-flex items-center justify-center gap-2 min-h-[46px] h-11 px-5 rounded-xl border border-[#E2E8F0] bg-white text-[#0F172A] font-medium hover:bg-[#F8FAFC] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2F9B73]/15 disabled:opacity-50 w-full sm:w-auto'
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024
-const ALLOWED_TYPES = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png']
+const CERTIFICATE_TYPES = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png']
+const LETTER_TYPES = [
+  ...CERTIFICATE_TYPES,
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/msword',
+]
 
 interface FormState {
   desiredSenderId: string
@@ -77,8 +82,22 @@ function validateCertificateFile(file: File): string | null {
   if (file.size > MAX_FILE_SIZE) return 'Business certificate must be 5MB or smaller'
   const extension = file.name.split('.').pop()?.toLowerCase() || ''
   const allowedExtensions = ['pdf', 'jpg', 'jpeg', 'png']
-  if (!ALLOWED_TYPES.includes(file.type) && !allowedExtensions.includes(extension)) {
+  if (!CERTIFICATE_TYPES.includes(file.type) && !allowedExtensions.includes(extension)) {
     return 'Only PDF, JPG, JPEG, and PNG files are allowed'
+  }
+  return null
+}
+
+function validateLetterUpload(file: File): string | null {
+  if (file.size > MAX_FILE_SIZE) return 'Authorization letter must be 5MB or smaller'
+  const extension = file.name.split('.').pop()?.toLowerCase() || ''
+  const allowedExtensions = ['pdf', 'jpg', 'jpeg', 'png', 'docx', 'doc']
+  if (
+    !LETTER_TYPES.includes(file.type) &&
+    !allowedExtensions.includes(extension) &&
+    !(file.type || '').includes('wordprocessingml')
+  ) {
+    return 'Only DOCX, DOC, PDF, JPG, JPEG, and PNG files are allowed'
   }
   return null
 }
@@ -237,7 +256,7 @@ export default function SenderIdRequestPage() {
   ) => {
     if (!file) return
     const errorKey = kind === 'letter' ? 'authorizationLetter' : 'businessCertificate'
-    const fileError = validateCertificateFile(file)
+    const fileError = kind === 'letter' ? validateLetterUpload(file) : validateCertificateFile(file)
     if (fileError) {
       setErrors((prev) => ({ ...prev, [errorKey]: fileError }))
       return
@@ -254,6 +273,7 @@ export default function SenderIdRequestPage() {
       const token = localStorage.getItem('token')
       const formData = new FormData()
       formData.append('file', file)
+      formData.append('kind', kind)
 
       const response = await fetch('/api/user/uploads/cloudinary', {
         method: 'POST',
@@ -495,11 +515,11 @@ export default function SenderIdRequestPage() {
               </p>
 
               <div className="rounded-xl border border-[#E2E8F0] bg-white p-4">
-                <p className="text-sm font-medium text-[#64748B]">Payment required</p>
+                <p className="text-sm font-medium text-[#334155]">Payment required</p>
                 <p className="text-2xl font-semibold text-[#0F172A] mt-1">
                   KSh {pendingPayment.feeAmount.toLocaleString()}
                 </p>
-                <p className="text-xs text-[#64748B] mt-2">
+                <p className="text-sm text-[#0F172A] mt-2">
                   Your application will enter review after payment is confirmed.
                 </p>
               </div>
@@ -534,10 +554,10 @@ export default function SenderIdRequestPage() {
             Back to Sender IDs
           </Link>
           <h1 className="text-xl sm:text-2xl font-semibold text-[#0F172A]">Sender ID Application</h1>
-          <p className="text-sm text-[#64748B] mt-1">
+          <p className="text-sm text-[#334155] mt-1">
             Apply for a branded sender name for your business SMS messages.
           </p>
-          <p className="text-xs text-[#64748B] mt-2 rounded-lg bg-[#F8FAFC] border border-[#E2E8F0] px-3 py-2 inline-block">
+          <p className="text-sm text-[#0F172A] mt-2 rounded-lg bg-[#F8FAFC] border border-[#E2E8F0] px-3 py-2 inline-block">
             Review begins after application fee payment is confirmed.
           </p>
         </div>
@@ -572,10 +592,10 @@ export default function SenderIdRequestPage() {
                 <label className={labelClass}>
                   Sender ID authorization letter <span className="text-[#EF4444]">*</span>
                 </label>
-                <p className={helperClass}>
-                  Download this letter, fill every item in red (date, company name, sender ID, sample
-                  message, name and designation), stamp it with your company stamp, then upload the
-                  completed copy.
+                <p className="text-sm text-[#0F172A] mt-1 leading-relaxed">
+                  Download this Word letter, fill every item in red (date, company name, sender ID,
+                  sample message, name and designation), stamp it with your company stamp, then upload
+                  the completed copy.
                 </p>
                 {letterTemplate ? (
                   <button
@@ -587,14 +607,14 @@ export default function SenderIdRequestPage() {
                     Download letter ({letterTemplate.fileName})
                   </button>
                 ) : (
-                  <p className="text-xs text-amber-700 mt-2 mb-3">
+                  <p className="mt-3 mb-3 rounded-lg bg-amber-100 border border-amber-300 px-3 py-2 text-sm font-medium text-amber-950">
                     The downloadable letter is not available yet. Please check again shortly.
                   </p>
                 )}
                 <input
                   ref={letterInputRef}
                   type="file"
-                  accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+                  accept=".docx,.doc,.pdf,.jpg,.jpeg,.png,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword,application/pdf,image/jpeg,image/png"
                   className="hidden"
                   onChange={(e) => handleFileUpload(e.target.files?.[0] || null, 'letter')}
                 />
@@ -651,7 +671,7 @@ export default function SenderIdRequestPage() {
                       {uploading ? (
                         <>
                           <Loader2 className="w-6 h-6 animate-spin text-[#2F9B73]" />
-                          <span className="text-sm text-[#64748B]">Uploading letter...</span>
+                          <span className="text-sm text-[#0F172A]">Uploading letter...</span>
                         </>
                       ) : (
                         <>
@@ -659,8 +679,8 @@ export default function SenderIdRequestPage() {
                           <span className="text-sm font-medium text-[#0F172A]">
                             Upload the filled, stamped letter
                           </span>
-                          <span className="text-xs text-[#64748B]">
-                            Must be stamped. PDF, JPG, JPEG, or PNG — max 5MB
+                          <span className="text-sm text-[#334155]">
+                            Must be stamped. DOCX, PDF, JPG, or PNG — max 5MB
                           </span>
                         </>
                       )}
@@ -736,7 +756,7 @@ export default function SenderIdRequestPage() {
                       {uploading ? (
                         <>
                           <Loader2 className="w-6 h-6 animate-spin text-[#2F9B73]" />
-                          <span className="text-sm text-[#64748B]">Uploading certificate...</span>
+                          <span className="text-sm text-[#0F172A]">Uploading certificate...</span>
                         </>
                       ) : (
                         <>
@@ -744,7 +764,7 @@ export default function SenderIdRequestPage() {
                           <span className="text-sm font-medium text-[#0F172A]">
                             Click to upload business certificate
                           </span>
-                          <span className="text-xs text-[#64748B]">
+                          <span className="text-sm text-[#334155]">
                             PDF, JPG, JPEG, or PNG — max 5MB
                           </span>
                         </>

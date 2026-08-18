@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth/middleware'
-import { uploadBusinessCertificate } from '@/lib/services/cloudinary/upload-certificate'
+import { uploadBusinessCertificate, uploadSenderIdLetter } from '@/lib/services/cloudinary/upload-certificate'
 
 export async function POST(request: NextRequest) {
   try {
@@ -18,7 +18,11 @@ export async function POST(request: NextRequest) {
     }
 
     const workspaceId = user.userId
-    const result = await uploadBusinessCertificate(file, workspaceId)
+    const kind = String(formData.get('kind') || 'certificate')
+    const result =
+      kind === 'letter'
+        ? await uploadSenderIdLetter(file, workspaceId)
+        : await uploadBusinessCertificate(file, workspaceId)
 
     return NextResponse.json({
       success: true,

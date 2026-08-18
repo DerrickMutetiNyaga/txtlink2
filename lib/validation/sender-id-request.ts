@@ -130,12 +130,23 @@ function validateAuthorizationLetter(body: AuthorizationLetterPayload, mode: 'dr
   }
 
   const mimeType = (body.authorizationLetterMimeType || '').toLowerCase()
-  const allowedMimeTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png']
+  const allowedMimeTypes = [
+    'application/pdf',
+    'image/jpeg',
+    'image/jpg',
+    'image/png',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/msword',
+  ]
   const extension = body.authorizationLetterFileName.split('.').pop()?.toLowerCase() || ''
-  const allowedExtensions = ['pdf', 'jpg', 'jpeg', 'png']
+  const allowedExtensions = ['pdf', 'jpg', 'jpeg', 'png', 'docx', 'doc']
 
-  if (!allowedMimeTypes.includes(mimeType) && !allowedExtensions.includes(extension)) {
-    return 'Only PDF, JPG, JPEG, and PNG files are allowed'
+  if (
+    !allowedMimeTypes.includes(mimeType) &&
+    !allowedExtensions.includes(extension) &&
+    !mimeType.includes('wordprocessingml')
+  ) {
+    return 'Only DOCX, DOC, PDF, JPG, JPEG, and PNG files are allowed'
   }
 
   if (body.authorizationLetterSize && body.authorizationLetterSize > 5 * 1024 * 1024) {

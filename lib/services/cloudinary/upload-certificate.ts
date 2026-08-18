@@ -2,14 +2,21 @@ import { v2 as cloudinary } from 'cloudinary'
 
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024
 
-const ALLOWED_MIME_TYPES = new Set([
+const IMAGE_AND_PDF_MIME_TYPES = new Set([
   'application/pdf',
   'image/jpeg',
   'image/jpg',
   'image/png',
 ])
 
-const ALLOWED_EXTENSIONS = new Set(['pdf', 'jpg', 'jpeg', 'png'])
+const IMAGE_AND_PDF_EXTENSIONS = new Set(['pdf', 'jpg', 'jpeg', 'png'])
+
+const WORD_MIME_TYPES = new Set([
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/msword',
+])
+
+const WORD_EXTENSIONS = new Set(['docx', 'doc'])
 
 export interface CloudinaryUploadResult {
   url: string
@@ -19,6 +26,57 @@ export interface CloudinaryUploadResult {
   format: string
   bytes: number
   originalFilename: string
+}
+
+export function isWordDocument(fileName?: string, mimeType?: string): boolean {
+  const ext = (fileName || '').split('.').pop()?.toLowerCase() || ''
+  const mime = (mimeType || '').toLowerCase()
+  return WORD_EXTENSIONS.has(ext) || WORD_MIME_TYPES.has(mime) || mime.includes('wordprocessingml')
+}
+
+function fileExtension(file: File): string {
+  return file.name.split('.').pop()?.toLowerCase() || ''
+}
+
+export function validateCertificateFile(file: File): string | null {
+  return validateDocumentFile(file, { allowWord: false, label: 'Business certificate' })
+}
+
+export function validateLetterFile(file: File): string | null {
+  return validateDocumentFile(file, { allowWord: true, label: 'Authorization letter' })
+}
+
+export function validateDocumentFile(
+  file: File,
+  options: { allowWord?: boolean; label?: string } = {}
+): string | null {
+  const label = options.label || 'File'
+  if (!file) return `${label} is required`
+
+  if (file.size > MAX_FILE_SIZE_BYTES) {
+    return `${label} must be 5MB or smaller`
+  }
+
+  const mimeType = (file.type || '').toLowerCase()
+  const extension = fileExtension(file)
+  const allowedMime = new Set(IMAGE_AND_PDF_MIME_TYPES)
+  const allowedExt = new Set(IMAGE_AND_PDF_EXTENSIONS)
+  if (options.allowWord) {
+    WORD_MIME_TYPES.forEach((type) => allowedMime.add(type))
+    WORD_EXTENSIONS.forEach((ext) => allowedExt.add(ext))
+  }
+
+  if (
+    !allowedMime.has(mimeType) &&
+    !allowedExt.has(extension) &&
+    !(options.allowWord && mimeType.includes('wordprocessingml'))
+  ) {
+    return options.allowWord
+      ? 'Only DOCX, DOC, PDF, JPG, JPEG, and PNG files are allowed'
+      : 'Only PDF, JPG, JPEG, and PNG files are allowed'
+  }
+
+  return null
 }
 
 function ensureCloudinaryConfigured() {
@@ -36,23 +94,6 @@ function ensureCloudinaryConfigured() {
     api_secret: apiSecret,
     secure: true,
   })
-}
-
-export function validateCertificateFile(file: File): string | null {
-  if (!file) return 'Business certificate is required'
-
-  if (file.size > MAX_FILE_SIZE_BYTES) {
-    return 'Business certificate must be 5MB or smaller'
-  }
-
-  const mimeType = (file.type || '').toLowerCase()
-  const extension = file.name.split('.').pop()?.toLowerCase() || ''
-
-  if (!ALLOWED_MIME_TYPES.has(mimeType) && !ALLOWED_EXTENSIONS.has(extension)) {
-    return 'Only PDF, JPG, JPEG, and PNG files are allowed'
-  }
-
-  return null
 }
 
 export function getCertificateDownloadCandidates(params: {
@@ -83,13 +124,14 @@ export function getCertificateDownloadCandidates(params: {
   if (params.publicId) {
     try {
       ensureCloudinaryConfigured()
-      const isPdf =
+      const preferRaw =
+        isWordDocument(params.fileName, params.mimeType) ||
         (params.mimeType || '').toLowerCase().includes('pdf') ||
         (params.fileName || '').toLowerCase().endsWith('.pdf') ||
         fallback.includes('/raw/')
       const resourceTypes: Array<'raw' | 'image'> = fallback.includes('/image/')
         ? ['image', 'raw']
-        : isPdf
+        : preferRaw
           ? ['raw', 'image']
           : ['image', 'raw']
 
@@ -112,11 +154,12 @@ export function getCertificateDownloadCandidates(params: {
   return urls
 }
 
-export async function uploadBusinessCertificate(
+async function uploadToCloudinary(
   file: File,
-  workspaceId: string
+  folder: string,
+  options: { allowWord?: boolean; label?: string }
 ): Promise<CloudinaryUploadResult> {
-  const validationError = validateCertificateFile(file)
+  const validationError = validateDocumentFile(file, options)
   if (validationError) {
     throw new Error(validationError)
   }
@@ -124,13 +167,13 @@ export async function uploadBusinessCertificate(
   ensureCloudinaryConfigured()
 
   const buffer = Buffer.from(await file.arrayBuffer())
-  const folder = `txtlink/sender-id-certificates/${workspaceId}`
+  const resourceType = isWordDocument(file.name, file.type) ? 'raw' : 'auto'
 
   const uploadResult = await new Promise<any>((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
       {
         folder,
-        resource_type: 'auto',
+        resource_type: resourceType,
         use_filename: true,
         unique_filename: true,
       },
@@ -153,41 +196,32 @@ export async function uploadBusinessCertificate(
   }
 }
 
+export async function uploadBusinessCertificate(
+  file: File,
+  workspaceId: string
+): Promise<CloudinaryUploadResult> {
+  return uploadToCloudinary(file, `txtlink/sender-id-certificates/${workspaceId}`, {
+    allowWord: false,
+    label: 'Business certificate',
+  })
+}
+
+export async function uploadSenderIdLetter(
+  file: File,
+  workspaceId: string
+): Promise<CloudinaryUploadResult> {
+  return uploadToCloudinary(file, `txtlink/sender-id-letters/${workspaceId}`, {
+    allowWord: true,
+    label: 'Authorization letter',
+  })
+}
+
 export async function uploadPlatformDocument(
   file: File,
   folder: string
 ): Promise<CloudinaryUploadResult> {
-  const validationError = validateCertificateFile(file)
-  if (validationError) {
-    throw new Error(validationError)
-  }
-
-  ensureCloudinaryConfigured()
-
-  const buffer = Buffer.from(await file.arrayBuffer())
-  const uploadResult = await new Promise<any>((resolve, reject) => {
-    const stream = cloudinary.uploader.upload_stream(
-      {
-        folder,
-        resource_type: 'auto',
-        use_filename: true,
-        unique_filename: true,
-      },
-      (error, result) => {
-        if (error) reject(error)
-        else resolve(result)
-      }
-    )
-    stream.end(buffer)
+  return uploadToCloudinary(file, folder, {
+    allowWord: true,
+    label: 'Letter template',
   })
-
-  return {
-    url: uploadResult.url,
-    secureUrl: uploadResult.secure_url,
-    publicId: uploadResult.public_id,
-    resourceType: uploadResult.resource_type,
-    format: uploadResult.format,
-    bytes: uploadResult.bytes,
-    originalFilename: file.name,
-  }
 }
