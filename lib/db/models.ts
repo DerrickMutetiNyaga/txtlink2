@@ -157,6 +157,13 @@ export interface ISenderIdRequest {
   businessCertificateFileName?: string
   businessCertificateMimeType?: string
   businessCertificateSize?: number
+  /** Filled, stamped Sender ID authorization letter */
+  authorizationLetterUrl?: string
+  authorizationLetterSecureUrl?: string
+  authorizationLetterPublicId?: string
+  authorizationLetterFileName?: string
+  authorizationLetterMimeType?: string
+  authorizationLetterSize?: number
   contactPerson: string
   phoneNumber: string
   email: string
@@ -183,6 +190,12 @@ const SenderIdRequestSchema = new Schema<ISenderIdRequest>(
     businessCertificateFileName: { type: String },
     businessCertificateMimeType: { type: String },
     businessCertificateSize: { type: Number },
+    authorizationLetterUrl: { type: String },
+    authorizationLetterSecureUrl: { type: String },
+    authorizationLetterPublicId: { type: String },
+    authorizationLetterFileName: { type: String },
+    authorizationLetterMimeType: { type: String },
+    authorizationLetterSize: { type: Number },
     contactPerson: { type: String, trim: true, default: '' },
     phoneNumber: { type: String, trim: true, default: '' },
     email: { type: String, trim: true, lowercase: true, default: '' },
@@ -718,6 +731,13 @@ export interface ISystemSettings {
   mpesaCallbackUrl?: string // For STK Push
   mpesaEnvironment?: 'sandbox' | 'production'
   mpesaEnabled?: boolean
+  /** Blank Sender ID authorization letter shown on /app/sender-ids/request */
+  senderIdAuthorizationTemplateUrl?: string
+  senderIdAuthorizationTemplateSecureUrl?: string
+  senderIdAuthorizationTemplatePublicId?: string
+  senderIdAuthorizationTemplateFileName?: string
+  senderIdAuthorizationTemplateMimeType?: string
+  senderIdAuthorizationTemplateSize?: number
   
   // HostPinnacle Configuration
   hostpinnacleBaseUrl?: string
@@ -782,6 +802,12 @@ const SystemSettingsSchema = new Schema<ISystemSettings>(
     mpesaCallbackUrl: { type: String },
     mpesaEnvironment: { type: String, enum: ['sandbox', 'production'], default: 'sandbox' },
     mpesaEnabled: { type: Boolean, default: false },
+    senderIdAuthorizationTemplateUrl: { type: String },
+    senderIdAuthorizationTemplateSecureUrl: { type: String },
+    senderIdAuthorizationTemplatePublicId: { type: String },
+    senderIdAuthorizationTemplateFileName: { type: String },
+    senderIdAuthorizationTemplateMimeType: { type: String },
+    senderIdAuthorizationTemplateSize: { type: Number },
     
     // HostPinnacle Configuration
     hostpinnacleBaseUrl: { type: String, default: 'https://smsportal.hostpinnacle.co.ke' },

@@ -31,7 +31,16 @@ export interface BusinessCertificatePayload {
   businessCertificateSize?: number
 }
 
-export interface SenderIdRequestPayload extends BusinessCertificatePayload {
+export interface AuthorizationLetterPayload {
+  authorizationLetterUrl?: string
+  authorizationLetterSecureUrl?: string
+  authorizationLetterPublicId?: string
+  authorizationLetterFileName?: string
+  authorizationLetterMimeType?: string
+  authorizationLetterSize?: number
+}
+
+export interface SenderIdRequestPayload extends BusinessCertificatePayload, AuthorizationLetterPayload {
   desiredSenderId?: string
   contactPerson?: string
   phoneNumber?: string
@@ -107,6 +116,35 @@ function validateCertificate(body: BusinessCertificatePayload, mode: 'draft' | '
   return null
 }
 
+function validateAuthorizationLetter(body: AuthorizationLetterPayload, mode: 'draft' | 'submit'): string | null {
+  if (mode !== 'submit') return null
+
+  if (!body.authorizationLetterSecureUrl && !body.authorizationLetterUrl) {
+    return 'Download the letter, fill the red items, stamp it, then upload the completed copy'
+  }
+  if (!body.authorizationLetterPublicId) {
+    return 'Authorization letter upload is incomplete. Please upload again.'
+  }
+  if (!body.authorizationLetterFileName) {
+    return 'Authorization letter file name is missing'
+  }
+
+  const mimeType = (body.authorizationLetterMimeType || '').toLowerCase()
+  const allowedMimeTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png']
+  const extension = body.authorizationLetterFileName.split('.').pop()?.toLowerCase() || ''
+  const allowedExtensions = ['pdf', 'jpg', 'jpeg', 'png']
+
+  if (!allowedMimeTypes.includes(mimeType) && !allowedExtensions.includes(extension)) {
+    return 'Only PDF, JPG, JPEG, and PNG files are allowed'
+  }
+
+  if (body.authorizationLetterSize && body.authorizationLetterSize > 5 * 1024 * 1024) {
+    return 'Authorization letter must be 5MB or smaller'
+  }
+
+  return null
+}
+
 export function validateSenderIdRequest(
   body: SenderIdRequestPayload,
   mode: 'draft' | 'submit'
@@ -128,6 +166,9 @@ export function validateSenderIdRequest(
 
   const certificateError = validateCertificate(body, mode)
   if (certificateError) errors.businessCertificate = certificateError
+
+  const letterError = validateAuthorizationLetter(body, mode)
+  if (letterError) errors.authorizationLetter = letterError
 
   if (mode === 'submit') {
     if (!contactPerson) errors.contactPerson = 'Contact person is required'
@@ -178,6 +219,12 @@ export function validateSenderIdRequest(
       businessCertificateFileName: body.businessCertificateFileName || '',
       businessCertificateMimeType: body.businessCertificateMimeType || '',
       businessCertificateSize: body.businessCertificateSize || 0,
+      authorizationLetterUrl: body.authorizationLetterUrl || '',
+      authorizationLetterSecureUrl: body.authorizationLetterSecureUrl || '',
+      authorizationLetterPublicId: body.authorizationLetterPublicId || '',
+      authorizationLetterFileName: body.authorizationLetterFileName || '',
+      authorizationLetterMimeType: body.authorizationLetterMimeType || '',
+      authorizationLetterSize: body.authorizationLetterSize || 0,
       contactPerson,
       phoneNumber,
       email: email.toLowerCase(),
@@ -200,6 +247,12 @@ export function formatSenderIdRequest(doc: any) {
     businessCertificateFileName: doc.businessCertificateFileName || '',
     businessCertificateMimeType: doc.businessCertificateMimeType || '',
     businessCertificateSize: doc.businessCertificateSize || 0,
+    authorizationLetterUrl: doc.authorizationLetterUrl || '',
+    authorizationLetterSecureUrl: doc.authorizationLetterSecureUrl || '',
+    authorizationLetterPublicId: doc.authorizationLetterPublicId || '',
+    authorizationLetterFileName: doc.authorizationLetterFileName || '',
+    authorizationLetterMimeType: doc.authorizationLetterMimeType || '',
+    authorizationLetterSize: doc.authorizationLetterSize || 0,
     contactPerson: doc.contactPerson,
     phoneNumber: doc.phoneNumber,
     email: doc.email,

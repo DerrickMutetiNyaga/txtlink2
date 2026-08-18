@@ -70,6 +70,12 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     existing.businessCertificateFileName = data.businessCertificateFileName as string
     existing.businessCertificateMimeType = data.businessCertificateMimeType as string
     existing.businessCertificateSize = data.businessCertificateSize as number
+    existing.authorizationLetterUrl = data.authorizationLetterUrl as string
+    existing.authorizationLetterSecureUrl = data.authorizationLetterSecureUrl as string
+    existing.authorizationLetterPublicId = data.authorizationLetterPublicId as string
+    existing.authorizationLetterFileName = data.authorizationLetterFileName as string
+    existing.authorizationLetterMimeType = data.authorizationLetterMimeType as string
+    existing.authorizationLetterSize = data.authorizationLetterSize as number
     existing.contactPerson = data.contactPerson as string
     existing.phoneNumber = data.phoneNumber as string
     existing.email = data.email as string

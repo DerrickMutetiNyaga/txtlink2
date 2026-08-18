@@ -152,3 +152,42 @@ export async function uploadBusinessCertificate(
     originalFilename: file.name,
   }
 }
+
+export async function uploadPlatformDocument(
+  file: File,
+  folder: string
+): Promise<CloudinaryUploadResult> {
+  const validationError = validateCertificateFile(file)
+  if (validationError) {
+    throw new Error(validationError)
+  }
+
+  ensureCloudinaryConfigured()
+
+  const buffer = Buffer.from(await file.arrayBuffer())
+  const uploadResult = await new Promise<any>((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      {
+        folder,
+        resource_type: 'auto',
+        use_filename: true,
+        unique_filename: true,
+      },
+      (error, result) => {
+        if (error) reject(error)
+        else resolve(result)
+      }
+    )
+    stream.end(buffer)
+  })
+
+  return {
+    url: uploadResult.url,
+    secureUrl: uploadResult.secure_url,
+    publicId: uploadResult.public_id,
+    resourceType: uploadResult.resource_type,
+    format: uploadResult.format,
+    bytes: uploadResult.bytes,
+    originalFilename: file.name,
+  }
+}

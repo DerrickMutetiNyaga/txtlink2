@@ -38,19 +38,37 @@ export async function GET(
       return NextResponse.json({ error: 'Application not found' }, { status: 404 })
     }
 
-    const storedUrl = doc.businessCertificateSecureUrl || doc.businessCertificateUrl
+    const kind = request.nextUrl.searchParams.get('kind') === 'letter' ? 'letter' : 'certificate'
+    const storedUrl =
+      kind === 'letter'
+        ? doc.authorizationLetterSecureUrl || doc.authorizationLetterUrl
+        : doc.businessCertificateSecureUrl || doc.businessCertificateUrl
     const candidates = getCertificateDownloadCandidates({
-      publicId: doc.businessCertificatePublicId,
+      publicId:
+        kind === 'letter' ? doc.authorizationLetterPublicId : doc.businessCertificatePublicId,
       fallbackUrl: storedUrl,
-      fileName: doc.businessCertificateFileName,
-      mimeType: doc.businessCertificateMimeType,
+      fileName:
+        kind === 'letter' ? doc.authorizationLetterFileName : doc.businessCertificateFileName,
+      mimeType:
+        kind === 'letter' ? doc.authorizationLetterMimeType : doc.businessCertificateMimeType,
     })
 
     if (candidates.length === 0) {
-      return NextResponse.json({ error: 'No certificate was uploaded for this application' }, { status: 404 })
+      return NextResponse.json(
+        {
+          error:
+            kind === 'letter'
+              ? 'No authorization letter was uploaded for this application'
+              : 'No certificate was uploaded for this application',
+        },
+        { status: 404 }
+      )
     }
 
-    const fileName = safeFileName(doc.businessCertificateFileName || `${doc.desiredSenderId || 'certificate'}.pdf`)
+    const fileName = safeFileName(
+      (kind === 'letter' ? doc.authorizationLetterFileName : doc.businessCertificateFileName) ||
+        `${doc.desiredSenderId || 'document'}-${kind}.pdf`
+    )
 
     for (const fileUrl of candidates) {
       try {
@@ -58,7 +76,9 @@ export async function GET(
         if (!fileRes.ok) continue
 
         const contentType =
-          doc.businessCertificateMimeType || fileRes.headers.get('content-type') || 'application/octet-stream'
+          (kind === 'letter' ? doc.authorizationLetterMimeType : doc.businessCertificateMimeType) ||
+          fileRes.headers.get('content-type') ||
+          'application/octet-stream'
         const buffer = Buffer.from(await fileRes.arrayBuffer())
         if (!buffer.length) continue
 

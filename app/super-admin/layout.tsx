@@ -56,6 +56,7 @@ const NAV_SECTIONS: NavSection[] = [
       { id: 'dashboard', href: '/super-admin', label: 'Dashboard', icon: LayoutDashboard },
       { id: 'accounts', href: '/super-admin/accounts', label: 'Accounts', icon: Users },
       { id: 'sender-apps', href: '/super-admin/sender-id-applications', label: 'Sender ID Applications', icon: FileText },
+      { id: 'sender-letter', href: '/super-admin/sender-id-letter', label: 'Sender ID Letter', icon: FileText },
       { id: 'pricing', href: '/super-admin/pricing', label: 'Pricing', icon: DollarSign },
       { id: 'sender-id-ad', href: '/super-admin/sender-id-ad', label: 'Sender ID Ad', icon: CheckCircle2 },
     ],

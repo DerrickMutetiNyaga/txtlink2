@@ -43,6 +43,9 @@ async function loadApplication(id: string) {
         }
       : null,
     hasCertificate: !!(formatted.businessCertificateSecureUrl || formatted.businessCertificateUrl),
+    hasAuthorizationLetter: !!(
+      formatted.authorizationLetterSecureUrl || formatted.authorizationLetterUrl
+    ),
   }
 }
 

@@ -57,6 +57,9 @@ export async function GET(request: NextRequest) {
             }
           : null,
         hasCertificate: !!(formatted.businessCertificateSecureUrl || formatted.businessCertificateUrl),
+        hasAuthorizationLetter: !!(
+          formatted.authorizationLetterSecureUrl || formatted.authorizationLetterUrl
+        ),
       }
     })
 

@@ -25,9 +25,13 @@ interface Application {
   industry: string
   status: string
   hasCertificate: boolean
+  hasAuthorizationLetter: boolean
   businessCertificateFileName: string
   businessCertificateMimeType: string
   businessCertificateSize: number
+  authorizationLetterFileName: string
+  authorizationLetterMimeType: string
+  authorizationLetterSize: number
   rejectionReason?: string
   createdAt: string
   user: { id: string; name: string; email: string; phone?: string } | null
@@ -163,12 +167,16 @@ export default function SenderIdApplicationsPage() {
     window.open(url, '_blank', 'noopener,noreferrer')
   }
 
-  const downloadCertificate = async (app: Application) => {
+  const downloadDocument = async (app: Application, kind: 'certificate' | 'letter') => {
     try {
       setDownloading(true)
       setMessage(null)
-      const fileName = app.businessCertificateFileName || `${app.desiredSenderId}-certificate`
-      const response = await fetch(`/api/super-admin/sender-id-requests/${app.id}/certificate`, {
+      const fileName =
+        kind === 'letter'
+          ? app.authorizationLetterFileName || `${app.desiredSenderId}-authorization-letter`
+          : app.businessCertificateFileName || `${app.desiredSenderId}-certificate`
+      const query = kind === 'letter' ? '?kind=letter' : ''
+      const response = await fetch(`/api/super-admin/sender-id-requests/${app.id}/certificate${query}`, {
         headers: { Authorization: `Bearer ${token()}` },
       })
       const contentType = response.headers.get('content-type') || ''
@@ -187,10 +195,10 @@ export default function SenderIdApplicationsPage() {
       }
 
       const blob = await response.blob()
-      if (!blob.size) throw new Error('The certificate file was empty')
+      if (!blob.size) throw new Error('The file was empty')
       saveBlob(blob, fileName)
     } catch (error: any) {
-      setMessage({ type: 'error', text: error.message || 'Could not download the certificate.' })
+      setMessage({ type: 'error', text: error.message || 'Could not download the file.' })
     } finally {
       setDownloading(false)
     }
@@ -315,6 +323,32 @@ export default function SenderIdApplicationsPage() {
                   </p>
                 </div>
 
+                <div className="space-y-3">
+                <div className="rounded-xl border border-slate-200 p-4 flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-slate-100 text-slate-700">
+                      <FileText className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-slate-900">
+                        {selected.authorizationLetterFileName || 'Stamped authorization letter'}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        {selected.hasAuthorizationLetter
+                          ? `${selected.authorizationLetterMimeType || 'file'} ${formatBytes(selected.authorizationLetterSize)}`
+                          : 'No letter uploaded'}
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    onClick={() => downloadDocument(selected, 'letter')}
+                    disabled={!selected.hasAuthorizationLetter || downloading}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    {downloading ? 'Downloading...' : 'Download'}
+                  </Button>
+                </div>
                 <div className="rounded-xl border border-slate-200 p-4 flex items-center justify-between gap-4">
                   <div className="flex items-center gap-3">
                     <div className="p-2 rounded-lg bg-slate-100 text-slate-700">
@@ -332,13 +366,14 @@ export default function SenderIdApplicationsPage() {
                     </div>
                   </div>
                   <Button
-                    onClick={() => downloadCertificate(selected)}
+                    onClick={() => downloadDocument(selected, 'certificate')}
                     disabled={!selected.hasCertificate || downloading}
                     className="bg-emerald-600 hover:bg-emerald-700 text-white"
                   >
                     <Download className="w-4 h-4 mr-2" />
                     {downloading ? 'Downloading...' : 'Download'}
                   </Button>
+                </div>
                 </div>
 
                 {selected.rejectionReason && (

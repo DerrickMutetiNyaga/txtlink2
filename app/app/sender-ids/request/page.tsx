@@ -14,7 +14,7 @@ import {
   validateEmail,
   validatePhone,
 } from '@/lib/validation/sender-id-request'
-import { ArrowLeft, FileUp, Loader2, X } from 'lucide-react'
+import { ArrowLeft, FileUp, Loader2, X, Download } from 'lucide-react'
 
 const fieldClass =
   'w-full h-11 min-h-[44px] px-4 border border-[#E2E8F0] rounded-xl bg-white text-[#0F172A] text-sm placeholder:text-[#94A3B8] focus:outline-none focus:ring-2 focus:ring-[#2F9B73]/15 focus:border-[#2F9B73] disabled:bg-[#F1F5F9] disabled:text-[#94A3B8]'
@@ -86,8 +86,11 @@ function validateCertificateFile(file: File): string | null {
 export default function SenderIdRequestPage() {
   const { toast } = useToast()
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const letterInputRef = useRef<HTMLInputElement>(null)
   const [form, setForm] = useState<FormState>(emptyForm)
   const [certificate, setCertificate] = useState<CertificateState | null>(null)
+  const [letter, setLetter] = useState<CertificateState | null>(null)
+  const [letterTemplate, setLetterTemplate] = useState<{ fileName: string; downloadUrl: string } | null>(null)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [draftId, setDraftId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -107,9 +110,12 @@ export default function SenderIdRequestPage() {
         setLoading(true)
         const token = localStorage.getItem('token')
 
-        const [profileRes, requestsRes] = await Promise.all([
+        const [profileRes, requestsRes, templateRes] = await Promise.all([
           fetch('/api/user/profile', { headers: { Authorization: `Bearer ${token}` } }),
           fetch('/api/user/sender-ids/requests', {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+          fetch('/api/sender-id-authorization-template', {
             headers: { Authorization: `Bearer ${token}` },
           }),
         ])
@@ -180,6 +186,27 @@ export default function SenderIdRequestPage() {
                 size: editable.businessCertificateSize || 0,
               })
             }
+
+            if (editable.authorizationLetterSecureUrl || editable.authorizationLetterUrl) {
+              setLetter({
+                url: editable.authorizationLetterUrl || '',
+                secureUrl: editable.authorizationLetterSecureUrl || '',
+                publicId: editable.authorizationLetterPublicId || '',
+                fileName: editable.authorizationLetterFileName || 'authorization-letter',
+                mimeType: editable.authorizationLetterMimeType || '',
+                size: editable.authorizationLetterSize || 0,
+              })
+            }
+          }
+        }
+
+        if (templateRes.ok) {
+          const templateData = await templateRes.json()
+          if (templateData.template?.downloadUrl) {
+            setLetterTemplate({
+              fileName: templateData.template.fileName || 'Sender ID authorization letter',
+              downloadUrl: templateData.template.downloadUrl,
+            })
           }
         }
 
@@ -204,12 +231,15 @@ export default function SenderIdRequestPage() {
     })
   }
 
-  const handleCertificateSelect = async (file: File | null) => {
+  const handleFileUpload = async (
+    file: File | null,
+    kind: 'certificate' | 'letter'
+  ) => {
     if (!file) return
-
+    const errorKey = kind === 'letter' ? 'authorizationLetter' : 'businessCertificate'
     const fileError = validateCertificateFile(file)
     if (fileError) {
-      setErrors((prev) => ({ ...prev, businessCertificate: fileError }))
+      setErrors((prev) => ({ ...prev, [errorKey]: fileError }))
       return
     }
 
@@ -217,7 +247,7 @@ export default function SenderIdRequestPage() {
       setUploading(true)
       setErrors((prev) => {
         const next = { ...prev }
-        delete next.businessCertificate
+        delete next[errorKey]
         return next
       })
 
@@ -233,26 +263,32 @@ export default function SenderIdRequestPage() {
 
       const data = await response.json()
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to upload certificate')
+        throw new Error(data.error || 'Failed to upload file')
       }
 
-      setCertificate({
+      const uploaded = {
         url: data.url,
         secureUrl: data.secureUrl,
         publicId: data.publicId,
         fileName: data.originalFilename || file.name,
         mimeType: file.type,
         size: data.bytes || file.size,
-      })
+      }
+
+      if (kind === 'letter') setLetter(uploaded)
+      else setCertificate(uploaded)
 
       toast({
-        title: 'Certificate uploaded',
-        description: 'Your business certificate was uploaded successfully.',
+        title: kind === 'letter' ? 'Letter uploaded' : 'Certificate uploaded',
+        description:
+          kind === 'letter'
+            ? 'Your stamped authorization letter was uploaded successfully.'
+            : 'Your business certificate was uploaded successfully.',
       })
     } catch (error: any) {
       setErrors((prev) => ({
         ...prev,
-        businessCertificate: error.message || 'Failed to upload certificate',
+        [errorKey]: error.message || 'Failed to upload file',
       }))
       toast({
         title: 'Upload failed',
@@ -261,8 +297,41 @@ export default function SenderIdRequestPage() {
       })
     } finally {
       setUploading(false)
-      if (fileInputRef.current) fileInputRef.current.value = ''
+      if (kind === 'letter' && letterInputRef.current) letterInputRef.current.value = ''
+      if (kind === 'certificate' && fileInputRef.current) fileInputRef.current.value = ''
     }
+  }
+
+  const downloadLetterTemplate = async () => {
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch('/api/sender-id-authorization-template?download=1', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({}))
+        throw new Error(result.error || 'Could not download the letter')
+      }
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = letterTemplate?.fileName || 'Sender-ID-Authorization-Letter.pdf'
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(url)
+    } catch (error: any) {
+      toast({
+        title: 'Download failed',
+        description: error.message || 'Please try again.',
+        variant: 'destructive',
+      })
+    }
+  }
+
+  const handleCertificateSelect = async (file: File | null) => {
+    await handleFileUpload(file, 'certificate')
   }
 
   const buildPayload = (status: 'draft' | 'submitted') => ({
@@ -275,6 +344,12 @@ export default function SenderIdRequestPage() {
     businessCertificateFileName: certificate?.fileName || '',
     businessCertificateMimeType: certificate?.mimeType || '',
     businessCertificateSize: certificate?.size || 0,
+    authorizationLetterUrl: letter?.url || '',
+    authorizationLetterSecureUrl: letter?.secureUrl || '',
+    authorizationLetterPublicId: letter?.publicId || '',
+    authorizationLetterFileName: letter?.fileName || '',
+    authorizationLetterMimeType: letter?.mimeType || '',
+    authorizationLetterSize: letter?.size || 0,
   })
 
   const validateForSubmit = () => {
@@ -284,6 +359,10 @@ export default function SenderIdRequestPage() {
     if (senderError) nextErrors.desiredSenderId = senderError
     if (!certificate?.secureUrl && !certificate?.url) {
       nextErrors.businessCertificate = 'Business certificate is required'
+    }
+    if (!letter?.secureUrl && !letter?.url) {
+      nextErrors.authorizationLetter =
+        'Download the letter, fill the red items, stamp it, then upload the completed copy'
     }
     if (!form.contactPerson.trim()) nextErrors.contactPerson = 'Contact person is required'
 
@@ -487,6 +566,110 @@ export default function SenderIdRequestPage() {
                   </p>
                 )}
                 {errors.desiredSenderId && <p className={errorClass}>{errors.desiredSenderId}</p>}
+              </div>
+
+              <div className="min-w-0 md:col-span-2">
+                <label className={labelClass}>
+                  Sender ID authorization letter <span className="text-[#EF4444]">*</span>
+                </label>
+                <p className={helperClass}>
+                  Download this letter, fill every item in red (date, company name, sender ID, sample
+                  message, name and designation), stamp it with your company stamp, then upload the
+                  completed copy.
+                </p>
+                {letterTemplate ? (
+                  <button
+                    type="button"
+                    onClick={downloadLetterTemplate}
+                    className={`${secondaryBtnClass} mt-3 mb-3`}
+                  >
+                    <Download className="w-4 h-4" />
+                    Download letter ({letterTemplate.fileName})
+                  </button>
+                ) : (
+                  <p className="text-xs text-amber-700 mt-2 mb-3">
+                    The downloadable letter is not available yet. Please check again shortly.
+                  </p>
+                )}
+                <input
+                  ref={letterInputRef}
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+                  className="hidden"
+                  onChange={(e) => handleFileUpload(e.target.files?.[0] || null, 'letter')}
+                />
+                <div
+                  className={cn(
+                    'rounded-xl border-2 border-dashed p-4 sm:p-6 text-center transition-colors',
+                    errors.authorizationLetter
+                      ? 'border-[#EF4444] bg-red-50/30'
+                      : 'border-[#E2E8F0] bg-[#F8FAFC] hover:border-[#2F9B73]/40'
+                  )}
+                >
+                  {letter ? (
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="p-2 rounded-lg bg-[#ECFDF5] text-[#2F9B73] shrink-0">
+                          <FileUp className="w-5 h-5" />
+                        </div>
+                        <div className="text-left min-w-0">
+                          <p className="text-sm font-medium text-[#0F172A] truncate">
+                            {letter.fileName}
+                          </p>
+                          <p className="text-xs text-[#64748B]">
+                            {(letter.size / 1024).toFixed(1)} KB
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                        <button
+                          type="button"
+                          onClick={() => letterInputRef.current?.click()}
+                          disabled={uploading}
+                          className={secondaryBtnClass}
+                        >
+                          Replace file
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setLetter(null)}
+                          disabled={uploading}
+                          className="inline-flex items-center justify-center gap-2 min-h-[46px] h-11 px-5 rounded-xl border border-[#E2E8F0] bg-white text-[#64748B] font-medium hover:bg-[#F8FAFC] w-full sm:w-auto"
+                        >
+                          <X className="w-4 h-4" />
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => letterInputRef.current?.click()}
+                      disabled={uploading}
+                      className="w-full flex flex-col items-center gap-2 py-2"
+                    >
+                      {uploading ? (
+                        <>
+                          <Loader2 className="w-6 h-6 animate-spin text-[#2F9B73]" />
+                          <span className="text-sm text-[#64748B]">Uploading letter...</span>
+                        </>
+                      ) : (
+                        <>
+                          <FileUp className="w-8 h-8 text-[#2F9B73]" />
+                          <span className="text-sm font-medium text-[#0F172A]">
+                            Upload the filled, stamped letter
+                          </span>
+                          <span className="text-xs text-[#64748B]">
+                            Must be stamped. PDF, JPG, JPEG, or PNG — max 5MB
+                          </span>
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
+                {errors.authorizationLetter && (
+                  <p className={errorClass}>{errors.authorizationLetter}</p>
+                )}
               </div>
 
               <div className="min-w-0 md:col-span-2">
