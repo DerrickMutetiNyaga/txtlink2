@@ -16,7 +16,7 @@ export async function POST(
 ) {
   try {
     await connectDB()
-    const owner = requireOwner(request)
+    const owner = await requireOwner(request)
     const { id: userId } = await params
 
     const { senderId } = await request.json()

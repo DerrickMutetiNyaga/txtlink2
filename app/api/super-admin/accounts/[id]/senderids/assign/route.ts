@@ -18,7 +18,7 @@ export async function POST(
 
     let admin: { userId: string; email: string }
     try {
-      admin = requireOwner(request)
+      admin = await requireOwner(request)
     } catch {
       try {
         admin = requireAdmin(request)

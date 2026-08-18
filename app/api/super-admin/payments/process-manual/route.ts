@@ -11,6 +11,7 @@ import connectDB from '@/lib/db/connect'
 import { MpesaTransaction, Transaction, User } from '@/lib/db/models'
 import { convertKesToCredits } from '@/lib/utils/credits'
 import { resolvePricePerCreditKes } from '@/lib/utils/resolve-price-per-credit'
+import { topupProfitMetadata } from '@/lib/services/profit'
 import { requireOwner } from '@/lib/auth/middleware'
 import { logAudit } from '@/lib/utils/audit'
 import mongoose from 'mongoose'
@@ -18,7 +19,7 @@ import mongoose from 'mongoose'
 export async function POST(request: NextRequest) {
   try {
     await connectDB()
-    const owner = requireOwner(request)
+    const owner = await requireOwner(request)
 
     const body = await request.json()
     const {
@@ -110,6 +111,11 @@ export async function POST(request: NextRequest) {
         source: 'super_admin',
         isManual: true,
         mpesaTransactionId: mpesaTransactionId || null,
+        ...(await topupProfitMetadata({
+          paidKes: amountKes,
+          credits: creditsToAdd,
+          sellingPriceKes: pricePerCreditKes,
+        })),
       },
     })
 

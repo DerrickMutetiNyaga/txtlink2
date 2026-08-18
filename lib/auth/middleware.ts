@@ -62,26 +62,15 @@ export function requireAdmin(request: NextRequest): AuthUser {
 }
 
 /**
- * Require owner access (strict - only owner email or userId)
+ * Require super-admin access (env owner or a user approved as super admin)
  */
-export function requireOwner(request: NextRequest): AuthUser {
+export async function requireOwner(request: NextRequest): Promise<AuthUser> {
   const user = requireAuth(request)
-  
-  const OWNER_EMAIL = process.env.OWNER_EMAIL
-  const OWNER_USER_ID = process.env.OWNER_USER_ID
-  
-  if (!OWNER_EMAIL && !OWNER_USER_ID) {
-    throw new Error('OWNER_EMAIL or OWNER_USER_ID must be set in environment variables')
-  }
-  
-  const isOwner = 
-    (OWNER_EMAIL && user.email.toLowerCase() === OWNER_EMAIL.toLowerCase()) ||
-    (OWNER_USER_ID && user.userId === OWNER_USER_ID)
-  
-  if (!isOwner) {
+  const { hasSuperAdminAccess } = await import('@/lib/auth/owner')
+  const allowed = await hasSuperAdminAccess(user.email, user.userId)
+  if (!allowed) {
     throw new Error('Forbidden: Owner access required')
   }
-  
   return user
 }
 

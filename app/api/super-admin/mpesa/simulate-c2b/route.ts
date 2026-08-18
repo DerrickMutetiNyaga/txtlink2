@@ -13,7 +13,7 @@ import { MpesaService } from '@/lib/services/mpesa/mpesa-service'
 export async function POST(request: NextRequest) {
   try {
     await connectDB()
-    const user = requireOwner(request)
+    const user = await requireOwner(request)
 
     const { phoneNumber, amount, billRefNumber, commandId } = await request.json()
 

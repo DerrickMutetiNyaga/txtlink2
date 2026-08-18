@@ -12,6 +12,7 @@ import { extractHostPinnacleSendIds, primaryStatusLookupId } from '@/lib/service
 import { requireAuth } from '@/lib/auth/middleware'
 import { calculateSegments153 } from '@/lib/utils/credits'
 import { resolvePricePerCreditKes } from '@/lib/utils/resolve-price-per-credit'
+import { smsProfitFields } from '@/lib/services/profit'
 import { initialNextCheckAt } from '@/lib/services/sms-status/build-synchronizer'
 import { postSendStatusFields } from '@/lib/services/sms-status/auto-delivered'
 import { schedulePostSendStatusSync } from '@/lib/services/sms-status/sync-user-pending'
@@ -112,6 +113,7 @@ export async function POST(request: NextRequest) {
     // For transparency & logging, also compute money-equivalent cost in KSh
     const pricePerCreditKes = await resolvePricePerCreditKes(user.userId)
     const totalCostKes = requiredCredits * pricePerCreditKes
+    const { providerCostKes, profitKes } = await smsProfitFields(segments, totalCostKes)
 
     // Format phone number
     const formattedPhone = formatPhoneNumber(recipient)
@@ -216,6 +218,8 @@ export async function POST(request: NextRequest) {
         encoding: 'gsm7',
         parts: segments,
         chargedKes: totalCostKes,
+        providerCostKes,
+        profitKes,
         status: 'queued',
         providerStatus: 'PROCESSING',
         deliveryStatus: 'queued',

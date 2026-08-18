@@ -15,7 +15,7 @@ import { registerDlrWebhook } from '@/lib/services/hostpinnacle/register-dlr-web
 
 export async function GET(request: NextRequest) {
   try {
-    requireOwner(request)
+    await requireOwner(request)
 
     const previewBase = request.nextUrl.searchParams.get('previewBaseUrl')?.trim()
     if (previewBase) {
@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    requireOwner(request)
+    await requireOwner(request)
 
     let baseUrl: string | undefined
     const baseUrlFromQuery = request.nextUrl.searchParams.get('baseUrl')?.trim()

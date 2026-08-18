@@ -11,7 +11,7 @@ import { calculatePricing } from '@/lib/utils/pricing'
 export async function POST(request: NextRequest) {
   try {
     await connectDB()
-    requireOwner(request)
+    await requireOwner(request)
 
     const { message, userId, encoding, monthlyVolume } = await request.json()
 

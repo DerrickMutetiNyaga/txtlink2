@@ -15,6 +15,7 @@ import { hostPinnacleClient } from '@/lib/services/hostpinnacle/client'
 import { extractHostPinnacleSendIds, primaryStatusLookupId } from '@/lib/services/hostpinnacle/send-ids'
 import { calculateSegments153 } from '@/lib/utils/credits'
 import { resolvePricePerCreditKes } from '@/lib/utils/resolve-price-per-credit'
+import { smsProfitFields } from '@/lib/services/profit'
 import { initialNextCheckAt } from '@/lib/services/sms-status/build-synchronizer'
 import { postSendStatusFields } from '@/lib/services/sms-status/auto-delivered'
 import { schedulePostSendStatusSync } from '@/lib/services/sms-status/sync-user-pending'
@@ -341,6 +342,7 @@ export async function POST(request: NextRequest) {
     // For transparency & logging
     const pricePerCreditKes = await resolvePricePerCreditKes(userId)
     const totalCostKes = requiredCredits * pricePerCreditKes
+    const { providerCostKes, profitKes } = await smsProfitFields(segments, totalCostKes)
     
     // Format phone number
     const formattedPhone = formatPhoneNumber(to)
@@ -426,6 +428,8 @@ export async function POST(request: NextRequest) {
         encoding: 'gsm7',
         parts: segments,
         chargedKes: totalCostKes,
+        providerCostKes,
+        profitKes,
         status: 'queued',
         deliveryStatus: 'queued',
         deliveryMethod: usePhoneGateway ? 'android_phone_gateway' : 'provider',

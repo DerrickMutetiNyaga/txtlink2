@@ -11,7 +11,7 @@ import { requireOwner } from '@/lib/auth/middleware'
 export async function GET(request: NextRequest) {
   try {
     await connectDB()
-    requireOwner(request)
+    await requireOwner(request)
 
     const users = await User.find({}).sort({ createdAt: -1 })
 
@@ -54,6 +54,7 @@ export async function GET(request: NextRequest) {
           email: user.email,
           phone: user.phone,
           role: user.role,
+          isSuperAdmin: !!user.isSuperAdmin,
           // Use creditsBalance (SMS credits) instead of legacy KSh wallet
           credits: user.creditsBalance ?? 0,
           isActive: user.isActive,

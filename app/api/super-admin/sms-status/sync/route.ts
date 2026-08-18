@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
     await connectDB()
 
     try {
-      requireOwner(request)
+      await requireOwner(request)
     } catch (authError: any) {
       return NextResponse.json(
         { success: false, error: authError.message || 'Unauthorized' },

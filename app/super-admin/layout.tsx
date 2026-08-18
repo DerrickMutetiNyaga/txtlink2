@@ -7,6 +7,8 @@ import {
   LayoutDashboard,
   Users,
   DollarSign,
+  PiggyBank,
+  UserCog,
   BarChart3,
   FileText,
   Shield,
@@ -40,18 +42,52 @@ type NavItem = {
   id: string
 }
 
-const NAV_ITEMS: NavItem[] = [
-  { id: 'dashboard', href: '/super-admin', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'accounts', href: '/super-admin/accounts', label: 'Accounts', icon: Users },
-  { id: 'pricing', href: '/super-admin/pricing', label: 'Pricing', icon: DollarSign },
-  { id: 'sender-id-ad', href: '/super-admin/sender-id-ad', label: 'Sender ID Ad', icon: CheckCircle2 },
-  { id: 'mpesa', href: '/super-admin/mpesa-transactions', label: 'M-Pesa Transactions', icon: CreditCard },
-  { id: 'analytics', href: '/super-admin/analytics', label: 'Analytics', icon: BarChart3 },
-  { id: 'queue', href: '/super-admin/queue-status', label: 'Queue Status', icon: Activity },
-  { id: 'audit', href: '/super-admin/audit', label: 'Audit Logs', icon: FileText },
-  { id: 'health', href: '/super-admin/queue-status?tab=health', label: 'System Health', icon: HeartPulse },
-  { id: 'settings', href: '/super-admin/settings', label: 'Settings', icon: Settings },
+type NavSection = {
+  id: string
+  label: string | null
+  items: NavItem[]
+}
+
+const NAV_SECTIONS: NavSection[] = [
+  {
+    id: 'workspace',
+    label: null,
+    items: [
+      { id: 'dashboard', href: '/super-admin', label: 'Dashboard', icon: LayoutDashboard },
+      { id: 'accounts', href: '/super-admin/accounts', label: 'Accounts', icon: Users },
+      { id: 'pricing', href: '/super-admin/pricing', label: 'Pricing', icon: DollarSign },
+      { id: 'sender-id-ad', href: '/super-admin/sender-id-ad', label: 'Sender ID Ad', icon: CheckCircle2 },
+    ],
+  },
+  {
+    id: 'finances',
+    label: 'Finances',
+    items: [
+      { id: 'profit', href: '/super-admin/profit', label: 'Profit', icon: PiggyBank },
+      { id: 'mpesa', href: '/super-admin/mpesa-transactions', label: 'M-Pesa Payments', icon: CreditCard },
+    ],
+  },
+  {
+    id: 'operations',
+    label: 'Operations',
+    items: [
+      { id: 'analytics', href: '/super-admin/analytics', label: 'Analytics', icon: BarChart3 },
+      { id: 'queue', href: '/super-admin/queue-status', label: 'Queue Status', icon: Activity },
+      { id: 'audit', href: '/super-admin/audit', label: 'Audit Logs', icon: FileText },
+      { id: 'health', href: '/super-admin/queue-status?tab=health', label: 'System Health', icon: HeartPulse },
+    ],
+  },
+  {
+    id: 'settings',
+    label: 'Settings',
+    items: [
+      { id: 'settings', href: '/super-admin/settings', label: 'Platform Settings', icon: Settings },
+      { id: 'super-admins', href: '/super-admin/super-admins', label: 'Permissions', icon: UserCog },
+    ],
+  },
 ]
+
+const NAV_ITEMS: NavItem[] = NAV_SECTIONS.flatMap((section) => section.items)
 
 function isNavItemActive(item: NavItem, pathname: string, tab: string | null): boolean {
   if (item.id === 'health') {
@@ -258,7 +294,14 @@ function SuperAdminLayoutContent({ children }: { children: React.ReactNode }) {
                     onClick={() => router.push('/super-admin/settings')}
                   >
                     <Settings className="w-4 h-4 text-slate-500" />
-                    <span>Settings</span>
+                    <span>Platform Settings</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="flex items-center gap-3 px-4 py-2.5 rounded-lg cursor-pointer"
+                    onClick={() => router.push('/super-admin/super-admins')}
+                  >
+                    <UserCog className="w-4 h-4 text-slate-500" />
+                    <span>Permissions</span>
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     onClick={() => {
@@ -302,8 +345,18 @@ function SuperAdminLayoutContent({ children }: { children: React.ReactNode }) {
               </div>
             </div>
 
-            <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-              {NAV_ITEMS.map((item) => renderNavLink(item))}
+            <nav className="flex-1 p-3 space-y-4 overflow-y-auto">
+              {NAV_SECTIONS.map((section) => (
+                <div key={section.id} className="space-y-1">
+                  {section.label && sidebarOpen && (
+                    <p className="px-3 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                      {section.label}
+                    </p>
+                  )}
+                  {section.label && !sidebarOpen && <div className="mx-2 border-t border-slate-200" />}
+                  {section.items.map((item) => renderNavLink(item))}
+                </div>
+              ))}
             </nav>
 
             {sidebarOpen && (
@@ -318,8 +371,17 @@ function SuperAdminLayoutContent({ children }: { children: React.ReactNode }) {
           <div className="fixed inset-0 z-40 lg:hidden">
             <div className="fixed inset-0 bg-black/50" onClick={() => setMobileMenuOpen(false)} />
             <div className="fixed left-0 top-16 bottom-0 w-64 bg-white border-r border-slate-200/70 overflow-y-auto">
-              <div className="p-4 space-y-1">
-                {NAV_ITEMS.map((item) => renderNavLink(item, () => setMobileMenuOpen(false)))}
+              <div className="p-4 space-y-4">
+                {NAV_SECTIONS.map((section) => (
+                  <div key={section.id} className="space-y-1">
+                    {section.label && (
+                      <p className="px-3 pt-1 pb-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                        {section.label}
+                      </p>
+                    )}
+                    {section.items.map((item) => renderNavLink(item, () => setMobileMenuOpen(false)))}
+                  </div>
+                ))}
               </div>
             </div>
           </div>

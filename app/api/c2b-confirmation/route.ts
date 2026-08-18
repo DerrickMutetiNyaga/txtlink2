@@ -11,6 +11,7 @@ import connectDB from '@/lib/db/connect'
 import { MpesaTransaction, Transaction, User } from '@/lib/db/models'
 import { convertKesToCredits } from '@/lib/utils/credits'
 import { resolvePricePerCreditKes } from '@/lib/utils/resolve-price-per-credit'
+import { topupProfitMetadata } from '@/lib/services/profit'
 import mongoose from 'mongoose'
 
 export async function POST(request: NextRequest) {
@@ -181,6 +182,11 @@ export async function POST(request: NextRequest) {
             // Check if transaction already exists by reference (TransID)
             const existingTransactionRecord = await Transaction.findOne({ reference })
             if (!existingTransactionRecord) {
+              const profitMeta = await topupProfitMetadata({
+                paidKes: amountKes,
+                credits: creditsToAdd,
+                sellingPriceKes: pricePerCreditKes,
+              })
               await Transaction.create({
                 userId,
                 type: 'top-up',
@@ -197,6 +203,7 @@ export async function POST(request: NextRequest) {
                   transactionType: TransactionType || 'C2B',
                   businessShortCode: BusinessShortCode,
                   billRefNumber: BillRefNumber,
+                  ...profitMeta,
                 },
               })
 

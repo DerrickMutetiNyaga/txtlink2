@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest) {
   try {
-    requireOwner(request)
+    await requireOwner(request)
     const report = await checkSystemHealth()
     return NextResponse.json({ success: true, ...report })
   } catch (e: unknown) {

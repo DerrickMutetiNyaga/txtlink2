@@ -31,15 +31,16 @@ export function getGoogleRedirectUri(req: NextRequest): string {
   return `${baseUrl}/api/auth/google/callback`
 }
 
-export function resolveIsOwner(email: string, userId: string): boolean {
+export function resolveIsOwner(email: string, userId: string, isSuperAdmin?: boolean): boolean {
   const ownerEmail = process.env.OWNER_EMAIL?.trim()?.toLowerCase()
   const ownerUserId = process.env.OWNER_USER_ID?.trim()
   const emailLower = email.toLowerCase().trim()
 
-  return (
+  const envOwner =
     (!!ownerEmail && emailLower === ownerEmail) ||
     (!!ownerUserId && userId === ownerUserId)
-  )
+
+  return envOwner || !!isSuperAdmin
 }
 
 export function createSessionToken(user: Pick<IUser, 'email' | 'role'> & { _id: { toString(): string } }): string {

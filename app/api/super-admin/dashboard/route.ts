@@ -12,7 +12,7 @@ import { checkSystemHealth } from '@/lib/services/system-health/check-system-hea
 export async function GET(request: NextRequest) {
   try {
     await connectDB()
-    requireOwner(request)
+    await requireOwner(request)
 
     const mongoose = require('mongoose')
     const now = new Date()

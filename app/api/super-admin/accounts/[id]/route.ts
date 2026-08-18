@@ -21,7 +21,7 @@ export async function PUT(
 ) {
   try {
     await connectDB()
-    const owner = requireOwner(request)
+    const owner = await requireOwner(request)
     const resolvedParams = await Promise.resolve(params)
     const userId = resolvedParams.id
 
@@ -91,7 +91,7 @@ export async function POST(
 ) {
   try {
     await connectDB()
-    const owner = requireOwner(request)
+    const owner = await requireOwner(request)
     const resolvedParams = await Promise.resolve(params)
     const userId = resolvedParams.id
 

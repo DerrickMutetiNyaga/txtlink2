@@ -35,6 +35,8 @@ export interface IUser {
   provider?: string
   /** Last successful login timestamp */
   lastLoginAt?: Date
+  /** When true, this user can access the super-admin portal (in addition to the env OWNER) */
+  isSuperAdmin?: boolean
   createdAt: Date
   updatedAt: Date
 }
@@ -51,6 +53,7 @@ const UserSchema = new Schema<IUser>(
     avatarUrl: { type: String },
     provider: { type: String },
     lastLoginAt: { type: Date },
+    isSuperAdmin: { type: Boolean, default: false },
     role: { type: String, enum: ['admin', 'user'], default: 'user' },
     credits: { type: Number, default: 0 },
     creditsBalance: { type: Number, default: 0 },
@@ -62,6 +65,8 @@ const UserSchema = new Schema<IUser>(
   },
   { timestamps: true }
 )
+
+UserSchema.index({ isSuperAdmin: 1 })
 
 // HostPinnacle Account Model
 export interface IHostPinnacleAccount {
@@ -852,6 +857,7 @@ const TransactionSchema = new Schema<ITransaction>(
 // Index for faster lookups
 TransactionSchema.index({ userId: 1, createdAt: -1 })
 TransactionSchema.index({ userId: 1, type: 1 })
+TransactionSchema.index({ type: 1, status: 1, createdAt: -1 })
 // Note: reference already has an index from unique: true, so we don't need to add it again
 
 // Payment Method Model

@@ -17,7 +17,7 @@ import mongoose from 'mongoose'
 export async function GET(request: NextRequest) {
   try {
     await connectDB()
-    const user = requireOwner(request)
+    const user = await requireOwner(request)
 
     // Get or create system settings (singleton)
     let settings = await SystemSettings.findOne().populate('signupDefaultSenderId', 'senderName status')
@@ -91,7 +91,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     await connectDB()
-    const user = requireOwner(request)
+    const user = await requireOwner(request)
 
     const body = await request.json()
     const {

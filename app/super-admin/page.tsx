@@ -100,11 +100,14 @@ export default function SuperAdminDashboard() {
     try {
       setRefreshing(true)
       const token = localStorage.getItem('token')
-      const response = await fetch('/api/super-admin/dashboard?health=1', {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
+      const [response, profitResponse] = await Promise.all([
+        fetch('/api/super-admin/dashboard?health=1', {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        fetch('/api/super-admin/cost-profit', {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+      ])
 
       if (!response.ok) {
         if (response.status === 403 || response.status === 401) {
@@ -115,7 +118,19 @@ export default function SuperAdminDashboard() {
       }
 
       const result = await response.json()
-      setData(result.data)
+      let profitKpis = {}
+      if (profitResponse.ok) {
+        const profitResult = await profitResponse.json()
+        profitKpis = {
+          purchaseProfit30d: profitResult.data?.periods?.last30d?.profitKes ?? 0,
+          buyingPriceKes: profitResult.data?.buyingPriceKes,
+          sellingPriceKes: profitResult.data?.sellingPriceKes,
+        }
+      }
+      setData({
+        ...result.data,
+        kpis: { ...result.data.kpis, ...profitKpis },
+      })
     } catch (error) {
       console.error('Dashboard error:', error)
     } finally {
@@ -256,7 +271,20 @@ export default function SuperAdminDashboard() {
         </div>
 
         {/* Additional KPIs */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <Link href="/super-admin/profit" className="block">
+            <KPICard
+              title="Profit from purchases (30d)"
+              value={`KSh ${Number(kpis.purchaseProfit30d || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+              subtitle={
+                kpis.buyingPriceKes != null
+                  ? `Buy KSh ${kpis.buyingPriceKes}/SMS · Sell KSh ${kpis.sellingPriceKes}/SMS · Manage →`
+                  : 'Set buying & selling prices →'
+              }
+              icon={TrendingUp}
+              iconColor="emerald"
+            />
+          </Link>
           <KPICard
             title="Active Sender IDs"
             value={kpis.activeSenderIds.toLocaleString()}

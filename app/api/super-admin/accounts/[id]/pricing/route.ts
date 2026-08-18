@@ -17,7 +17,7 @@ export async function POST(
 ) {
   try {
     await connectDB()
-    const owner = requireOwner(request)
+    const owner = await requireOwner(request)
     const { id: userId } = await params
 
     const { mode, pricePerSms, pricePerPart, pricePerBlock, pricePerCharacter, charsPerBlock, chargeFailed, refundOnFail, samePriceForEncodings, roundPartialBlocks, minimumChargePerMessage, gsm7Part1, gsm7PartN, ucs2Part1, ucs2PartN, ucs2CharsPerBlock, ucs2PricePerBlock, ucs2PricePerCharacter } = await request.json()
@@ -142,7 +142,7 @@ export async function DELETE(
 ) {
   try {
     await connectDB()
-    const owner = requireOwner(request)
+    const owner = await requireOwner(request)
     const { id: userId } = await params
 
     const userObjectId = new mongoose.Types.ObjectId(userId)

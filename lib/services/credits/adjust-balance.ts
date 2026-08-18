@@ -4,6 +4,7 @@
 
 import mongoose from 'mongoose'
 import { User, Transaction } from '@/lib/db/models'
+import { topupProfitMetadata } from '@/lib/services/profit'
 
 export interface AdjustUserCreditsParams {
   userId: string
@@ -87,6 +88,11 @@ export async function adjustUserCredits(
         creditsAdded: creditsChange,
         pricePerCreditKes: payment.pricePerCreditKes,
         isManualMpesa: true,
+        ...(await topupProfitMetadata({
+          paidKes: payment.amountKes,
+          credits: creditsChange,
+          sellingPriceKes: payment.pricePerCreditKes,
+        })),
       }),
     },
   })

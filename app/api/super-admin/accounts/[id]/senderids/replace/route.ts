@@ -22,7 +22,7 @@ export async function POST(
 
     let admin: any
     try {
-      admin = requireOwner(request)
+      admin = await requireOwner(request)
     } catch {
       try {
         admin = requireAdmin(request)

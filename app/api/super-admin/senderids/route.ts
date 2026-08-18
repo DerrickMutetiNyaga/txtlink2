@@ -18,7 +18,7 @@ import { ensureSharedSenderIdIndexes } from '@/lib/services/senderids/ensure-sha
 export async function GET(request: NextRequest) {
   try {
     await connectDB()
-    requireOwner(request)
+    await requireOwner(request)
     await ensureSharedSenderIdIndexes()
 
     const creds = await loadMasterHostPinnacleCredentials()

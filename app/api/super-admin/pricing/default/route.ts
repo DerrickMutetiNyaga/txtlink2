@@ -11,7 +11,7 @@ import { requireOwner } from '@/lib/auth/middleware'
 export async function POST(request: NextRequest) {
   try {
     await connectDB()
-    const owner = requireOwner(request)
+    const owner = await requireOwner(request)
     const mongoose = require('mongoose')
 
     // Check if global rule exists

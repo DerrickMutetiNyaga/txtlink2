@@ -8,6 +8,7 @@ import connectDB from '@/lib/db/connect'
 import { User } from '@/lib/db/models'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
+import { resolveIsOwner } from '@/lib/auth/google-oauth'
 
 const JWT_SECRET = process.env.JWT_SECRET!
 
@@ -58,26 +59,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Check if user is owner
-    const OWNER_EMAIL = process.env.OWNER_EMAIL?.trim()
-    const OWNER_USER_ID = process.env.OWNER_USER_ID?.trim()
-    const userEmailLower = user.email.toLowerCase().trim()
-    const ownerEmailLower = OWNER_EMAIL?.toLowerCase().trim()
-    
-    const isOwner =
-      (ownerEmailLower && userEmailLower === ownerEmailLower) ||
-      (OWNER_USER_ID && user._id.toString() === OWNER_USER_ID)
-    
-    // Debug logging
-    console.log('Owner check:', {
-      userEmail: user.email,
-      userEmailLower,
-      OWNER_EMAIL,
-      ownerEmailLower,
-      OWNER_USER_ID,
-      userId: user._id.toString(),
-      isOwner
-    })
+    const isOwner = resolveIsOwner(user.email, user._id.toString(), user.isSuperAdmin)
 
     // Generate JWT token
     const token = jwt.sign(

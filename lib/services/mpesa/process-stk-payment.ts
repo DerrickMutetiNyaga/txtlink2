@@ -7,6 +7,7 @@ import mongoose from 'mongoose'
 import { MpesaTransaction, Transaction, User } from '@/lib/db/models'
 import { convertKesToCredits } from '@/lib/utils/credits'
 import { resolvePricePerCreditKes } from '@/lib/utils/resolve-price-per-credit'
+import { topupProfitMetadata } from '@/lib/services/profit'
 import {
   completeSenderIdInvoicePayment,
   markInvoicePaymentFailed,
@@ -145,6 +146,11 @@ export async function processStkPaymentResult(
 
             const existingTransaction = await Transaction.findOne({ reference })
             if (!existingTransaction) {
+              const profitMeta = await topupProfitMetadata({
+                paidKes: amountKes,
+                credits: creditsToAdd,
+                sellingPriceKes: pricePerCreditKes,
+              })
               await Transaction.create({
                 userId,
                 type: 'top-up',
@@ -160,6 +166,7 @@ export async function processStkPaymentResult(
                   mpesaReceiptNumber: mpesaReceiptNumber || mpesaTransaction.mpesaReceiptNumber,
                   checkoutRequestId: checkoutRequestId || mpesaTransaction.checkoutRequestId,
                   paymentType: 'sms_topup',
+                  ...profitMeta,
                 },
               })
             }

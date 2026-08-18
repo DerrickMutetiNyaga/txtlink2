@@ -264,7 +264,7 @@ export class StatusRepository {
   }): Promise<boolean> {
     const marked = await SmsMessage.findOneAndUpdate(
       { _id: params.messageId, refunded: { $ne: true } },
-      { $set: { refunded: true } },
+      { $set: { refunded: true, profitKes: 0 } },
       { new: false }
     ).lean()
 

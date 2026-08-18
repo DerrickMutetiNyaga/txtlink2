@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
 // POST - Create or update sender ID ad (Super Admin only)
 export async function POST(request: NextRequest) {
   try {
-    const owner = requireOwner(request)
+    const owner = await requireOwner(request)
     await connectDB()
     
     const body = await request.json()

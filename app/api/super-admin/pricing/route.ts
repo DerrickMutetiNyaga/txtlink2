@@ -13,7 +13,7 @@ import { logAudit } from '@/lib/utils/audit'
 export async function GET(request: NextRequest) {
   try {
     await connectDB()
-    requireOwner(request)
+    await requireOwner(request)
 
     const rules = await PricingRule.find({}).populate('userId', 'name email').sort({ scope: 1, createdAt: -1 })
 
@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     await connectDB()
-    const owner = requireOwner(request)
+    const owner = await requireOwner(request)
     const mongoose = require('mongoose')
 
     const {

@@ -617,7 +617,7 @@ export default function SuperAdminSettingsPage() {
             </div>
 
             <div>
-              <Label className="text-sm font-medium text-[#020617] mb-2 block">Default Provider Cost per Part (KES)</Label>
+              <Label className="text-sm font-medium text-[#020617] mb-2 block">Buying price per SMS (KES)</Label>
               <Input
                 type="number"
                 step="0.01"
@@ -625,6 +625,7 @@ export default function SuperAdminSettingsPage() {
                 onChange={(e) => updateField('defaultProviderCostPerPart', parseFloat(e.target.value))}
                 className="border-[#E5E7EB] bg-white text-[#020617]"
               />
+              <p className="text-xs text-[#64748B] mt-1">What you pay the SMS provider. Also editable on Profit.</p>
             </div>
 
             <div>
@@ -958,7 +959,7 @@ export default function SuperAdminSettingsPage() {
 
           <div className="grid md:grid-cols-2 gap-6">
             <div>
-              <Label className="text-sm font-medium text-[#020617] mb-2 block">Global Default Price per Part (KES)</Label>
+              <Label className="text-sm font-medium text-[#020617] mb-2 block">Selling price per SMS (KES)</Label>
               <Input
                 type="number"
                 step="0.01"
@@ -966,10 +967,11 @@ export default function SuperAdminSettingsPage() {
                 onChange={(e) => updateField('globalDefaultPricePerPart', parseFloat(e.target.value))}
                 className="border-[#E5E7EB] bg-white text-[#020617]"
               />
+              <p className="text-xs text-[#64748B] mt-1">Default customer price. Prefer Profit or Pricing for the live selling rate.</p>
             </div>
 
             <div>
-              <Label className="text-sm font-medium text-[#020617] mb-2 block">Global Provider Cost per Part (KES)</Label>
+              <Label className="text-sm font-medium text-[#020617] mb-2 block">Buying price per SMS (KES)</Label>
               <Input
                 type="number"
                 step="0.01"
@@ -977,6 +979,7 @@ export default function SuperAdminSettingsPage() {
                 onChange={(e) => updateField('globalProviderCostPerPart', parseFloat(e.target.value))}
                 className="border-[#E5E7EB] bg-white text-[#020617]"
               />
+              <p className="text-xs text-[#64748B] mt-1">What you pay the provider. Used to calculate profit as customers buy.</p>
             </div>
 
             <div className="md:col-span-2 space-y-4">

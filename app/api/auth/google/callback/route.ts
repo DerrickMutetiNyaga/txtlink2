@@ -94,7 +94,7 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    const isOwner = resolveIsOwner(email, user._id.toString())
+    const isOwner = resolveIsOwner(email, user._id.toString(), user.isSuperAdmin)
     const token = createSessionToken(user)
     const userPayload = buildAuthUserPayload(user, isOwner)
 

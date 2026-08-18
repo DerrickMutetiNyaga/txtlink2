@@ -21,7 +21,7 @@ import { requireOwner } from '@/lib/auth/middleware'
 export async function GET(request: NextRequest) {
   try {
     await connectDB()
-    requireOwner(request)
+    await requireOwner(request)
 
     const { searchParams } = new URL(request.url)
     const page = parseInt(searchParams.get('page') || '1')

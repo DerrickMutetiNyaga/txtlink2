@@ -16,7 +16,7 @@ import { logAudit } from '@/lib/utils/audit'
 export async function GET(request: NextRequest) {
   try {
     await connectDB()
-    const user = requireOwner(request)
+    const user = await requireOwner(request)
 
     // Get M-Pesa configuration
     const settings = await SystemSettings.findOne()

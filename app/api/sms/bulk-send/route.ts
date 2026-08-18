@@ -11,6 +11,8 @@ import { SmsMessage, User, UserSenderId } from '@/lib/db/models'
 import { requireAuth } from '@/lib/auth/middleware'
 import { calculateSegments153 } from '@/lib/utils/credits'
 import { resolvePricePerCreditKes } from '@/lib/utils/resolve-price-per-credit'
+import { getBuyingPriceKes } from '@/lib/services/profit'
+import { smsCostAndProfit } from '@/lib/utils/cost-profit'
 import { advancedSmsQueue } from '@/lib/services/sms/advanced-queue'
 import { initialNextCheckAt } from '@/lib/services/sms-status/build-synchronizer'
 import { buildMessageBodyFields, renderBulkTemplate, logSmsMessageCreateDebug } from '@/lib/services/sms/message-body'
@@ -116,6 +118,7 @@ export async function POST(request: NextRequest) {
     // Calculate costs
     const pricePerCreditKes = await resolvePricePerCreditKes(user.userId)
     const totalCostKes = requiredCredits * pricePerCreditKes
+    const buyingPriceKes = await getBuyingPriceKes()
 
     // Format phone numbers
     const formattedPhones = recipients.map(formatPhoneNumber)
@@ -166,18 +169,27 @@ export async function POST(request: NextRequest) {
             ...recipientVars,
           })
           const messageFields = buildMessageBodyFields(renderedMessage, message)
+          const messageSegments = calculateSegments153(renderedMessage)
+          const chargedKes = pricePerCreditKes * messageSegments
+          const { providerCostKes, profitKes } = smsCostAndProfit({
+            parts: messageSegments,
+            chargedKes,
+            buyingPriceKes,
+          })
           return {
             userId: userObjectId,
             senderName: senderId.senderName,
             toNumbers: [phone],
             normalizedPhone: phone.replace(/^\+/, ''),
             ...messageFields,
-            segments: calculateSegments153(renderedMessage),
+            segments: messageSegments,
             costPerSegment: pricePerCreditKes,
-            totalCost: pricePerCreditKes * calculateSegments153(renderedMessage),
+            totalCost: chargedKes,
             encoding: 'gsm7' as const,
-            parts: calculateSegments153(renderedMessage),
-            chargedKes: pricePerCreditKes * calculateSegments153(renderedMessage),
+            parts: messageSegments,
+            chargedKes,
+            providerCostKes,
+            profitKes,
             status: 'queued' as const,
             providerStatus: 'PROCESSING',
             deliveryStatus: 'queued',

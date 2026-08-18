@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
     let user: any = null
     
     try {
-      user = requireOwner(request)
+      user = await requireOwner(request)
       isOwner = true
     } catch {
       // Not owner, try regular auth

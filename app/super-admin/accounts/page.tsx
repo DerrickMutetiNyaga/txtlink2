@@ -222,6 +222,7 @@ export default function SuperAdminAccounts() {
   const [transferDialogOpen, setTransferDialogOpen] = useState(false)
   const [allSenderIds, setAllSenderIds] = useState<HostPinnacleSenderId[]>([])
   const [fetchingSenderIds, setFetchingSenderIds] = useState(false)
+  const [senderIdFetchError, setSenderIdFetchError] = useState<string | null>(null)
   const [assigningSenderId, setAssigningSenderId] = useState<string | null>(null)
   const [replacingSenderId, setReplacingSenderId] = useState<string | null>(null)
   const [replaceTargetId, setReplaceTargetId] = useState<string>('')
@@ -261,6 +262,7 @@ export default function SuperAdminAccounts() {
   const fetchAllSenderIds = async () => {
     try {
       setFetchingSenderIds(true)
+      setSenderIdFetchError(null)
       const token = localStorage.getItem('token')
       const response = await fetch('/api/super-admin/senderids', {
         headers: { Authorization: `Bearer ${token}` },
@@ -272,12 +274,19 @@ export default function SuperAdminAccounts() {
         return data.senderIds || []
       }
 
-      const error = await response.json()
-      alert(error.error || 'Failed to fetch sender IDs from HostPinnacle')
+      const error = await response.json().catch(() => ({}))
+      const message =
+        error.details ||
+        error.error ||
+        'Could not load sender IDs from HostPinnacle. Accounts still load from TXTLINK.'
+      setSenderIdFetchError(message)
+      console.warn('HostPinnacle sender ID fetch failed:', message)
       return []
     } catch (error) {
       console.error('Error fetching sender IDs:', error)
-      alert('Failed to fetch sender IDs from HostPinnacle')
+      setSenderIdFetchError(
+        'Could not reach HostPinnacle for sender IDs. Accounts still load from TXTLINK.'
+      )
       return []
     } finally {
       setFetchingSenderIds(false)
@@ -845,6 +854,16 @@ export default function SuperAdminAccounts() {
             </button>
           </div>
         </div>
+
+        {senderIdFetchError && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            <p className="font-medium">HostPinnacle sender IDs could not be loaded</p>
+            <p className="mt-1 text-amber-800">{senderIdFetchError}</p>
+            <p className="mt-1 text-amber-700">
+              This page still works. Use Fetch HostPinnacle IDs after credentials in Settings are working.
+            </p>
+          </div>
+        )}
 
         {/* Metrics Summary */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
