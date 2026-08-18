@@ -312,6 +312,9 @@ export default function SettingsPage() {
                         className={fieldClass}
                         placeholder="+254712345678"
                       />
+                      <p className="text-xs text-[#64748B] mt-1">
+                        Low-balance alerts and PayBill top-ups use this number. Pay from this M-Pesa line so credits land on your account automatically.
+                      </p>
                     </div>
                     <Button
                       type="submit"

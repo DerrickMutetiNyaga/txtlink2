@@ -139,6 +139,7 @@ export async function POST(request: NextRequest) {
       mpesaConsumerSecret,
       mpesaPasskey,
       mpesaShortcode,
+      mpesaPaybillAccount,
       mpesaConfirmationUrl,
       mpesaValidationUrl,
       mpesaCallbackUrl,
@@ -227,6 +228,11 @@ export async function POST(request: NextRequest) {
       updateData.mpesaPasskey = mpesaPasskey
     }
     if (mpesaShortcode !== undefined) updateData.mpesaShortcode = mpesaShortcode
+    if (mpesaPaybillAccount !== undefined) {
+      updateData.mpesaPaybillAccount = String(mpesaPaybillAccount || 'SMS')
+        .replace(/\s+/g, '')
+        .toUpperCase() || 'SMS'
+    }
     if (mpesaConfirmationUrl !== undefined) updateData.mpesaConfirmationUrl = mpesaConfirmationUrl
     if (mpesaValidationUrl !== undefined) updateData.mpesaValidationUrl = mpesaValidationUrl
     if (mpesaCallbackUrl !== undefined) updateData.mpesaCallbackUrl = mpesaCallbackUrl

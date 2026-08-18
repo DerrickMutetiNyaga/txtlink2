@@ -22,6 +22,7 @@ import {
   routeSmsViaPhoneGateway,
 } from '@/lib/services/sms-fallback/route-via-phone'
 import { maskPhone } from '@/lib/utils/log-sanitize'
+import { queueLowBalanceAlertSync } from '@/lib/services/sms/low-balance-alert'
 
 // Format phone number to E.164
 function formatPhoneNumber(phone: string): string {
@@ -243,6 +244,8 @@ export async function POST(request: NextRequest) {
 
       await session.commitTransaction()
 
+      queueLowBalanceAlertSync(userObjectId, newBalance)
+
       // Return success immediately with new balance (non-blocking) - SUPER FAST RESPONSE
       const response = NextResponse.json({
         success: true,
@@ -275,6 +278,7 @@ export async function POST(request: NextRequest) {
                 $inc: { creditsBalance: requiredCredits },
               })
               await SmsMessage.findByIdAndUpdate(smsMessage._id, { refunded: true })
+              queueLowBalanceAlertSync(userObjectId)
             }
             return
           }
@@ -330,6 +334,7 @@ export async function POST(request: NextRequest) {
             await User.findByIdAndUpdate(userObjectId, {
               $inc: { creditsBalance: requiredCredits },
             })
+            queueLowBalanceAlertSync(userObjectId)
 
             // Provider rejected the send outright: final failure, no further status checks
             await SmsMessage.findByIdAndUpdate(smsMessage._id, {
@@ -387,6 +392,7 @@ export async function POST(request: NextRequest) {
           await User.findByIdAndUpdate(userObjectId, {
             $inc: { creditsBalance: requiredCredits },
           })
+          queueLowBalanceAlertSync(userObjectId)
           await SmsMessage.findByIdAndUpdate(smsMessage._id, {
             status: 'failed',
             errorCode: 'ASYNC_ERROR',

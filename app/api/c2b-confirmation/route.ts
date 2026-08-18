@@ -12,7 +12,8 @@ import { MpesaTransaction, Transaction, User } from '@/lib/db/models'
 import { convertKesToCredits } from '@/lib/utils/credits'
 import { resolvePricePerCreditKes } from '@/lib/utils/resolve-price-per-credit'
 import { topupProfitMetadata } from '@/lib/services/profit'
-import mongoose from 'mongoose'
+import { queueLowBalanceAlertSync } from '@/lib/services/sms/low-balance-alert'
+import { findUserIdForC2bPayment } from '@/lib/services/mpesa/match-c2b-user'
 
 export async function POST(request: NextRequest) {
   try {
@@ -98,56 +99,12 @@ export async function POST(request: NextRequest) {
       await mpesaTransaction.save()
     }
 
-    // Match user by BillRefNumber (PayBill account number)
-    // Priority: 1. BillRefNumber (USER-{userId} format), 2. Direct ObjectId, 3. Email
-    let userId: mongoose.Types.ObjectId | undefined
-
-    if (accountReference) {
-      console.log('Matching user by account reference:', accountReference)
-      
-      // Format: USER-{userId} (e.g., USER-698acd4349426058ffa16b94)
-      if (accountReference.startsWith('USER-')) {
-        const idPart = accountReference.replace('USER-', '').trim()
-        if (mongoose.Types.ObjectId.isValid(idPart)) {
-          userId = new mongoose.Types.ObjectId(idPart)
-          console.log('Matched user by USER- prefix:', idPart)
-        }
-      } 
-      // Direct MongoDB ObjectId
-      else if (mongoose.Types.ObjectId.isValid(accountReference)) {
-        userId = new mongoose.Types.ObjectId(accountReference)
-        console.log('Matched user by direct ObjectId:', accountReference)
-      } 
-      // Try email lookup
-      else {
-        const user = await User.findOne({ email: accountReference.toLowerCase().trim() })
-        if (user) {
-          userId = new mongoose.Types.ObjectId(user._id)
-          console.log('Matched user by email:', accountReference)
-        }
-      }
-    }
-
-    // If still no user found and MSISDN is available (not encrypted), try phone number
-    // Note: PayBill MSISDN may be encrypted/hashed, so this might not work
-    if (!userId && MSISDN && MSISDN.length < 20) {
-      // Only try if MSISDN looks like a phone number (not encrypted)
-      const phone = MSISDN.replace(/^254/, '0').replace(/\D/g, '')
-      if (phone.length >= 9) {
-        const user = await User.findOne({
-          $or: [
-            { phone: phone },
-            { phone: `0${phone}` },
-            { phone: `254${phone}` },
-            { phone: MSISDN },
-          ],
-        })
-        if (user) {
-          userId = new mongoose.Types.ObjectId(user._id)
-          console.log('Matched user by phone number')
-        }
-      }
-    }
+    // Match user: shared PayBill account (SMS) + paying phone, or legacy USER-/email refs
+    const userId = await findUserIdForC2bPayment({
+      billRefNumber: BillRefNumber,
+      invoiceNumber: InvoiceNumber,
+      msisdn: MSISDN,
+    })
 
     // Process payment if user found
     if (userId) {
@@ -175,6 +132,7 @@ export async function POST(request: NextRequest) {
               { creditsBalance: finalBalance },
               { new: false }
             )
+            queueLowBalanceAlertSync(userId, finalBalance)
 
             // Create transaction record (use TransID as reference to prevent duplicates)
             const reference = TransID || `MPESA-C2B-${Date.now()}`
@@ -253,7 +211,7 @@ export async function POST(request: NextRequest) {
         BillRefNumber,
         InvoiceNumber,
         TransactionType,
-        message: 'Payment received but user account not found. Manual processing may be required.',
+        message: 'Payment received but no user matched. Credits are added to the account whose profile phone is the M-Pesa number that paid. Account number should be SMS for all users.',
       })
       // Still return success to M-Pesa - we'll handle unmatched payments manually
     }

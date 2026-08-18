@@ -12,6 +12,7 @@ import { MpesaTransaction, Transaction, User } from '@/lib/db/models'
 import { convertKesToCredits } from '@/lib/utils/credits'
 import { resolvePricePerCreditKes } from '@/lib/utils/resolve-price-per-credit'
 import { topupProfitMetadata } from '@/lib/services/profit'
+import { queueLowBalanceAlertSync } from '@/lib/services/sms/low-balance-alert'
 import { requireOwner } from '@/lib/auth/middleware'
 import { logAudit } from '@/lib/utils/audit'
 import mongoose from 'mongoose'
@@ -81,6 +82,7 @@ export async function POST(request: NextRequest) {
       { creditsBalance: finalBalance },
       { new: false }
     )
+    queueLowBalanceAlertSync(userObjectId, finalBalance)
 
     const transactionReference = reference || transactionId || `MANUAL-${Date.now()}`
 

@@ -8,6 +8,7 @@ import { MpesaTransaction, Transaction, User } from '@/lib/db/models'
 import { convertKesToCredits } from '@/lib/utils/credits'
 import { resolvePricePerCreditKes } from '@/lib/utils/resolve-price-per-credit'
 import { topupProfitMetadata } from '@/lib/services/profit'
+import { queueLowBalanceAlertSync } from '@/lib/services/sms/low-balance-alert'
 import {
   completeSenderIdInvoicePayment,
   markInvoicePaymentFailed,
@@ -138,6 +139,7 @@ export async function processStkPaymentResult(
             const finalBalance = safeStartingBalance + creditsToAdd
 
             await User.findByIdAndUpdate(userId, { creditsBalance: finalBalance }, { new: false })
+            queueLowBalanceAlertSync(userId, finalBalance)
 
             const reference =
               mpesaReceiptNumber ||

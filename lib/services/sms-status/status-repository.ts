@@ -10,6 +10,7 @@
 
 import mongoose from 'mongoose'
 import { SmsMessage, User, SMS_PENDING_STATUSES, type ISmsMessage, type SmsStatus } from '@/lib/db/models'
+import { queueLowBalanceAlertSync } from '@/lib/services/sms/low-balance-alert'
 export interface ClaimedMessage {
   _id: mongoose.Types.ObjectId
   userId: mongoose.Types.ObjectId
@@ -271,6 +272,7 @@ export class StatusRepository {
     if (!marked) return false
 
     await User.updateOne({ _id: params.userId }, { $inc: { creditsBalance: params.credits } })
+    queueLowBalanceAlertSync(params.userId)
     return true
   }
 

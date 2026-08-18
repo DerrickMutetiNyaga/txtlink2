@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
     const result = await mpesaService.simulateC2BPayment(
       phoneNumber,
       amount,
-      billRefNumber || '',
+      billRefNumber || 'SMS',
       commandId || 'CustomerPayBillOnline'
     )
 

@@ -16,6 +16,7 @@ import { postSendStatusFields } from '@/lib/services/sms-status/auto-delivered'
 import { resolveSmsMessageBody } from '@/lib/services/sms/message-body'
 import { normalizeKenyanPhone } from '@/lib/utils/phone'
 import { maskPhone } from '@/lib/utils/log-sanitize'
+import { queueLowBalanceAlertSync } from '@/lib/services/sms/low-balance-alert'
 
 export const PROVIDER_OUTAGE_ERROR_REGEX =
   /503\s*Service Unavailable|No server is available to handle this request|HostPinnacle temporarily unavailable \(HTTP 50[234]\)|Invalid response:[\s\S]*<(?:html|body|h1)/i
@@ -95,6 +96,8 @@ async function reDeductIfRefunded(
     creditDeducted: true,
   })
 
+  queueLowBalanceAlertSync(sms.userId, updated.creditsBalance || 0)
+
   return { ok: true }
 }
 
@@ -171,6 +174,7 @@ async function resendOne(sms: ISmsMessage & { _id: unknown }): Promise<'resent' 
     // Refund only if this attempt held credits (re-deducted, or original never refunded)
     if (chargedThisAttempt || !wasRefunded) {
       await User.findByIdAndUpdate(sms.userId, { $inc: { creditsBalance: credits } })
+      queueLowBalanceAlertSync(sms.userId)
     }
 
     const stillTransient = isTransientProviderFailure(hpResult)

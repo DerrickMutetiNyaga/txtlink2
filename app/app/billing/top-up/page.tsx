@@ -7,6 +7,7 @@ import { useState, useEffect, useRef, Suspense } from 'react'
 import { ArrowLeft, Phone, CreditCard, Wallet, CheckCircle2, XCircle, Clock, RefreshCw, FileText, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { PaybillInstructions } from '@/components/billing/paybill-instructions'
 
 type PaymentStatus = 'idle' | 'pending' | 'success' | 'failed' | 'cancelled' | 'timeout'
 
@@ -41,9 +42,31 @@ function TopUpPageContent() {
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const pollCountRef = useRef<number>(0)
 
+  const [profilePhone, setProfilePhone] = useState('')
+
   const presets = [1000, 2500, 5000, 10000]
   const MAX_POLL_ATTEMPTS = 60 // Poll for up to 5 minutes (60 * 5 seconds)
   const POLL_INTERVAL = 5000 // 5 seconds
+
+  useEffect(() => {
+    const loadProfile = async () => {
+      try {
+        const token = localStorage.getItem('token')
+        const response = await fetch('/api/user/profile', {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        const data = await response.json()
+        const phone = data.user?.phone || ''
+        if (phone) {
+          setProfilePhone(phone)
+          setPhoneNumber((current) => current || phone)
+        }
+      } catch {
+        // ignore
+      }
+    }
+    loadProfile()
+  }, [])
 
   useEffect(() => {
     if (!invoiceId) return
@@ -410,7 +433,7 @@ function TopUpPageContent() {
               </div>
               <h3 className="font-bold text-lg text-slate-900">M-Pesa</h3>
             </div>
-            <p className="text-sm text-slate-600">Pay via M-Pesa STK push (Kenya)</p>
+            <p className="text-sm text-slate-600">Pay via M-Pesa Paybill or optional STK prompt</p>
           </Card>
 
           <Card
@@ -480,8 +503,19 @@ function TopUpPageContent() {
 
         {/* Payment Form */}
         {paymentMethod === 'mpesa' ? (
+          <div className="space-y-6">
+          {!isInvoiceMode && (
+            <PaybillInstructions profilePhone={profilePhone} showOptionalStkNote />
+          )}
           <Card className="p-8 bg-white border border-slate-200 shadow-sm">
-            <h3 className="font-bold text-xl text-slate-900 mb-6">M-Pesa Payment</h3>
+            <h3 className="font-bold text-xl text-slate-900 mb-2">
+              {isInvoiceMode ? 'M-Pesa Payment' : 'Optional: send an STK prompt'}
+            </h3>
+            {!isInvoiceMode && (
+              <p className="text-sm text-slate-600 mb-6">
+                Only if you want a payment prompt on your phone. Paybill above already credits you automatically.
+              </p>
+            )}
             <form className="space-y-6">
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-2">Phone Number</label>
@@ -599,6 +633,7 @@ function TopUpPageContent() {
               </div>
             </form>
           </Card>
+          </div>
         ) : (
           <Card className="p-8 bg-white border border-slate-200 shadow-sm">
             <h3 className="font-bold text-xl text-slate-900 mb-6">Card Payment</h3>

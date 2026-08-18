@@ -5,6 +5,7 @@
 import mongoose from 'mongoose'
 import { User, Transaction } from '@/lib/db/models'
 import { topupProfitMetadata } from '@/lib/services/profit'
+import { queueLowBalanceAlertSync } from '@/lib/services/sms/low-balance-alert'
 
 export interface AdjustUserCreditsParams {
   userId: string
@@ -57,6 +58,7 @@ export async function adjustUserCredits(
   }
 
   await User.findByIdAndUpdate(userObjectId, { creditsBalance: newBalance })
+  queueLowBalanceAlertSync(userObjectId, newBalance)
 
   const isAdd = creditsChange > 0
   const reference = `MANUAL-CREDIT-${source.toUpperCase()}-${Date.now()}-${userId.slice(-6)}`

@@ -38,3 +38,22 @@ export function formatPhoneE164(phone: string): string {
   if (phone.startsWith('+')) return phone
   return `+${digits}`
 }
+
+/** Formats stored on User.phone and sent as M-Pesa MSISDN, for lookup. */
+export function kenyanPhoneVariants(phone: string): string[] {
+  const raw = (phone || '').trim()
+  const normalized = normalizeKenyanPhone(raw)
+  const digits = raw.replace(/\D/g, '')
+  const values = new Set<string>()
+
+  if (raw) values.add(raw)
+  if (digits) values.add(digits)
+  if (normalized) {
+    values.add(normalized)
+    values.add(`+${normalized}`)
+    values.add(`0${normalized.slice(3)}`)
+    values.add(normalized.slice(3))
+  }
+
+  return [...values]
+}

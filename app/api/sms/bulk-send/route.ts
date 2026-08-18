@@ -21,6 +21,7 @@ import {
   routeSmsViaPhoneGateway,
 } from '@/lib/services/sms-fallback/route-via-phone'
 import mongoose from 'mongoose'
+import { queueLowBalanceAlertSync } from '@/lib/services/sms/low-balance-alert'
 
 // Format phone number to E.164
 function formatPhoneNumber(phone: string): string {
@@ -214,6 +215,8 @@ export async function POST(request: NextRequest) {
 
       await session.commitTransaction()
 
+      queueLowBalanceAlertSync(userObjectId, newBalance)
+
       // Return success immediately (non-blocking)
       const response = NextResponse.json({
         success: true,
@@ -244,6 +247,7 @@ export async function POST(request: NextRequest) {
                   $inc: { creditsBalance: msgCredits },
                 })
                 await SmsMessage.findByIdAndUpdate(smsMsg._id, { refunded: true })
+                queueLowBalanceAlertSync(userObjectId)
               }
             }
             console.log(

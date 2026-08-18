@@ -15,6 +15,8 @@ export interface IUser {
   role: 'admin' | 'user'
   credits: number // Legacy wallet balance (in KSh) - kept for backward compatibility
   creditsBalance?: number // Wallet balance in SMS credits (integer; 1 credit = 1 SMS segment up to 153 chars)
+  /** Thresholds (200/100/50/10) already SMS-alerted until the user tops up above them */
+  lowBalanceAlertedThresholds?: number[]
   smsPriceUsdOverride?: number // (Deprecated) was used for USD pricing; no longer in active use
   isActive: boolean
   /** Max SMS history records to keep; null = unlimited */
@@ -57,6 +59,7 @@ const UserSchema = new Schema<IUser>(
     role: { type: String, enum: ['admin', 'user'], default: 'user' },
     credits: { type: Number, default: 0 },
     creditsBalance: { type: Number, default: 0 },
+    lowBalanceAlertedThresholds: { type: [Number], default: [] },
     smsPriceUsdOverride: { type: Number },
     isActive: { type: Boolean, default: true },
     smsHistoryRetentionLimit: { type: Number, default: 10000 },
@@ -67,6 +70,7 @@ const UserSchema = new Schema<IUser>(
 )
 
 UserSchema.index({ isSuperAdmin: 1 })
+UserSchema.index({ phone: 1 })
 
 // HostPinnacle Account Model
 export interface IHostPinnacleAccount {
@@ -707,6 +711,8 @@ export interface ISystemSettings {
   mpesaConsumerSecret?: string
   mpesaPasskey?: string
   mpesaShortcode?: string // Paybill/Till Number
+  /** Shared Lipa na M-Pesa account number for all users (default SMS) */
+  mpesaPaybillAccount?: string
   mpesaConfirmationUrl?: string
   mpesaValidationUrl?: string
   mpesaCallbackUrl?: string // For STK Push
@@ -770,6 +776,7 @@ const SystemSettingsSchema = new Schema<ISystemSettings>(
     mpesaConsumerSecret: { type: String },
     mpesaPasskey: { type: String },
     mpesaShortcode: { type: String },
+    mpesaPaybillAccount: { type: String, default: 'SMS' },
     mpesaConfirmationUrl: { type: String },
     mpesaValidationUrl: { type: String },
     mpesaCallbackUrl: { type: String },

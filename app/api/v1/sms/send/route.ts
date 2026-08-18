@@ -24,6 +24,7 @@ import {
   routeSmsViaPhoneGateway,
 } from '@/lib/services/sms-fallback/route-via-phone'
 import { maskPhone } from '@/lib/utils/log-sanitize'
+import { queueLowBalanceAlertSync } from '@/lib/services/sms/low-balance-alert'
 import {
   normalizeOutgoingSmsPayload,
   buildMessageBodyFields,
@@ -414,6 +415,8 @@ export async function POST(request: NextRequest) {
         await session.abortTransaction()
         return NextResponse.json({ error: 'User not found' }, { status: 404 })
       }
+
+      const newBalance = updatedUser.creditsBalance || 0
       
       // Create SMS log entry
       const [smsMessage] = await SmsMessage.create([{
@@ -449,6 +452,8 @@ export async function POST(request: NextRequest) {
       }], { session })
       
       await session.commitTransaction()
+
+      queueLowBalanceAlertSync(userObjectId, newBalance)
       
       // Return a compact success payload (AT Gateway / hotspot panels display this as status)
       const response = NextResponse.json({
@@ -475,6 +480,7 @@ export async function POST(request: NextRequest) {
                 $inc: { creditsBalance: requiredCredits },
               })
               await SmsMessage.findByIdAndUpdate(smsMessage._id, { refunded: true })
+              queueLowBalanceAlertSync(userObjectId)
             }
             return
           }
@@ -503,6 +509,7 @@ export async function POST(request: NextRequest) {
             await User.findByIdAndUpdate(userObjectId, {
               $inc: { creditsBalance: requiredCredits },
             })
+            queueLowBalanceAlertSync(userObjectId)
             
             await SmsMessage.findByIdAndUpdate(smsMessage._id, {
               status: 'failed',
@@ -539,6 +546,7 @@ export async function POST(request: NextRequest) {
           await User.findByIdAndUpdate(userObjectId, {
             $inc: { creditsBalance: requiredCredits },
           })
+          queueLowBalanceAlertSync(userObjectId)
           await SmsMessage.findByIdAndUpdate(smsMessage._id, {
             status: 'failed',
             errorCode: 'ASYNC_ERROR',

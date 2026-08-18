@@ -81,6 +81,7 @@ interface SystemSettings {
   mpesaConsumerSecret?: string
   mpesaPasskey?: string
   mpesaShortcode?: string
+  mpesaPaybillAccount?: string
   mpesaConfirmationUrl?: string
   mpesaValidationUrl?: string
   mpesaCallbackUrl?: string
@@ -1285,6 +1286,19 @@ export default function SuperAdminSettingsPage() {
                 </div>
 
                 <div>
+                  <Label className="text-sm font-medium text-[#020617] mb-2 block">PayBill account number</Label>
+                  <Input
+                    value={formData.mpesaPaybillAccount || 'SMS'}
+                    onChange={(e) => updateField('mpesaPaybillAccount', e.target.value.toUpperCase())}
+                    className="border-[#E5E7EB] bg-white text-[#020617]"
+                    placeholder="SMS"
+                  />
+                  <p className="text-xs text-[#64748B] mt-1">
+                    Same for every customer. They pay from the M-Pesa number saved on their profile. Credits are matched automatically.
+                  </p>
+                </div>
+
+                <div>
                   <Label className="text-sm font-medium text-[#020617] mb-2 block">Environment</Label>
                   <Select
                     value={formData.mpesaEnvironment || 'sandbox'}
@@ -1393,7 +1407,7 @@ export default function SuperAdminSettingsPage() {
                         <Input
                           value={simulationData.billRefNumber}
                           onChange={(e) => setSimulationData({ ...simulationData, billRefNumber: e.target.value })}
-                          placeholder="Account reference"
+                          placeholder="SMS"
                           className="border-[#E5E7EB] bg-white text-[#020617]"
                         />
                       </div>

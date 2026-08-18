@@ -11,6 +11,7 @@ import { requireAuth } from '@/lib/auth/middleware'
 import mongoose from 'mongoose'
 import { normalizeRetentionLimit, DEFAULT_SMS_HISTORY_RETENTION } from '@/lib/services/sms-history/constants'
 import { normalizeFallbackRetentionDays } from '@/lib/services/sms-fallback/job-cleanup'
+import { normalizeKenyanPhone } from '@/lib/utils/phone'
 
 export async function GET(request: NextRequest) {
   try {
@@ -66,7 +67,10 @@ export async function PATCH(request: NextRequest) {
     // Allowed fields to update
     const allowedFields: Record<string, any> = {}
     if (body.name !== undefined) allowedFields.name = body.name
-    if (body.phone !== undefined) allowedFields.phone = body.phone
+    if (body.phone !== undefined) {
+      const raw = String(body.phone || '').trim()
+      allowedFields.phone = normalizeKenyanPhone(raw) || raw
+    }
     if (body.smsHistoryRetentionLimit !== undefined) {
       allowedFields.smsHistoryRetentionLimit = normalizeRetentionLimit(body.smsHistoryRetentionLimit)
     }

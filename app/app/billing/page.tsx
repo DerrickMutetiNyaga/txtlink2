@@ -21,6 +21,7 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
+import { PaybillInstructions } from '@/components/billing/paybill-instructions'
 
 interface Transaction {
   id: string
@@ -184,6 +185,8 @@ export default function BillingPage() {
             </div>
           </div>
         </Card>
+
+        <PaybillInstructions />
 
         {/* KPI Row - 3 Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
