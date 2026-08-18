@@ -55,6 +55,63 @@ export function validateCertificateFile(file: File): string | null {
   return null
 }
 
+export function getCertificateDownloadCandidates(params: {
+  publicId?: string
+  fallbackUrl?: string
+  fileName?: string
+  mimeType?: string
+}): string[] {
+  const urls: string[] = []
+  const fallback = params.fallbackUrl || ''
+
+  const push = (url?: string | null) => {
+    if (url && !urls.includes(url)) urls.push(url)
+  }
+
+  const withAttachment = (url: string) => {
+    if (url.includes('/upload/') && !url.includes('fl_attachment')) {
+      return url.replace('/upload/', '/upload/fl_attachment/')
+    }
+    return url
+  }
+
+  if (fallback) {
+    push(withAttachment(fallback))
+    push(fallback)
+  }
+
+  if (params.publicId) {
+    try {
+      ensureCloudinaryConfigured()
+      const isPdf =
+        (params.mimeType || '').toLowerCase().includes('pdf') ||
+        (params.fileName || '').toLowerCase().endsWith('.pdf') ||
+        fallback.includes('/raw/')
+      const resourceTypes: Array<'raw' | 'image'> = fallback.includes('/image/')
+        ? ['image', 'raw']
+        : isPdf
+          ? ['raw', 'image']
+          : ['image', 'raw']
+
+      for (const resourceType of resourceTypes) {
+        push(
+          cloudinary.url(params.publicId, {
+            resource_type: resourceType,
+            type: 'upload',
+            flags: 'attachment',
+            sign_url: true,
+            secure: true,
+          })
+        )
+      }
+    } catch {
+      // Fall through to stored Cloudinary URLs
+    }
+  }
+
+  return urls
+}
+
 export async function uploadBusinessCertificate(
   file: File,
   workspaceId: string

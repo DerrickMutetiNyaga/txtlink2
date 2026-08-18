@@ -78,6 +78,7 @@ export default function SenderIdApplicationsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [rejectReason, setRejectReason] = useState('')
   const [busy, setBusy] = useState(false)
+  const [downloading, setDownloading] = useState(false)
   const [message, setMessage] = useState<{ type: 'ok' | 'error'; text: string } | null>(null)
 
   const token = () => localStorage.getItem('token')
@@ -147,26 +148,51 @@ export default function SenderIdApplicationsPage() {
     }
   }
 
+  const saveBlob = (blob: Blob, fileName: string) => {
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = fileName
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
+  }
+
+  const openFileUrl = (url: string) => {
+    window.open(url, '_blank', 'noopener,noreferrer')
+  }
+
   const downloadCertificate = async (app: Application) => {
     try {
+      setDownloading(true)
+      setMessage(null)
+      const fileName = app.businessCertificateFileName || `${app.desiredSenderId}-certificate`
       const response = await fetch(`/api/super-admin/sender-id-requests/${app.id}/certificate`, {
         headers: { Authorization: `Bearer ${token()}` },
       })
-      if (!response.ok) {
+      const contentType = response.headers.get('content-type') || ''
+
+      if (contentType.includes('application/json')) {
         const result = await response.json().catch(() => ({}))
+        if (result.url) {
+          openFileUrl(result.url)
+          return
+        }
         throw new Error(result.error || 'Download failed')
       }
+
+      if (!response.ok) {
+        throw new Error('Download failed')
+      }
+
       const blob = await response.blob()
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = app.businessCertificateFileName || `${app.desiredSenderId}-certificate`
-      document.body.appendChild(link)
-      link.click()
-      link.remove()
-      URL.revokeObjectURL(url)
+      if (!blob.size) throw new Error('The certificate file was empty')
+      saveBlob(blob, fileName)
     } catch (error: any) {
       setMessage({ type: 'error', text: error.message || 'Could not download the certificate.' })
+    } finally {
+      setDownloading(false)
     }
   }
 
@@ -307,11 +333,11 @@ export default function SenderIdApplicationsPage() {
                   </div>
                   <Button
                     onClick={() => downloadCertificate(selected)}
-                    disabled={!selected.hasCertificate}
+                    disabled={!selected.hasCertificate || downloading}
                     className="bg-emerald-600 hover:bg-emerald-700 text-white"
                   >
                     <Download className="w-4 h-4 mr-2" />
-                    Download
+                    {downloading ? 'Downloading...' : 'Download'}
                   </Button>
                 </div>
 
@@ -328,13 +354,15 @@ export default function SenderIdApplicationsPage() {
                       onChange={(e) => setRejectReason(e.target.value)}
                       placeholder="Reason if you reject this application"
                       rows={3}
+                      autoComplete="off"
+                      className="bg-white text-slate-900 border-slate-200 placeholder:text-slate-500"
                     />
                     <div className="flex gap-3">
                       <Button
-                        variant="outline"
+                        variant="destructive"
                         disabled={busy}
                         onClick={() => review('reject')}
-                        className="flex-1 border-rose-200 text-rose-700 hover:bg-rose-50"
+                        className="flex-1"
                       >
                         <XCircle className="w-4 h-4 mr-2" />
                         Reject
