@@ -147,6 +147,8 @@ function DeliveryCounts({ account }: { account: Account }) {
     </Link>
   )
 }
+
+function StatusPill({ isActive }: { isActive: boolean }) {
   return isActive ? (
     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
       <Circle className="w-2 h-2 fill-emerald-600" />
