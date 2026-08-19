@@ -106,3 +106,37 @@ export async function adjustUserCredits(
     transactionId: transaction._id.toString(),
   }
 }
+
+export async function setUserCredits(
+  params: Omit<AdjustUserCreditsParams, 'creditsDelta'> & { credits: number }
+): Promise<AdjustUserCreditsResult> {
+  const target = Math.max(0, Math.trunc(params.credits))
+  if (!Number.isFinite(target)) {
+    throw new Error('Credits must be a whole number of 0 or more')
+  }
+
+  const userObjectId = new mongoose.Types.ObjectId(params.userId)
+  const user = await User.findById(userObjectId).select('creditsBalance')
+  if (!user) {
+    throw new Error('User not found')
+  }
+
+  const previousBalance = Math.max(0, user.creditsBalance ?? 0)
+  const creditsDelta = target - previousBalance
+  if (creditsDelta === 0) {
+    return {
+      previousBalance,
+      newBalance: previousBalance,
+      creditsDelta: 0,
+      transactionId: '',
+    }
+  }
+
+  return adjustUserCredits({
+    ...params,
+    creditsDelta,
+    reason:
+      params.reason ||
+      `Set SMS credit balance to ${target} (was ${previousBalance})`,
+  })
+}

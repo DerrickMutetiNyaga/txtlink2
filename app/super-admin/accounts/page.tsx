@@ -268,7 +268,7 @@ export default function SuperAdminAccounts() {
   const [replaceTargetId, setReplaceTargetId] = useState<string>('')
   const [actionLoading, setActionLoading] = useState(false)
   const [creditsDrawerOpen, setCreditsDrawerOpen] = useState(false)
-  const [creditAction, setCreditAction] = useState<'add_credits' | 'remove_credits'>('add_credits')
+  const [creditAction, setCreditAction] = useState<'set_credits' | 'add_credits' | 'remove_credits'>('set_credits')
   const [creditAmount, setCreditAmount] = useState('')
   const [creditReason, setCreditReason] = useState('')
   const [creditSubmitting, setCreditSubmitting] = useState(false)
@@ -573,7 +573,12 @@ export default function SuperAdminAccounts() {
     if (!selectedAccount) return
 
     const parsed = Number(creditAmount)
-    if (!parsed || parsed <= 0 || !Number.isFinite(parsed)) {
+    if (creditAction === 'set_credits') {
+      if (!Number.isFinite(parsed) || parsed < 0) {
+        alert('Enter a valid credit balance (0 or more)')
+        return
+      }
+    } else if (!parsed || parsed <= 0 || !Number.isFinite(parsed)) {
       alert(creditAction === 'add_credits' ? 'Enter a valid amount in KSh' : 'Enter a valid credit amount')
       return
     }
@@ -621,7 +626,9 @@ export default function SuperAdminAccounts() {
         setCreditAmount('')
         setCreditReason('')
         alert(
-          creditAction === 'add_credits'
+          creditAction === 'set_credits'
+            ? `Balance set to ${data.newBalance} SMS credits.`
+            : creditAction === 'add_credits'
             ? `Added ${data.creditsDelta} credits from KSh ${parsed.toLocaleString()}. New balance: ${data.newBalance}`
             : `Removed ${Math.abs(data.creditsDelta)} credits. New balance: ${data.newBalance}`
         )
@@ -1101,7 +1108,20 @@ export default function SuperAdminAccounts() {
                         <DeliveryCounts account={account} />
                       </td>
                       <td className="text-right py-3 px-6 font-medium text-slate-900">
-                        {account.credits.toLocaleString()}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedAccount(account)
+                            setCreditAction('set_credits')
+                            setCreditAmount(String(account.credits ?? 0))
+                            setCreditReason('')
+                            setCreditsDrawerOpen(true)
+                          }}
+                          className="hover:text-emerald-700 hover:underline"
+                          title="Edit credits"
+                        >
+                          {account.credits.toLocaleString()}
+                        </button>
                       </td>
                       <td className="text-center py-3 px-6">
                         <div className="flex flex-col items-center gap-1">
@@ -1132,8 +1152,8 @@ export default function SuperAdminAccounts() {
                           onPricingOverride={() => openPricingOverride(account)}
                           onAdjustCredits={() => {
                             setSelectedAccount(account)
-                            setCreditAction('add_credits')
-                            setCreditAmount('')
+                            setCreditAction('set_credits')
+                            setCreditAmount(String(account.credits ?? 0))
                             setCreditReason('')
                             setCreditsDrawerOpen(true)
                           }}
@@ -1211,8 +1231,8 @@ export default function SuperAdminAccounts() {
                     onPricingOverride={() => openPricingOverride(account)}
                     onAdjustCredits={() => {
                       setSelectedAccount(account)
-                      setCreditAction('add_credits')
-                      setCreditAmount('')
+                      setCreditAction('set_credits')
+                      setCreditAmount(String(account.credits ?? 0))
                       setCreditReason('')
                       setCreditsDrawerOpen(true)
                     }}
@@ -1248,9 +1268,19 @@ export default function SuperAdminAccounts() {
                   </div>
                   <div>
                     <p className="text-xs text-slate-500 mb-1">Credits</p>
-                    <p className="text-sm font-medium text-slate-900">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedAccount(account)
+                        setCreditAction('set_credits')
+                        setCreditAmount(String(account.credits ?? 0))
+                        setCreditReason('')
+                        setCreditsDrawerOpen(true)
+                      }}
+                      className="text-sm font-medium text-slate-900 hover:text-emerald-700 hover:underline"
+                    >
                       {account.credits.toLocaleString()}
-                    </p>
+                    </button>
                   </div>
                   <div>
                     <p className="text-xs text-slate-500 mb-1">Last Activity</p>
@@ -1477,10 +1507,12 @@ export default function SuperAdminAccounts() {
             <DialogContent className="max-w-md bg-white border border-slate-200 rounded-2xl shadow-xl">
               <DialogHeader>
                 <DialogTitle className="text-xl font-semibold text-slate-900">
-                  Adjust Credits — {selectedAccount.name}
+                  Edit Credits — {selectedAccount.name}
                 </DialogTitle>
                 <DialogDescription className="text-slate-600">
-                  {creditAction === 'add_credits'
+                  {creditAction === 'set_credits'
+                    ? 'Set this account’s SMS credit balance to an exact number, including 0.'
+                    : creditAction === 'add_credits'
                     ? 'Enter the KSh amount the customer paid (e.g. missed M-Pesa). Credits are calculated automatically.'
                     : 'Remove SMS credits directly from this account.'}
                 </DialogDescription>
@@ -1498,14 +1530,17 @@ export default function SuperAdminAccounts() {
                   <Select
                     value={creditAction}
                     onValueChange={(v) => {
-                      setCreditAction(v as 'add_credits' | 'remove_credits')
-                      setCreditAmount('')
+                      setCreditAction(v as 'set_credits' | 'add_credits' | 'remove_credits')
+                      setCreditAmount(
+                        v === 'set_credits' ? String(selectedAccount.credits ?? 0) : ''
+                      )
                     }}
                   >
                     <SelectTrigger className="border-slate-200">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="set_credits">Set exact balance</SelectItem>
                       <SelectItem value="add_credits">Add credits (from KSh paid)</SelectItem>
                       <SelectItem value="remove_credits">Remove credits</SelectItem>
                     </SelectContent>
@@ -1514,15 +1549,25 @@ export default function SuperAdminAccounts() {
 
                 <div>
                   <Label className="text-sm font-medium text-slate-700 mb-2 block">
-                    {creditAction === 'add_credits' ? 'Amount paid (KSh)' : 'Credits to remove'}
+                    {creditAction === 'set_credits'
+                      ? 'SMS credit balance'
+                      : creditAction === 'add_credits'
+                      ? 'Amount paid (KSh)'
+                      : 'Credits to remove'}
                   </Label>
                   <Input
                     type="number"
-                    min={creditAction === 'add_credits' ? 1 : 1}
+                    min={creditAction === 'set_credits' ? 0 : 1}
                     step={creditAction === 'add_credits' ? 'any' : 1}
                     value={creditAmount}
                     onChange={(e) => setCreditAmount(e.target.value)}
-                    placeholder={creditAction === 'add_credits' ? 'e.g. 300' : 'e.g. 100'}
+                    placeholder={
+                      creditAction === 'set_credits'
+                        ? 'e.g. 0'
+                        : creditAction === 'add_credits'
+                        ? 'e.g. 300'
+                        : 'e.g. 100'
+                    }
                     autoComplete="off"
                     className={MODAL_INPUT_CLASS}
                   />
@@ -1563,14 +1608,16 @@ export default function SuperAdminAccounts() {
                     onClick={handleAdjustCredits}
                     disabled={
                       creditSubmitting ||
-                      !creditAmount ||
+                      creditAmount === '' ||
                       (creditAction === 'add_credits' && addCreditsPreview <= 0)
                     }
                     className="px-4 py-2 text-sm font-medium bg-emerald-600 text-white hover:bg-emerald-700 rounded-xl transition-colors disabled:opacity-50"
                   >
                     {creditSubmitting
                       ? 'Saving...'
-                      : creditAction === 'add_credits'
+                      : creditAction === 'set_credits'
+                        ? 'Save balance'
+                        : creditAction === 'add_credits'
                         ? addCreditsPreview > 0
                           ? `Add ${addCreditsPreview.toLocaleString()} Credits`
                           : 'Add Credits'

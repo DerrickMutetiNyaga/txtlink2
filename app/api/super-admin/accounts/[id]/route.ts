@@ -10,7 +10,7 @@ import connectDB from '@/lib/db/connect'
 import { User } from '@/lib/db/models'
 import { requireOwner } from '@/lib/auth/middleware'
 import { logAudit } from '@/lib/utils/audit'
-import { adjustUserCredits } from '@/lib/services/credits/adjust-balance'
+import { adjustUserCredits, setUserCredits } from '@/lib/services/credits/adjust-balance'
 import { convertKesToCredits } from '@/lib/utils/credits'
 import { resolvePricePerCreditKes } from '@/lib/utils/resolve-price-per-credit'
 import { clearPhoneGatewayRoutingCache } from '@/lib/services/sms-fallback/route-via-phone'
@@ -146,6 +146,44 @@ export async function POST(
     const user = await User.findById(userObjectId)
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    }
+
+    if (action === 'set_credits') {
+      const credits = Math.trunc(Number(amount))
+      if (!Number.isFinite(credits) || credits < 0) {
+        return NextResponse.json(
+          { error: 'amount must be a whole number of 0 or more SMS credits' },
+          { status: 400 }
+        )
+      }
+
+      const result = await setUserCredits({
+        userId,
+        credits,
+        reason,
+        adjustedBy: { userId: owner.userId, email: owner.email },
+        source: 'super_admin',
+      })
+
+      await logAudit('SET_CREDITS', 'user', owner.userId, owner.email, {
+        resourceId: userId,
+        changes: {
+          credits,
+          creditsDelta: result.creditsDelta,
+          previousBalance: result.previousBalance,
+          newBalance: result.newBalance,
+          reason,
+          transactionId: result.transactionId,
+        },
+        request,
+      })
+
+      return NextResponse.json({
+        success: true,
+        previousBalance: result.previousBalance,
+        newBalance: result.newBalance,
+        creditsDelta: result.creditsDelta,
+      })
     }
 
     if (action === 'add_credits' || action === 'remove_credits') {
