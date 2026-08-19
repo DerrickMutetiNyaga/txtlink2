@@ -10,6 +10,14 @@ import { requireAuth } from '@/lib/auth/middleware'
 import { formatInvoice } from '@/lib/validation/sender-id-request'
 import mongoose from 'mongoose'
 
+const TRANSACTION_LIMIT = 50
+
+function monthLabel(yearMonth: string) {
+  const [year, month] = yearMonth.split('-').map(Number)
+  const date = new Date(year, (month || 1) - 1, 1)
+  return `${date.toLocaleString('default', { month: 'long' })} ${year}`
+}
+
 export async function GET(request: NextRequest) {
   try {
     await connectDB()
@@ -18,16 +26,13 @@ export async function GET(request: NextRequest) {
     const userId = new mongoose.Types.ObjectId(user.userId)
     const { searchParams } = new URL(request.url)
     const filter = searchParams.get('filter') || 'all'
-    const search = searchParams.get('search') || ''
 
-    // Get user balance (credits-based wallet)
-    const userDoc = await User.findById(userId).select('creditsBalance').lean()
-    const balance = userDoc?.creditsBalance || 0
+    const now = new Date()
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
 
-    // Build transaction query
-    const transactionQuery: any = { userId }
+    const transactionQuery: Record<string, unknown> = { userId }
     if (filter !== 'all') {
-      // Convert filter format: 'top-ups' -> 'top-up', 'charges' -> 'charge', 'refunds' -> 'refund'
       const typeMap: Record<string, string> = {
         'top-ups': 'top-up',
         'charges': 'charge',
@@ -36,87 +41,86 @@ export async function GET(request: NextRequest) {
       transactionQuery.type = typeMap[filter] || filter
     }
 
-    // Get transactions
-    let transactions = await Transaction.find(transactionQuery)
-      .sort({ createdAt: -1 })
-      .limit(100)
-      .lean()
+    const [
+      userDoc,
+      transactions,
+      usageRows,
+      invoiceRows,
+      paymentMethods,
+      pendingInvoiceDocs,
+    ] = await Promise.all([
+      User.findById(userId).select('creditsBalance').lean(),
+      Transaction.find(transactionQuery)
+        .select('type status amount description reference createdAt')
+        .sort({ createdAt: -1 })
+        .limit(TRANSACTION_LIMIT)
+        .lean(),
+      SmsMessage.aggregate([
+        { $match: { userId, createdAt: { $gte: thirtyDaysAgo } } },
+        {
+          $group: {
+            _id: null,
+            usedThisMonth: {
+              $sum: {
+                $cond: [{ $gte: ['$createdAt', startOfMonth] }, { $ifNull: ['$totalCost', 0] }, 0],
+              },
+            },
+            smsCount: {
+              $sum: {
+                $cond: [
+                  { $gte: ['$createdAt', startOfMonth] },
+                  {
+                    $cond: [
+                      { $isArray: '$toNumbers' },
+                      { $size: '$toNumbers' },
+                      1,
+                    ],
+                  },
+                  0,
+                ],
+              },
+            },
+            totalSpend30Days: { $sum: { $ifNull: ['$totalCost', 0] } },
+          },
+        },
+      ]).option({ maxTimeMS: 8000 }),
+      Transaction.aggregate([
+        { $match: { userId, type: 'charge', status: 'completed' } },
+        {
+          $group: {
+            _id: { $dateToString: { format: '%Y-%m', date: '$createdAt' } },
+            amount: { $sum: { $abs: '$amount' } },
+          },
+        },
+        { $sort: { _id: -1 } },
+        { $limit: 12 },
+      ]).option({ maxTimeMS: 8000 }),
+      PaymentMethod.find({ userId })
+        .select('type name details expiry isDefault')
+        .sort({ isDefault: -1, createdAt: -1 })
+        .lean(),
+      Invoice.find({
+        userId,
+        type: 'sender_id_application',
+        status: { $in: ['unpaid', 'failed', 'pending_payment'] },
+      })
+        .sort({ createdAt: -1 })
+        .limit(20)
+        .lean(),
+    ])
 
-    // Apply search filter
-    if (search) {
-      transactions = transactions.filter(
-        (tx) =>
-          tx.description.toLowerCase().includes(search.toLowerCase()) ||
-          tx.reference.toLowerCase().includes(search.toLowerCase())
-      )
-    }
+    const usage = usageRows[0] || { usedThisMonth: 0, smsCount: 0, totalSpend30Days: 0 }
+    const usedThisMonth = usage.usedThisMonth || 0
+    const smsCount = usage.smsCount || 0
+    const avgDailySpend = Math.round((usage.totalSpend30Days || 0) / 30)
 
-    // Calculate usage statistics for current month
-    const now = new Date()
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-    const startOfMonthISO = startOfMonth.toISOString()
-
-    // Get SMS messages for current month
-    const messagesThisMonth = await SmsMessage.find({
-      userId,
-      createdAt: { $gte: startOfMonth },
-    }).lean()
-
-    const usedThisMonth = messagesThisMonth.reduce((sum, msg) => sum + (msg.totalCost || 0), 0)
-    const smsCount = messagesThisMonth.reduce((sum, msg) => sum + msg.toNumbers.length, 0)
-
-    // Calculate average daily spend (last 30 days)
-    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
-    const messagesLast30Days = await SmsMessage.find({
-      userId,
-      createdAt: { $gte: thirtyDaysAgo },
-    }).lean()
-
-    const totalSpend30Days = messagesLast30Days.reduce((sum, msg) => sum + (msg.totalCost || 0), 0)
-    const avgDailySpend = Math.round(totalSpend30Days / 30)
-
-    // Get user plan (default to Enterprise for now)
-    const plan = 'Enterprise'
-
-    // Get payment methods
-    const paymentMethods = await PaymentMethod.find({ userId }).sort({ isDefault: -1, createdAt: -1 }).lean()
-
-    // Generate invoices from transactions (grouped by month)
-    const invoiceMap: Record<string, any> = {}
-    transactions.forEach((tx) => {
-      if (tx.type === 'charge' && tx.status === 'completed') {
-        const date = new Date(tx.createdAt)
-        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
-        if (!invoiceMap[monthKey]) {
-          invoiceMap[monthKey] = {
-            date: `${date.toLocaleString('default', { month: 'long' })} ${date.getFullYear()}`,
-            amount: 0,
-            transactions: [],
-          }
-        }
-        invoiceMap[monthKey].amount += Math.abs(tx.amount)
-        invoiceMap[monthKey].transactions.push(tx)
-      }
-    })
-
-    const invoices = Object.entries(invoiceMap)
-      .map(([key, data]: [string, any]) => ({
-        id: key,
-        date: data.date,
-        amount: data.amount,
-        status: 'paid',
-        reference: `INV-${key}`,
-      }))
-      .sort((a, b) => b.id.localeCompare(a.id))
-      .slice(0, 12) // Last 12 months
-
-    const pendingInvoiceDocs = await Invoice.find({
-      userId,
-      type: 'sender_id_application',
-      status: { $in: ['unpaid', 'failed', 'pending_payment'] },
-    })
-      .sort({ createdAt: -1 })
-      .lean()
+    const invoices = invoiceRows.map((row) => ({
+      id: row._id,
+      date: monthLabel(row._id),
+      amount: row.amount,
+      status: 'paid',
+      reference: `INV-${row._id}`,
+    }))
 
     const senderRequestIds = pendingInvoiceDocs
       .map((inv) => inv.senderIdRequestId)
@@ -136,7 +140,6 @@ export async function GET(request: NextRequest) {
       formatInvoice(inv, senderIdByRequest.get(inv.senderIdRequestId?.toString() || '') || '')
     )
 
-    // Format transactions for response
     const formattedTransactions = transactions.map((tx) => ({
       id: tx._id?.toString(),
       date: new Date(tx.createdAt).toISOString().split('T')[0],
@@ -149,12 +152,12 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      balance,
+      balance: userDoc?.creditsBalance || 0,
       summary: {
         usedThisMonth,
         smsCount,
         avgDailySpend,
-        plan,
+        plan: 'Enterprise',
       },
       transactions: formattedTransactions,
       invoices,
@@ -179,4 +182,3 @@ export async function GET(request: NextRequest) {
     )
   }
 }
-

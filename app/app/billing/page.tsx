@@ -77,7 +77,6 @@ export default function BillingPage() {
   })
   const isLowBalance = balance < 1000
 
-  // Fetch billing data from API
   useEffect(() => {
     const fetchBillingData = async () => {
       try {
@@ -85,7 +84,6 @@ export default function BillingPage() {
         const token = localStorage.getItem('token')
         const params = new URLSearchParams()
         if (transactionFilter !== 'all') params.append('filter', transactionFilter)
-        if (searchQuery) params.append('search', searchQuery)
 
         const response = await fetch(`/api/user/billing?${params.toString()}`, {
           headers: {
@@ -115,14 +113,15 @@ export default function BillingPage() {
     }
 
     fetchBillingData()
-  }, [transactionFilter, searchQuery])
+  }, [transactionFilter])
 
-  const filteredTransactions = transactions.filter(tx => {
-    if (transactionFilter === 'all') return true
-    if (transactionFilter === 'top-ups') return tx.type === 'top-up'
-    if (transactionFilter === 'charges') return tx.type === 'charge'
-    if (transactionFilter === 'refunds') return tx.type === 'refund'
-    return true
+  const filteredTransactions = transactions.filter((tx) => {
+    const query = searchQuery.trim().toLowerCase()
+    if (!query) return true
+    return (
+      tx.description.toLowerCase().includes(query) ||
+      tx.reference.toLowerCase().includes(query)
+    )
   })
 
   const handleExportCSV = () => {
