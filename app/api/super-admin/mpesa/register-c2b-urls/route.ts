@@ -1,7 +1,7 @@
 /**
  * Super Admin M-Pesa C2B URL Registration
  * GET /api/super-admin/mpesa/register-c2b-urls
- * 
+ *
  * Registers C2B validation and confirmation URLs with M-Pesa
  * Uses URLs configured in SystemSettings
  */
@@ -12,13 +12,13 @@ import { SystemSettings } from '@/lib/db/models'
 import { requireOwner } from '@/lib/auth/middleware'
 import { MpesaService } from '@/lib/services/mpesa/mpesa-service'
 import { logAudit } from '@/lib/utils/audit'
+import { canonicalMpesaCallbackUrl } from '@/lib/utils/mpesa-callback-url'
 
 export async function GET(request: NextRequest) {
   try {
     await connectDB()
     const user = await requireOwner(request)
 
-    // Get M-Pesa configuration
     const settings = await SystemSettings.findOne()
     if (!settings || !settings.mpesaEnabled) {
       return NextResponse.json(
@@ -27,14 +27,16 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    if (!settings.mpesaValidationUrl || !settings.mpesaConfirmationUrl) {
+    const validationUrl = canonicalMpesaCallbackUrl(settings.mpesaValidationUrl)
+    const confirmationUrl = canonicalMpesaCallbackUrl(settings.mpesaConfirmationUrl)
+
+    if (!validationUrl || !confirmationUrl) {
       return NextResponse.json(
         { error: 'Validation URL and Confirmation URL must be configured in settings first.' },
         { status: 400 }
       )
     }
 
-    // Create M-Pesa service instance
     const mpesaService = await MpesaService.createFromSettings()
     if (!mpesaService) {
       return NextResponse.json(
@@ -43,21 +45,26 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Register C2B URLs
-    const result = await mpesaService.registerC2BUrls(
-      settings.mpesaValidationUrl,
-      settings.mpesaConfirmationUrl
+    const result = await mpesaService.registerC2BUrls(validationUrl, confirmationUrl)
+
+    await SystemSettings.updateOne(
+      { _id: settings._id },
+      {
+        $set: {
+          mpesaValidationUrl: validationUrl,
+          mpesaConfirmationUrl: confirmationUrl,
+        },
+      }
     )
 
-    // Log audit
     await logAudit(
       'REGISTER_C2B_URLS',
       'mpesa_configuration',
       user.userId,
       user.email,
       {
-        validationUrl: settings.mpesaValidationUrl,
-        confirmationUrl: settings.mpesaConfirmationUrl,
+        validationUrl,
+        confirmationUrl,
         response: result,
         request,
       }
@@ -66,7 +73,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       message: 'C2B URLs registered successfully',
-      data: result,
+      data: {
+        ...result,
+        validationUrl,
+        confirmationUrl,
+      },
     })
   } catch (error: any) {
     if (error.message === 'Unauthorized' || error.message.includes('Forbidden')) {
@@ -77,7 +88,7 @@ export async function GET(request: NextRequest) {
     }
     console.error('C2B URL registration error:', error)
     return NextResponse.json(
-      { 
+      {
         error: 'Failed to register C2B URLs',
         details: error.message,
       },
@@ -85,4 +96,3 @@ export async function GET(request: NextRequest) {
     )
   }
 }
-

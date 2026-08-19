@@ -328,7 +328,16 @@ export default function SuperAdminSettingsPage() {
         return
       }
 
-      alert('C2B URLs registered successfully!')
+      alert(
+        `C2B URLs registered with Safaricom.\n\nConfirmation: ${
+          result.data?.confirmationUrl || 'https://txtlink.co.ke/api/c2b-confirmation'
+        }\n\nPay Bill payments should now appear under M-Pesa Transactions as C2B.`
+      )
+      setFormData((prev) => ({
+        ...prev,
+        mpesaValidationUrl: result.data?.validationUrl || prev.mpesaValidationUrl,
+        mpesaConfirmationUrl: result.data?.confirmationUrl || prev.mpesaConfirmationUrl,
+      }))
     } catch (error) {
       console.error('Error registering C2B URLs:', error)
       alert('Failed to register C2B URLs')
@@ -1324,7 +1333,7 @@ export default function SuperAdminSettingsPage() {
                       value={formData.mpesaCallbackUrl || ''}
                       onChange={(e) => updateField('mpesaCallbackUrl', e.target.value)}
                       className="border-[#E5E7EB] bg-white text-[#020617]"
-                      placeholder="https://yourdomain.com/api/mpesa/stk-callback"
+                      placeholder="https://txtlink.co.ke/api/mpesa/stk-callback"
                     />
                     <p className="text-xs text-[#64748B] mt-1">URL where M-Pesa sends STK Push payment callbacks</p>
                   </div>
@@ -1335,7 +1344,7 @@ export default function SuperAdminSettingsPage() {
                       value={formData.mpesaValidationUrl || ''}
                       onChange={(e) => updateField('mpesaValidationUrl', e.target.value)}
                       className="border-[#E5E7EB] bg-white text-[#020617]"
-                      placeholder="https://yourdomain.com/api/c2b-validation"
+                      placeholder="https://txtlink.co.ke/api/c2b-validation"
                     />
                     <p className="text-xs text-[#64748B] mt-1">URL where M-Pesa sends C2B validation requests</p>
                   </div>
@@ -1346,7 +1355,7 @@ export default function SuperAdminSettingsPage() {
                       value={formData.mpesaConfirmationUrl || ''}
                       onChange={(e) => updateField('mpesaConfirmationUrl', e.target.value)}
                       className="border-[#E5E7EB] bg-white text-[#020617]"
-                      placeholder="https://yourdomain.com/api/c2b-confirmation"
+                      placeholder="https://txtlink.co.ke/api/c2b-confirmation"
                     />
                     <p className="text-xs text-[#64748B] mt-1">URL where M-Pesa sends C2B confirmation requests</p>
                   </div>
@@ -1354,9 +1363,16 @@ export default function SuperAdminSettingsPage() {
               </div>
 
               <div className="space-y-4">
-                <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                  <p className="text-sm text-blue-900 mb-3">
-                    <strong>Note:</strong> After configuring M-Pesa settings, register the C2B URLs with M-Pesa.
+                <div className="p-4 bg-amber-50 border border-amber-300 rounded-lg space-y-3">
+                  <p className="text-sm text-amber-950">
+                    <strong>Saving these boxes is not enough.</strong> Safaricom only sends Pay Bill
+                    payments after you click Register C2B URLs.
+                  </p>
+                  <p className="text-sm text-amber-950">
+                    Do not use <span className="font-mono">www</span>. Use{' '}
+                    <span className="font-mono">https://txtlink.co.ke/api/c2b-confirmation</span>.
+                    The www address redirects, and M-Pesa will not follow that redirect — that is why
+                    Pay Bill payments never appear.
                   </p>
                   <Button
                     onClick={handleRegisterC2BUrls}

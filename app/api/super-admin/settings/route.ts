@@ -9,6 +9,7 @@ import connectDB from '@/lib/db/connect'
 import { SystemSettings } from '@/lib/db/models'
 import { requireOwner } from '@/lib/auth/middleware'
 import { logAudit } from '@/lib/utils/audit'
+import { canonicalMpesaCallbackUrl } from '@/lib/utils/mpesa-callback-url'
 import { clearHostPinnacleSettingsCache } from '@/lib/services/hostpinnacle/client'
 import { clearAutoMarkDeliveredCache } from '@/lib/services/sms-status/auto-delivered'
 import { clearFailureAlertPhoneCache } from '@/lib/services/sms-status/failure-alert'
@@ -68,6 +69,10 @@ export async function GET(request: NextRequest) {
     if (settingsObj.mpesaPasskey) {
       settingsObj.mpesaPasskey = maskValue(settingsObj.mpesaPasskey)
     }
+
+    settingsObj.mpesaConfirmationUrl = canonicalMpesaCallbackUrl(settingsObj.mpesaConfirmationUrl)
+    settingsObj.mpesaValidationUrl = canonicalMpesaCallbackUrl(settingsObj.mpesaValidationUrl)
+    settingsObj.mpesaCallbackUrl = canonicalMpesaCallbackUrl(settingsObj.mpesaCallbackUrl)
 
     return NextResponse.json({
       success: true,
@@ -233,9 +238,15 @@ export async function POST(request: NextRequest) {
         .replace(/\s+/g, '')
         .toUpperCase() || 'SMS'
     }
-    if (mpesaConfirmationUrl !== undefined) updateData.mpesaConfirmationUrl = mpesaConfirmationUrl
-    if (mpesaValidationUrl !== undefined) updateData.mpesaValidationUrl = mpesaValidationUrl
-    if (mpesaCallbackUrl !== undefined) updateData.mpesaCallbackUrl = mpesaCallbackUrl
+    if (mpesaConfirmationUrl !== undefined) {
+      updateData.mpesaConfirmationUrl = canonicalMpesaCallbackUrl(mpesaConfirmationUrl)
+    }
+    if (mpesaValidationUrl !== undefined) {
+      updateData.mpesaValidationUrl = canonicalMpesaCallbackUrl(mpesaValidationUrl)
+    }
+    if (mpesaCallbackUrl !== undefined) {
+      updateData.mpesaCallbackUrl = canonicalMpesaCallbackUrl(mpesaCallbackUrl)
+    }
     if (mpesaEnvironment !== undefined) updateData.mpesaEnvironment = mpesaEnvironment
     if (mpesaEnabled !== undefined) updateData.mpesaEnabled = mpesaEnabled
 

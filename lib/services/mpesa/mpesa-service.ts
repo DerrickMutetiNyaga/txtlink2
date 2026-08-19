@@ -4,6 +4,7 @@
  */
 
 import crypto from 'crypto'
+import { canonicalMpesaCallbackUrl } from '@/lib/utils/mpesa-callback-url'
 
 interface MpesaConfig {
   consumerKey: string
@@ -355,9 +356,9 @@ export class MpesaService {
       consumerSecret: settings.mpesaConsumerSecret || '',
       passkey: settings.mpesaPasskey || '',
       shortcode: settings.mpesaShortcode || '',
-      callbackUrl:
-        settings.mpesaCallbackUrl ||
-        (baseUrl ? `${baseUrl}/api/mpesa/stk-callback` : ''),
+      callbackUrl: canonicalMpesaCallbackUrl(
+        settings.mpesaCallbackUrl || (baseUrl ? `${baseUrl}/api/mpesa/stk-callback` : '')
+      ),
       environment: settings.mpesaEnvironment || 'sandbox',
     }
   }
