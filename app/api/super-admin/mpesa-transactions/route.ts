@@ -17,11 +17,18 @@ import { NextRequest, NextResponse } from 'next/server'
 import connectDB from '@/lib/db/connect'
 import { MpesaTransaction } from '@/lib/db/models'
 import { requireOwner } from '@/lib/auth/middleware'
+import { creditUnmatchedC2bPayments } from '@/lib/services/mpesa/credit-c2b-payment'
 
 export async function GET(request: NextRequest) {
   try {
     await connectDB()
     await requireOwner(request)
+
+    try {
+      await creditUnmatchedC2bPayments(25)
+    } catch (error) {
+      console.warn('Could not rematch unmatched C2B payments', error)
+    }
 
     const { searchParams } = new URL(request.url)
     const page = parseInt(searchParams.get('page') || '1')

@@ -18,6 +18,17 @@ export async function findPaybillReservation(account: string) {
   return PaybillAccountReservation.findOne({ account }).lean()
 }
 
+export async function findPaybillReservationForKeys(keys: string[]) {
+  if (!keys.length) return null
+  const rows = await PaybillAccountReservation.find({ account: { $in: keys } }).lean()
+  const byAccount = new Map(rows.map((row) => [String(row.account), row]))
+  for (const key of keys) {
+    const hit = byAccount.get(key)
+    if (hit) return hit
+  }
+  return null
+}
+
 export async function isPaybillAccountTaken(
   account: string,
   exceptUserId?: mongoose.Types.ObjectId | string | null

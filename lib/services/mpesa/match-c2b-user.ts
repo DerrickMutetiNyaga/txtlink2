@@ -9,10 +9,10 @@
 import mongoose from 'mongoose'
 import { User } from '@/lib/db/models'
 import { kenyanPhoneVariants, normalizeKenyanPhone } from '@/lib/utils/phone'
-import { isSharedPaybillAccount, paybillAccountDigits } from '@/lib/utils/paybill'
+import { isSharedPaybillAccount, paybillAccountLookupKeys } from '@/lib/utils/paybill'
 import {
   assignPaybillAccount,
-  findPaybillReservation,
+  findPaybillReservationForKeys,
 } from '@/lib/services/mpesa/allocate-paybill-account'
 
 export async function findUserIdForC2bPayment(params: {
@@ -21,30 +21,30 @@ export async function findUserIdForC2bPayment(params: {
   msisdn?: string | null
 }): Promise<mongoose.Types.ObjectId | null> {
   const accountReference = (params.billRefNumber || params.invoiceNumber || '').trim()
-  const digits = paybillAccountDigits(accountReference)
+  const keys = paybillAccountLookupKeys(accountReference)
 
-  if (digits && digits.length >= 4 && digits.length <= 9) {
-    const reservation = await findPaybillReservation(digits)
+  if (keys.length > 0) {
+    const reservation = await findPaybillReservationForKeys(keys)
     if (reservation) {
       const owner = await User.exists({ _id: reservation.userId })
       if (owner) return new mongoose.Types.ObjectId(String(reservation.userId))
       console.warn('[c2b] PayBill account is retired and will not be given to another user', {
-        account: digits,
+        account: keys[0],
       })
       return null
     }
 
-    const byAssigned = await findUsersByPaybillAccount(digits)
+    const byAssigned = await findUsersByPaybillAccount(keys)
     const resolvedAssigned = await pickUniqueOrPhone(byAssigned, params.msisdn)
     if (resolvedAssigned) {
-      await persistAccountIfMissing(resolvedAssigned, digits)
+      await persistAccountIfMissing(resolvedAssigned, keys[0])
       return resolvedAssigned
     }
 
-    const bySuffix = await findUsersByPhoneSuffix(digits)
+    const bySuffix = await findUsersByPhoneSuffix(keys)
     const resolvedSuffix = await pickUniqueOrPhone(bySuffix, params.msisdn)
     if (resolvedSuffix) {
-      await persistAccountIfMissing(resolvedSuffix, digits)
+      await persistAccountIfMissing(resolvedSuffix, keys[0])
       return resolvedSuffix
     }
   }
@@ -82,6 +82,7 @@ export async function findUserIdByPayerPhone(
   msisdn?: string | null
 ): Promise<mongoose.Types.ObjectId | null> {
   const raw = (msisdn || '').trim()
+  // Hashed C2B MSISDNs are 64-char hex; they cannot be matched to a profile phone.
   if (!raw || raw.length >= 20) return null
 
   const variants = kenyanPhoneVariants(raw)
@@ -112,19 +113,35 @@ export async function findUserIdByPayerPhone(
   return null
 }
 
-async function findUsersByPaybillAccount(account: string) {
-  return User.find({ paybillAccount: account }).select('_id phone paybillAccount').lean()
+async function findUsersByPaybillAccount(keys: string[]) {
+  if (!keys.length) return []
+  const stripped = keys[keys.length - 1]
+  const escaped = stripped.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return User.find({
+    $or: [
+      { paybillAccount: { $in: keys } },
+      { paybillAccount: { $regex: `^0*${escaped}$` } },
+    ],
+  })
+    .select('_id phone paybillAccount')
+    .lean()
 }
 
-async function findUsersByPhoneSuffix(account: string) {
-  const escaped = account.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+async function findUsersByPhoneSuffix(keys: string[]) {
+  const suffixKeys = keys.filter((key) => !key.startsWith('0'))
+  if (!suffixKeys.length) return []
+
   return User.find({
-    phone: { $regex: `${escaped}$` },
+    phone: { $regex: `(${suffixKeys.map(escapeRegex).join('|')})$` },
     $or: [{ paybillAccount: { $exists: false } }, { paybillAccount: null }, { paybillAccount: '' }],
   })
     .select('_id phone paybillAccount')
     .limit(20)
     .lean()
+}
+
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 async function pickUniqueOrPhone(

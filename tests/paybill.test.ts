@@ -5,6 +5,7 @@ import {
   nextGeneratedPaybillAccount,
   phonePaybillCandidates,
   paybillAccountDigits,
+  paybillAccountLookupKeys,
 } from '@/lib/utils/paybill'
 
 describe('paybill account from phone', () => {
@@ -27,6 +28,12 @@ describe('paybill account from phone', () => {
 
   it('strips account references to digits for matching', () => {
     expect(paybillAccountDigits(' 45 678 ')).toBe('45678')
+  })
+
+  it('matches M-Pesa zero-padded account numbers', () => {
+    expect(paybillAccountLookupKeys('03992')).toEqual(['03992', '3992'])
+    expect(paybillAccountLookupKeys('3992')).toEqual(['3992'])
+    expect(paybillAccountLookupKeys('30992')).toEqual(['30992'])
   })
 
   it('still treats SMS/TXTLINK as a legacy shared account', () => {
