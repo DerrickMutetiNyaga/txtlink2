@@ -64,6 +64,7 @@ export async function POST(request: NextRequest) {
               nextCheckAt: null,
               statusCheckLockedUntil: null,
               statusCheckWorkerId: null,
+              awaitingProviderConfirmation: false,
               fallbackQueued: false,
               fallbackStatus: 'cancelled',
               fallbackJobId: null,

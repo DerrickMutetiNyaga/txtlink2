@@ -14,7 +14,7 @@ import { RetryScheduler } from './retry-scheduler'
 import { StatusRepository, type ClaimedMessage } from './status-repository'
 import { mapProviderStatus, isFinalStatus } from './status-mapper'
 import { notifyDeliveryFailureAlert } from './failure-alert'
-import type { ProviderStatusResult, SyncBatchSummary } from './types'
+import { MANUAL_COMPLETED_CAUSE, isManuallyCompleted } from '@/lib/services/sms-history/actionable'
 
 /** Final failure statuses that trigger a credit refund (business rule carried
  *  over from the previous implementation). provider_timeout is excluded on
@@ -107,6 +107,15 @@ export class SmsStatusSynchronizer {
     message: ClaimedMessage
   ): Promise<'finalized' | 'rescheduled' | 'timedOut' | 'errors'> {
     const now = new Date()
+
+    if (isManuallyCompleted(message)) {
+      await this.repository.stopVerificationKeepDelivered({
+        messageId: message._id,
+        now,
+        providerError: 'Left completed after user marked it done',
+      })
+      return 'finalized'
+    }
 
     // Give up permanently once the message is too old to ever resolve.
     if (this.scheduler.hasTimedOut(message.sentAt, message.createdAt, now)) {
@@ -235,6 +244,14 @@ export class SmsStatusSynchronizer {
 
     const result = mapProviderStatus(providerStatusRaw, cause)
 
+    if (isManuallyCompleted(doc)) {
+      this.logger.info('applyProviderStatus: ignored update for manually completed message', {
+        providerMessageId,
+        incomingStatus: result.status,
+      })
+      return { applied: false, status: doc.status }
+    }
+
     // Guard against out-of-order updates: once a message is final, a late
     // pending report (e.g. a delayed SUBMITTED DLR after DELIVERED) must not
     // resurrect it — unless we are still verifying an auto-mark. A late
@@ -267,6 +284,7 @@ export class SmsStatusSynchronizer {
       senderName: doc.senderName,
       awaitingProviderConfirmation: !!doc.awaitingProviderConfirmation,
       source: doc.source,
+      deliveryCause: doc.deliveryCause || null,
     }
 
     const outcome = await this.applyStatusResult(message, result, new Date())
@@ -284,6 +302,9 @@ export class SmsStatusSynchronizer {
     if (!doc) return { applied: false }
 
     const result = mapProviderStatus(providerStatusRaw, cause)
+    if (isManuallyCompleted(doc)) {
+      return { applied: false, status: doc.status }
+    }
     if (
       isFinalStatus(doc.status) &&
       !result.isFinal &&
@@ -308,6 +329,7 @@ export class SmsStatusSynchronizer {
       senderName: doc.senderName ?? '',
       awaitingProviderConfirmation: !!doc.awaitingProviderConfirmation,
       source: doc.source,
+      deliveryCause: doc.deliveryCause || null,
     }
 
     await this.applyStatusResult(message, result, new Date())
@@ -319,6 +341,9 @@ export class SmsStatusSynchronizer {
     result: ProviderStatusResult,
     now: Date
   ): Promise<'finalized' | 'rescheduled'> {
+    if (isManuallyCompleted(message)) {
+      return 'finalized'
+    }
     if (result.isFinal) {
       const previousStatus = message.status
       await this.repository.markFinal({

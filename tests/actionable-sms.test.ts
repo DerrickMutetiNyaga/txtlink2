@@ -24,6 +24,13 @@ describe('pending & failed desk filter', () => {
       expect.arrayContaining(['delivered_via_phone', 'sent_via_phone'])
     )
   })
+
+  it('excludes messages the user marked completed', () => {
+    const all = buildActionableSmsFilter(userId, 'all') as {
+      deliveryCause: { $ne: string }
+    }
+    expect(all.deliveryCause.$ne).toBe('manually_completed_by_user')
+  })
 })
 
 describe('getDisplayStatus', () => {

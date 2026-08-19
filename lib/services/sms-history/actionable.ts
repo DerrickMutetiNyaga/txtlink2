@@ -25,9 +25,16 @@ export function normalizeActionableView(value: unknown): ActionableView {
   return 'all'
 }
 
+export const MANUAL_COMPLETED_CAUSE = 'manually_completed_by_user'
+
+export function isManuallyCompleted(doc: { deliveryCause?: string | null }): boolean {
+  return doc.deliveryCause === MANUAL_COMPLETED_CAUSE
+}
+
 function notResolvedYet() {
   return {
     status: { $ne: 'delivered' },
+    deliveryCause: { $ne: MANUAL_COMPLETED_CAUSE },
     fallbackStatus: { $nin: [...RESOLVED_PHONE_FALLBACK_STATUSES] },
   }
 }
@@ -79,5 +86,3 @@ export function buildActionableSmsFilter(
     ],
   }
 }
-
-export const MANUAL_COMPLETED_CAUSE = 'manually_completed_by_user'

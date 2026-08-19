@@ -43,6 +43,8 @@ function makeFakes() {
     refundIfNeeded: vi.fn<(...args: any[]) => Promise<boolean>>(async () => true),
     findByProviderMessageId: vi.fn<(...args: any[]) => Promise<any>>(async () => null),
     countDue: vi.fn<(...args: any[]) => Promise<number>>(async () => 0),
+    rescheduleVerification: vi.fn<(...args: any[]) => Promise<void>>(async () => {}),
+    stopVerificationKeepDelivered: vi.fn<(...args: any[]) => Promise<void>>(async () => {}),
   }
   const client = {
     getMessageStatus: vi.fn<(...args: any[]) => Promise<ProviderLookup>>(),
@@ -311,5 +313,27 @@ describe('SmsStatusSynchronizer.applyProviderStatus (webhook / admin path)', () 
     expect(fakes.repository.markFinal).toHaveBeenCalledWith(
       expect.objectContaining({ status: 'delivered' })
     )
+  })
+
+  it('does not let a later UNDELIVERABLE DLR undo a user Mark Completed', async () => {
+    const fakes = makeFakes()
+    fakes.repository.findByProviderMessageId.mockResolvedValue({
+      _id: new mongoose.Types.ObjectId(),
+      userId: new mongoose.Types.ObjectId(),
+      status: 'delivered',
+      deliveryCause: 'manually_completed_by_user',
+      statusCheckAttempts: 2,
+      segments: 1,
+      refunded: false,
+      sentAt: new Date(),
+      createdAt: new Date(),
+      toNumbers: ['+254700000000'],
+      senderName: 'TEST',
+    })
+
+    const result = await fakes.synchronizer.applyProviderStatus('uuid-12', 'UNDELIVERABLE')
+    expect(result.applied).toBe(false)
+    expect(result.status).toBe('delivered')
+    expect(fakes.repository.markFinal).not.toHaveBeenCalled()
   })
 })

@@ -29,6 +29,7 @@ export interface ClaimedMessage {
   senderName: string
   awaitingProviderConfirmation?: boolean
   source?: string
+  deliveryCause?: string | null
 }
 
 function toClaimedMessage(doc: any): ClaimedMessage {
@@ -50,6 +51,7 @@ function toClaimedMessage(doc: any): ClaimedMessage {
     senderName: doc.senderName ?? '',
     awaitingProviderConfirmation: !!doc.awaitingProviderConfirmation,
     source: doc.source,
+    deliveryCause: doc.deliveryCause || null,
   }
 }
 

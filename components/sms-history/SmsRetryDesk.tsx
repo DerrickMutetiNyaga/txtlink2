@@ -90,6 +90,7 @@ function isFailedSms(sms: ActionableSms) {
 
 function stillActionable(sms: ActionableSms) {
   if (sms.status === 'delivered') return false
+  if ((sms.displayStatus || '').toLowerCase() === 'completed') return false
   if (isPhoneResolved(sms)) return false
   return isPendingSms(sms) || isFailedSms(sms) || Boolean(sms.fallbackStatus)
 }

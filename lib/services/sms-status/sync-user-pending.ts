@@ -8,6 +8,7 @@ import { SmsMessage, SMS_PENDING_STATUSES, type ISmsMessage } from '@/lib/db/mod
 import { getSharedSynchronizer } from './build-synchronizer'
 import type { ClaimedMessage } from './status-repository'
 import { formatSmsHistoryRow, type FormattedSmsHistoryRow } from '@/lib/services/sms-history/format'
+import { MANUAL_COMPLETED_CAUSE, isManuallyCompleted } from '@/lib/services/sms-history/actionable'
 
 /** Provider statuses that mean real handset delivery — anything else on a
  *  "delivered" row is suspicious (API success / auto-mark / DeliveredTime bug). */
@@ -34,6 +35,7 @@ function toClaimedMessage(doc: Record<string, unknown>): ClaimedMessage {
     awaitingProviderConfirmation:
       Boolean(doc.awaitingProviderConfirmation) || falseDelivered,
     source: doc.source as string | undefined,
+    deliveryCause: (doc.deliveryCause as string) || null,
   }
 }
 
@@ -42,7 +44,9 @@ export function looksFalselyDelivered(doc: {
   status?: string
   providerStatus?: string | null
   awaitingProviderConfirmation?: boolean
+  deliveryCause?: string | null
 }): boolean {
+  if (isManuallyCompleted(doc)) return false
   if (doc.status !== 'delivered') return false
   if (doc.awaitingProviderConfirmation) return true
   const raw = (doc.providerStatus || '').trim().toUpperCase()
@@ -94,10 +98,14 @@ export async function syncUserPendingMessages(
       createdAt: { $gte: since },
       $or: [
         { status: { $in: [...SMS_PENDING_STATUSES] } },
-        // Re-check rows marked delivered without a real HostPinnacle DELIVERED
-        { status: 'delivered', awaitingProviderConfirmation: true },
         {
           status: 'delivered',
+          awaitingProviderConfirmation: true,
+          deliveryCause: { $ne: MANUAL_COMPLETED_CAUSE },
+        },
+        {
+          status: 'delivered',
+          deliveryCause: { $ne: MANUAL_COMPLETED_CAUSE },
           $or: [
             { providerStatus: { $exists: false } },
             { providerStatus: null },
