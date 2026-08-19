@@ -1,6 +1,7 @@
 import mongoose from 'mongoose'
 import { PaybillAccountReservation, User } from '@/lib/db/models'
 import {
+  isUsablePaybillAccount,
   nextGeneratedPaybillAccount,
   phonePaybillCandidates,
 } from '@/lib/utils/paybill'
@@ -76,12 +77,17 @@ async function pickUniquePaybillAccount(
   const seed = preferred[0]
   for (let attempt = 0; attempt < 20000; attempt++) {
     const generated = nextGeneratedPaybillAccount(seed, attempt)
+    if (!isUsablePaybillAccount(generated)) continue
     if (!(await isGeneratedAccountReserved(generated, userId))) {
       return generated
     }
   }
 
-  return `${Date.now().toString().slice(-8)}`
+  let fallback = Date.now().toString().slice(-8)
+  while (!isUsablePaybillAccount(fallback)) {
+    fallback = String(Number(fallback) + 1)
+  }
+  return fallback
 }
 
 async function rememberReservation(account: string, userId: mongoose.Types.ObjectId | string) {

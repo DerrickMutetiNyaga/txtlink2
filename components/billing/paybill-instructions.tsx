@@ -112,7 +112,8 @@ export function PaybillInstructions({
           <h3 className="font-semibold text-slate-900">Pay with M-Pesa (no app needed)</h3>
           <p className="text-sm text-slate-800 mt-1">
             Lipa na M-Pesa → Pay Bill. Your account number is usually the last 5 digits of your
-            TXTLINK phone (or last 4 if that code is already taken). Once given, this number is
+            TXTLINK phone (or last 4 if that code is already taken). Numbers never start or end
+            with 0. Once given, this number is
             yours forever and is never given to anyone else.
           </p>
         </div>

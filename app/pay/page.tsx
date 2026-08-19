@@ -13,8 +13,9 @@ export default function PublicPayPage() {
             <h1 className="text-3xl font-bold text-slate-900">Buy SMS credits</h1>
             <p className="text-slate-600 mt-2">
               You do not need to open the portal to pay. Send M-Pesa to the Paybill below. Your
-              account number is the last 5 digits of your TXTLINK phone — or last 4 if that number
-              is already used. Enter your phone below if you need to see the exact account.
+              account number is usually the last 5 digits of your TXTLINK phone — or last 4 if that
+              number is already used. It will not start or end with 0. Enter your phone below if you
+              need to see the exact account.
             </p>
           </div>
 

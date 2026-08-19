@@ -33,6 +33,14 @@ export function paybillAccountLookupKeys(value?: string | null): string[] {
   return keys
 }
 
+/** Issued account numbers must not start or end with 0. */
+export function isUsablePaybillAccount(value?: string | null): boolean {
+  const digits = paybillAccountDigits(value)
+  if (digits.length < 4 || digits.length > 9) return false
+  if (digits.startsWith('0') || digits.endsWith('0')) return false
+  return true
+}
+
 export function isSharedPaybillAccount(billRef?: string | null): boolean {
   const ref = (billRef || '').replace(/\s+/g, '').toUpperCase()
   return !ref || ref === DEFAULT_PAYBILL_ACCOUNT || ref === 'TXTLINK'
@@ -50,7 +58,8 @@ export function phonePaybillCandidates(phone?: string | null): string[] {
   const candidates = [national.slice(-5), national.slice(-4), national.slice(-6)]
   const unique: string[] = []
   for (const candidate of candidates) {
-    if (candidate && !unique.includes(candidate)) unique.push(candidate)
+    if (!isUsablePaybillAccount(candidate) || unique.includes(candidate)) continue
+    unique.push(candidate)
   }
   return unique
 }
@@ -58,6 +67,13 @@ export function phonePaybillCandidates(phone?: string | null): string[] {
 export function nextGeneratedPaybillAccount(seed: string | undefined, attempt: number): string {
   const base = paybillAccountDigits(seed)
   const parsed = base.length >= 4 ? parseInt(base, 10) : NaN
-  const start = Number.isFinite(parsed) ? parsed + 1 : 10000
-  return String(start + attempt)
+  let value = Number.isFinite(parsed) ? parsed + 1 : 10001
+  let remaining = Math.max(0, attempt)
+
+  while (remaining > 0 || !isUsablePaybillAccount(String(value))) {
+    if (isUsablePaybillAccount(String(value))) remaining -= 1
+    value += 1
+  }
+
+  return String(value)
 }

@@ -1298,10 +1298,10 @@ export default function SuperAdminSettingsPage() {
                   <Label className="text-sm font-medium text-[#020617] mb-2 block">PayBill account numbers</Label>
                   <p className="text-sm text-[#0F172A] rounded-xl border border-[#E5E7EB] bg-[#F8FAFC] px-4 py-3">
                     Each customer gets their own account number: the last 5 digits of their profile
-                    phone, or the last 4 if that 5-digit code is already taken. If both are taken,
-                    the system assigns another unique number. Once issued, that number never
-                    changes and is never given to anyone else, so payments cannot land on the wrong
-                    account.
+                    phone, or the last 4 if that 5-digit code is already taken. Numbers never start
+                    or end with 0; if those digits would, another unique number is assigned. Once
+                    issued, that number never changes and is never given to anyone else, so payments
+                    cannot land on the wrong account.
                   </p>
                 </div>
 

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { kenyanPhoneVariants, normalizeKenyanPhone } from '@/lib/utils/phone'
 import {
   isSharedPaybillAccount,
+  isUsablePaybillAccount,
   nextGeneratedPaybillAccount,
   phonePaybillCandidates,
   paybillAccountDigits,
@@ -15,15 +16,23 @@ describe('paybill account from phone', () => {
     expect(phonePaybillCandidates('+254712345678')).toEqual(['45678', '5678', '345678'])
   })
 
+  it('skips phone digits that start or end with 0', () => {
+    expect(phonePaybillCandidates('0712304567')).toEqual(['4567', '304567'])
+    expect(phonePaybillCandidates('0712345670')).toEqual([])
+    expect(isUsablePaybillAccount('03992')).toBe(false)
+    expect(isUsablePaybillAccount('39920')).toBe(false)
+    expect(isUsablePaybillAccount('3992')).toBe(true)
+  })
+
   it('returns no candidates for an empty phone', () => {
     expect(phonePaybillCandidates('')).toEqual([])
     expect(phonePaybillCandidates(null)).toEqual([])
   })
 
-  it('generates the next unused number after a collision', () => {
+  it('generates the next unused number after a collision, skipping 0 start/end', () => {
     expect(nextGeneratedPaybillAccount('45678', 0)).toBe('45679')
-    expect(nextGeneratedPaybillAccount('45678', 1)).toBe('45680')
-    expect(nextGeneratedPaybillAccount('', 0)).toBe('10000')
+    expect(nextGeneratedPaybillAccount('45678', 1)).toBe('45681')
+    expect(nextGeneratedPaybillAccount('', 0)).toBe('10001')
   })
 
   it('strips account references to digits for matching', () => {
