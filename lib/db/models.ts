@@ -12,6 +12,8 @@ export interface IUser {
   email: string
   passwordHash?: string
   phone?: string
+  /** Permanent Lipa na M-Pesa account number. Assigned once and never changed or reused. */
+  paybillAccount?: string
   role: 'admin' | 'user'
   credits: number // Legacy wallet balance (in KSh) - kept for backward compatibility
   creditsBalance?: number // Wallet balance in SMS credits (integer; 1 credit = 1 SMS segment up to 153 chars)
@@ -49,6 +51,7 @@ const UserSchema = new Schema<IUser>(
     email: { type: String, required: true, unique: true },
     passwordHash: { type: String },
     phone: { type: String },
+    paybillAccount: { type: String, trim: true },
     googleId: { type: String, sparse: true, unique: true },
     authProviders: { type: [String], default: undefined },
     emailVerified: { type: Boolean, default: false },
@@ -71,6 +74,24 @@ const UserSchema = new Schema<IUser>(
 
 UserSchema.index({ isSuperAdmin: 1 })
 UserSchema.index({ phone: 1 })
+UserSchema.index({ paybillAccount: 1 }, { unique: true, sparse: true })
+
+/** Every PayBill account number ever issued. Never deleted, so numbers are never reused. */
+export interface IPaybillAccountReservation {
+  _id?: string
+  account: string
+  userId: mongoose.Types.ObjectId
+  createdAt: Date
+  updatedAt: Date
+}
+
+const PaybillAccountReservationSchema = new Schema<IPaybillAccountReservation>(
+  {
+    account: { type: String, required: true, unique: true, trim: true },
+    userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+  },
+  { timestamps: true }
+)
 
 // HostPinnacle Account Model
 export interface IHostPinnacleAccount {
@@ -1475,6 +1496,9 @@ SmsFallbackJobSchema.index({ attemptId: 1 }, { sparse: true })
 
 // Export models
 export const User: Model<IUser> = mongoose.models.User || mongoose.model<IUser>('User', UserSchema)
+export const PaybillAccountReservation: Model<IPaybillAccountReservation> =
+  mongoose.models.PaybillAccountReservation ||
+  mongoose.model<IPaybillAccountReservation>('PaybillAccountReservation', PaybillAccountReservationSchema)
 export const HostPinnacleAccount: Model<IHostPinnacleAccount> =
   mongoose.models.HostPinnacleAccount || mongoose.model<IHostPinnacleAccount>('HostPinnacleAccount', HostPinnacleAccountSchema)
 export const SenderId: Model<ISenderId> = mongoose.models.SenderId || mongoose.model<ISenderId>('SenderId', SenderIdSchema)

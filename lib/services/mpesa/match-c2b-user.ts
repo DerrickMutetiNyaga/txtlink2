@@ -1,13 +1,19 @@
 /**
  * Match a C2B PayBill payment to a user.
- * Shared account number (SMS) is the same for everyone; the paying phone
- * is matched to User.phone from registration / Settings → Profile.
+ * Account number is usually the last 5 (or last 4) digits of the profile phone.
+ * If that code is already taken, the user has a unique fallback number.
+ * Paying M-Pesa phone is used to auto-detect when the account is shared/legacy
+ * or when two people share the same last digits.
  */
 
 import mongoose from 'mongoose'
-import { SystemSettings, User } from '@/lib/db/models'
+import { User } from '@/lib/db/models'
 import { kenyanPhoneVariants, normalizeKenyanPhone } from '@/lib/utils/phone'
-import { isSharedPaybillAccount, normalizePaybillAccount } from '@/lib/utils/paybill'
+import { isSharedPaybillAccount, paybillAccountDigits } from '@/lib/utils/paybill'
+import {
+  assignPaybillAccount,
+  findPaybillReservation,
+} from '@/lib/services/mpesa/allocate-paybill-account'
 
 export async function findUserIdForC2bPayment(params: {
   billRefNumber?: string | null
@@ -15,13 +21,36 @@ export async function findUserIdForC2bPayment(params: {
   msisdn?: string | null
 }): Promise<mongoose.Types.ObjectId | null> {
   const accountReference = (params.billRefNumber || params.invoiceNumber || '').trim()
-  const settings = await SystemSettings.findOne().select('mpesaPaybillAccount').lean()
-  const sharedAccount = normalizePaybillAccount(settings?.mpesaPaybillAccount)
+  const digits = paybillAccountDigits(accountReference)
 
-  const byPhone = async () => findUserIdByPayerPhone(params.msisdn)
+  if (digits && digits.length >= 4 && digits.length <= 9) {
+    const reservation = await findPaybillReservation(digits)
+    if (reservation) {
+      const owner = await User.exists({ _id: reservation.userId })
+      if (owner) return new mongoose.Types.ObjectId(String(reservation.userId))
+      console.warn('[c2b] PayBill account is retired and will not be given to another user', {
+        account: digits,
+      })
+      return null
+    }
 
-  if (isSharedPaybillAccount(accountReference, sharedAccount)) {
-    const userId = await byPhone()
+    const byAssigned = await findUsersByPaybillAccount(digits)
+    const resolvedAssigned = await pickUniqueOrPhone(byAssigned, params.msisdn)
+    if (resolvedAssigned) {
+      await persistAccountIfMissing(resolvedAssigned, digits)
+      return resolvedAssigned
+    }
+
+    const bySuffix = await findUsersByPhoneSuffix(digits)
+    const resolvedSuffix = await pickUniqueOrPhone(bySuffix, params.msisdn)
+    if (resolvedSuffix) {
+      await persistAccountIfMissing(resolvedSuffix, digits)
+      return resolvedSuffix
+    }
+  }
+
+  if (isSharedPaybillAccount(accountReference)) {
+    const userId = await findUserIdByPayerPhone(params.msisdn)
     if (userId) return userId
   }
 
@@ -46,7 +75,7 @@ export async function findUserIdForC2bPayment(params: {
   const byAccountPhone = await findUserIdByPayerPhone(accountReference)
   if (byAccountPhone) return byAccountPhone
 
-  return byPhone()
+  return findUserIdByPayerPhone(params.msisdn)
 }
 
 export async function findUserIdByPayerPhone(
@@ -81,6 +110,52 @@ export async function findUserIdByPayerPhone(
   const unique = uniqueUserIds(matched)
   if (unique.length === 1) return unique[0]
   return null
+}
+
+async function findUsersByPaybillAccount(account: string) {
+  return User.find({ paybillAccount: account }).select('_id phone paybillAccount').lean()
+}
+
+async function findUsersByPhoneSuffix(account: string) {
+  const escaped = account.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return User.find({
+    phone: { $regex: `${escaped}$` },
+    $or: [{ paybillAccount: { $exists: false } }, { paybillAccount: null }, { paybillAccount: '' }],
+  })
+    .select('_id phone paybillAccount')
+    .limit(20)
+    .lean()
+}
+
+async function pickUniqueOrPhone(
+  users: Array<{ _id: unknown; phone?: string }>,
+  msisdn?: string | null
+): Promise<mongoose.Types.ObjectId | null> {
+  const unique = uniqueUserIds(users)
+  if (unique.length === 1) return unique[0]
+  if (unique.length === 0) return null
+
+  const payer = await findUserIdByPayerPhone(msisdn)
+  if (payer && unique.some((id) => String(id) === String(payer))) return payer
+  return null
+}
+
+async function persistAccountIfMissing(
+  userId: mongoose.Types.ObjectId,
+  paidAccount: string
+) {
+  try {
+    const user = await User.findById(userId).select('paybillAccount phone')
+    if (!user) return
+    if (user.paybillAccount) return
+    await assignPaybillAccount(userId, user.phone)
+  } catch (error) {
+    console.warn('[c2b] could not persist PayBill account', {
+      userId: String(userId),
+      paidAccount,
+      error: error instanceof Error ? error.message : error,
+    })
+  }
 }
 
 function uniqueUserIds(users: Array<{ _id: unknown }>): mongoose.Types.ObjectId[] {

@@ -14,6 +14,7 @@ import { resolvePricePerCreditKes } from '@/lib/utils/resolve-price-per-credit'
 import { topupProfitMetadata } from '@/lib/services/profit'
 import { queueLowBalanceAlertSync } from '@/lib/services/sms/low-balance-alert'
 import { findUserIdForC2bPayment } from '@/lib/services/mpesa/match-c2b-user'
+import { ensureUserPaybillAccount } from '@/lib/services/mpesa/allocate-paybill-account'
 
 export async function POST(request: NextRequest) {
   try {
@@ -49,19 +50,22 @@ export async function POST(request: NextRequest) {
       FirstName,
     })
 
-    // Check for duplicate transaction by TransID (critical for PayBill)
-    const existingTransaction = await MpesaTransaction.findOne({
-      transactionId: TransID,
-    })
-
-    if (existingTransaction && existingTransaction.status === 'success') {
-      console.log('Duplicate C2B transaction detected (already processed):', TransID)
-      // Return success to M-Pesa but don't process again
+    // Credits are keyed by M-Pesa TransID. If this receipt already became a top-up,
+    // do not add money again (Safaricom may retry the same confirmation).
+    const existingLedger = TransID
+      ? await Transaction.findOne({ reference: TransID, type: 'top-up' })
+      : null
+    if (existingLedger) {
+      console.log('Duplicate C2B transaction detected (already credited):', TransID)
       return NextResponse.json({
         ResultCode: 0,
         ResultDesc: 'Transaction already processed',
       })
     }
+
+    const existingTransaction = await MpesaTransaction.findOne({
+      transactionId: TransID,
+    })
 
     // Find or create the transaction
     let mpesaTransaction = existingTransaction
@@ -99,7 +103,7 @@ export async function POST(request: NextRequest) {
       await mpesaTransaction.save()
     }
 
-    // Match user: shared PayBill account (SMS) + paying phone, or legacy USER-/email refs
+    // Match user by PayBill account number (last 5/4 of phone, or unique fallback)
     const userId = await findUserIdForC2bPayment({
       billRefNumber: BillRefNumber,
       invoiceNumber: InvoiceNumber,
@@ -112,6 +116,7 @@ export async function POST(request: NextRequest) {
         const userDoc = await User.findById(userId)
 
         if (userDoc) {
+          await ensureUserPaybillAccount(userId, userDoc.phone)
           const amountKes = mpesaTransaction.amount
           const pricePerCreditKes = await resolvePricePerCreditKes(String(userId))
 
@@ -121,25 +126,12 @@ export async function POST(request: NextRequest) {
           })
 
           if (creditsToAdd > 0) {
-            // Update user balance atomically
-            const currentBalanceRaw =
-              typeof userDoc.creditsBalance === 'number' ? userDoc.creditsBalance : 0
-            const safeStartingBalance = Math.max(0, currentBalanceRaw)
-            const finalBalance = safeStartingBalance + creditsToAdd
-
-            await User.findByIdAndUpdate(
-              userId,
-              { creditsBalance: finalBalance },
-              { new: false }
-            )
-            queueLowBalanceAlertSync(userId, finalBalance)
-
-            // Create transaction record (use TransID as reference to prevent duplicates)
             const reference = TransID || `MPESA-C2B-${Date.now()}`
-            
-            // Check if transaction already exists by reference (TransID)
-            const existingTransactionRecord = await Transaction.findOne({ reference })
-            if (!existingTransactionRecord) {
+            const previousBalanceRaw =
+              typeof userDoc.creditsBalance === 'number' ? userDoc.creditsBalance : 0
+            const safeStartingBalance = Math.max(0, previousBalanceRaw)
+
+            try {
               const profitMeta = await topupProfitMetadata({
                 paidKes: amountKes,
                 credits: creditsToAdd,
@@ -165,7 +157,17 @@ export async function POST(request: NextRequest) {
                 },
               })
 
-              // Update M-Pesa transaction with user ID and invoice reference
+              const updatedUser = await User.findByIdAndUpdate(
+                userId,
+                { $inc: { creditsBalance: creditsToAdd } },
+                { new: true }
+              )
+              const newBalance =
+                typeof updatedUser?.creditsBalance === 'number'
+                  ? updatedUser.creditsBalance
+                  : safeStartingBalance + creditsToAdd
+              queueLowBalanceAlertSync(userId, newBalance)
+
               mpesaTransaction.invoiceId = reference
               mpesaTransaction.userId = userId
               await mpesaTransaction.save()
@@ -178,11 +180,15 @@ export async function POST(request: NextRequest) {
                 amountKes,
                 creditsToAdd,
                 previousBalance: safeStartingBalance,
-                newBalance: finalBalance,
+                newBalance,
                 transactionType: TransactionType,
               })
-            } else {
-              console.log('Transaction record already exists for TransID:', TransID)
+            } catch (error: any) {
+              if (error?.code === 11000) {
+                console.log('Transaction record already exists for TransID:', TransID)
+              } else {
+                throw error
+              }
             }
           } else {
             console.warn('No credits to add for payment:', {
@@ -211,7 +217,7 @@ export async function POST(request: NextRequest) {
         BillRefNumber,
         InvoiceNumber,
         TransactionType,
-        message: 'Payment received but no user matched. Credits are added to the account whose profile phone is the M-Pesa number that paid. Account number should be SMS for all users.',
+        message: 'Payment received but no user matched. Credits go to the account whose PayBill account number was entered, or whose profile phone is the paying M-Pesa number.',
       })
       // Still return success to M-Pesa - we'll handle unmatched payments manually
     }

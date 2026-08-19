@@ -8,6 +8,7 @@ import connectDB from '@/lib/db/connect'
 import { User } from '@/lib/db/models'
 import bcrypt from 'bcryptjs'
 import { assignSignupDefaultSenderId } from '@/lib/services/senderids/signup-default'
+import { assignPaybillAccount } from '@/lib/services/mpesa/allocate-paybill-account'
 
 export async function POST(request: NextRequest) {
   try {
@@ -62,6 +63,9 @@ export async function POST(request: NextRequest) {
     })
 
     await assignSignupDefaultSenderId(user._id.toString())
+    if (user.phone) {
+      await assignPaybillAccount(user._id.toString(), user.phone)
+    }
 
     // Generate JWT token
     const jwt = require('jsonwebtoken')

@@ -12,6 +12,7 @@ import mongoose from 'mongoose'
 import { normalizeRetentionLimit, DEFAULT_SMS_HISTORY_RETENTION } from '@/lib/services/sms-history/constants'
 import { normalizeFallbackRetentionDays } from '@/lib/services/sms-fallback/job-cleanup'
 import { normalizeKenyanPhone } from '@/lib/utils/phone'
+import { assignPaybillAccount } from '@/lib/services/mpesa/allocate-paybill-account'
 
 export async function GET(request: NextRequest) {
   try {
@@ -62,14 +63,17 @@ export async function PATCH(request: NextRequest) {
     const user = requireAuth(request)
 
     const userId = new mongoose.Types.ObjectId(user.userId)
+    const existing = await User.findById(userId).select('phone')
     const body = await request.json()
 
     // Allowed fields to update
     const allowedFields: Record<string, any> = {}
     if (body.name !== undefined) allowedFields.name = body.name
+    let phoneChanged = false
     if (body.phone !== undefined) {
       const raw = String(body.phone || '').trim()
       allowedFields.phone = normalizeKenyanPhone(raw) || raw
+      phoneChanged = (existing?.phone || '') !== allowedFields.phone
     }
     if (body.smsHistoryRetentionLimit !== undefined) {
       allowedFields.smsHistoryRetentionLimit = normalizeRetentionLimit(body.smsHistoryRetentionLimit)
@@ -91,6 +95,10 @@ export async function PATCH(request: NextRequest) {
 
     if (!userDoc) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    }
+
+    if (phoneChanged && userDoc.phone && !userDoc.paybillAccount) {
+      await assignPaybillAccount(userId, userDoc.phone)
     }
 
     return NextResponse.json({

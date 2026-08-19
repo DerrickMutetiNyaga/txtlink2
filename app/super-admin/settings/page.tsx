@@ -1286,15 +1286,13 @@ export default function SuperAdminSettingsPage() {
                 </div>
 
                 <div>
-                  <Label className="text-sm font-medium text-[#020617] mb-2 block">PayBill account number</Label>
-                  <Input
-                    value={formData.mpesaPaybillAccount || 'SMS'}
-                    onChange={(e) => updateField('mpesaPaybillAccount', e.target.value.toUpperCase())}
-                    className="border-[#E5E7EB] bg-white text-[#020617]"
-                    placeholder="SMS"
-                  />
-                  <p className="text-xs text-[#64748B] mt-1">
-                    Same for every customer. They pay from the M-Pesa number saved on their profile. Credits are matched automatically.
+                  <Label className="text-sm font-medium text-[#020617] mb-2 block">PayBill account numbers</Label>
+                  <p className="text-sm text-[#0F172A] rounded-xl border border-[#E5E7EB] bg-[#F8FAFC] px-4 py-3">
+                    Each customer gets their own account number: the last 5 digits of their profile
+                    phone, or the last 4 if that 5-digit code is already taken. If both are taken,
+                    the system assigns another unique number. Once issued, that number never
+                    changes and is never given to anyone else, so payments cannot land on the wrong
+                    account.
                   </p>
                 </div>
 

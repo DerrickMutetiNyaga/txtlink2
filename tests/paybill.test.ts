@@ -1,18 +1,39 @@
 import { describe, it, expect } from 'vitest'
 import { kenyanPhoneVariants, normalizeKenyanPhone } from '@/lib/utils/phone'
-import { isSharedPaybillAccount, normalizePaybillAccount } from '@/lib/utils/paybill'
+import {
+  isSharedPaybillAccount,
+  nextGeneratedPaybillAccount,
+  phonePaybillCandidates,
+  paybillAccountDigits,
+} from '@/lib/utils/paybill'
 
-describe('paybill account', () => {
-  it('defaults to SMS and is the same for every user', () => {
-    expect(normalizePaybillAccount('')).toBe('SMS')
-    expect(normalizePaybillAccount(' sms ')).toBe('SMS')
+describe('paybill account from phone', () => {
+  it('uses last 5 digits, then last 4, then last 6', () => {
+    expect(phonePaybillCandidates('0712345678')).toEqual(['45678', '5678', '345678'])
+    expect(phonePaybillCandidates('254712345678')).toEqual(['45678', '5678', '345678'])
+    expect(phonePaybillCandidates('+254712345678')).toEqual(['45678', '5678', '345678'])
   })
 
-  it('treats empty or SMS/TXTLINK as the shared account', () => {
-    expect(isSharedPaybillAccount('SMS', 'SMS')).toBe(true)
-    expect(isSharedPaybillAccount('sms', 'SMS')).toBe(true)
-    expect(isSharedPaybillAccount('', 'SMS')).toBe(true)
-    expect(isSharedPaybillAccount('USER-698acd4349426058ffa16b94', 'SMS')).toBe(false)
+  it('returns no candidates for an empty phone', () => {
+    expect(phonePaybillCandidates('')).toEqual([])
+    expect(phonePaybillCandidates(null)).toEqual([])
+  })
+
+  it('generates the next unused number after a collision', () => {
+    expect(nextGeneratedPaybillAccount('45678', 0)).toBe('45679')
+    expect(nextGeneratedPaybillAccount('45678', 1)).toBe('45680')
+    expect(nextGeneratedPaybillAccount('', 0)).toBe('10000')
+  })
+
+  it('strips account references to digits for matching', () => {
+    expect(paybillAccountDigits(' 45 678 ')).toBe('45678')
+  })
+
+  it('still treats SMS/TXTLINK as a legacy shared account', () => {
+    expect(isSharedPaybillAccount('SMS')).toBe(true)
+    expect(isSharedPaybillAccount('sms')).toBe(true)
+    expect(isSharedPaybillAccount('')).toBe(true)
+    expect(isSharedPaybillAccount('45678')).toBe(false)
   })
 })
 
