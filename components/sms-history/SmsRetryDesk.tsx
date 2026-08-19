@@ -62,15 +62,25 @@ const FAILED_STATUSES = new Set([
 const PHONE_IN_PROGRESS = new Set([
   'queued_for_phone',
   'sending_via_phone',
-  'sent_via_phone',
-  'delivered_via_phone',
 ])
+const PHONE_RESOLVED = new Set(['delivered_via_phone', 'sent_via_phone'])
+
+function isPhoneResolved(sms: ActionableSms) {
+  const display = (sms.displayStatus || '').toLowerCase()
+  return (
+    PHONE_RESOLVED.has(sms.fallbackStatus || '') ||
+    display.includes('delivered via phone') ||
+    display === 'sent via phone'
+  )
+}
 
 function isPendingSms(sms: ActionableSms) {
+  if (isPhoneResolved(sms)) return false
   return PENDING_STATUSES.has(sms.status)
 }
 
 function isFailedSms(sms: ActionableSms) {
+  if (isPhoneResolved(sms)) return false
   return (
     FAILED_STATUSES.has(sms.status) ||
     sms.fallbackStatus === 'phone_failed' ||
@@ -80,9 +90,7 @@ function isFailedSms(sms: ActionableSms) {
 
 function stillActionable(sms: ActionableSms) {
   if (sms.status === 'delivered') return false
-  if (sms.fallbackStatus === 'delivered_via_phone' || sms.fallbackStatus === 'sent_via_phone') {
-    return false
-  }
+  if (isPhoneResolved(sms)) return false
   return isPendingSms(sms) || isFailedSms(sms) || Boolean(sms.fallbackStatus)
 }
 
@@ -111,7 +119,7 @@ function toActionableRow(raw: Partial<ActionableSms> & { id: string }): Actionab
 
 function canRetryViaSenderId(sms: ActionableSms) {
   if (sms.status === 'delivered') return false
-  // Manual retries may re-hit HostPinnacle even after a prior attempt
+  if (isPhoneResolved(sms)) return false
   if (sms.fallbackStatus === 'retrying_provider') {
     return false
   }
@@ -122,6 +130,7 @@ type RetryChannel = 'provider' | 'phone'
 
 function canRetryViaPhone(sms: ActionableSms) {
   if (sms.status === 'delivered') return false
+  if (isPhoneResolved(sms)) return false
   if (PHONE_IN_PROGRESS.has(sms.fallbackStatus || '')) return false
   return true
 }
@@ -282,8 +291,13 @@ export const SmsRetryDesk = forwardRef<SmsRetryDeskHandle, Props>(function SmsRe
       )
       if (!response.ok) throw new Error('Failed to load')
       const data = await response.json()
-      setItems(data.data || [])
-      setCounts(data.counts || { pending: 0, failed: 0, total: 0 })
+      const rows = ((data.data || []) as ActionableSms[]).filter((row) =>
+        matchesView(row, viewRef.current)
+      )
+      setItems(rows)
+      const local = recount(rows)
+      const apiCounts = data.counts || { pending: 0, failed: 0, total: 0 }
+      setCounts(rows.length < (data.data || []).length ? local : apiCounts)
       setHasLoaded(true)
     } catch {
       if (showSpinner) {

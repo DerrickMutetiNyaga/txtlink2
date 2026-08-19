@@ -1,5 +1,7 @@
 'use client'
 
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -39,6 +41,7 @@ import {
   TrendingUp,
   Wallet,
   Shield,
+  MessageSquare,
 } from 'lucide-react'
 import {
   DropdownMenu,
@@ -98,6 +101,15 @@ interface Account {
   globalPricing: EditablePricingRule | null
   createdAt?: string
   lastActivity?: string
+  delivery?: {
+    total: number
+    delivered: number
+    sent: number
+    pending: number
+    failed: number
+    lastSmsAt: string | null
+  }
+  deliveryHealth?: 'none' | 'good' | 'watch' | 'problem'
 }
 
 // Stat Card Component
@@ -118,7 +130,23 @@ function StatCard({ label, value, icon: Icon }: { label: string; value: string |
 }
 
 // Status Pill Component
-function StatusPill({ isActive }: { isActive: boolean }) {
+function DeliveryCounts({ account }: { account: Account }) {
+  const delivery = account.delivery || { delivered: 0, sent: 0, pending: 0, failed: 0, total: 0 }
+  if (!delivery.total) {
+    return <span className="text-sm text-slate-500">No SMS yet</span>
+  }
+  return (
+    <Link
+      href={`/super-admin/accounts/${account.id}`}
+      className="inline-flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-medium hover:underline"
+    >
+      <span className="text-emerald-700">{delivery.delivered} delivered</span>
+      <span className="text-sky-700">{delivery.sent} sent</span>
+      <span className="text-amber-800">{delivery.pending} pending</span>
+      <span className="text-red-700">{delivery.failed} failed</span>
+    </Link>
+  )
+}
   return isActive ? (
     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
       <Circle className="w-2 h-2 fill-emerald-600" />
@@ -135,6 +163,7 @@ function StatusPill({ isActive }: { isActive: boolean }) {
 // Actions Menu Component
 function ActionsMenu({
   account,
+  onViewDeliveries,
   onManageSenderIds,
   onPricingOverride,
   onAdjustCredits,
@@ -142,6 +171,7 @@ function ActionsMenu({
   onSuspend,
 }: {
   account: Account
+  onViewDeliveries: () => void
   onManageSenderIds: () => void
   onPricingOverride: () => void
   onAdjustCredits: () => void
@@ -163,6 +193,13 @@ function ActionsMenu({
           Actions
         </DropdownMenuLabel>
         <DropdownMenuSeparator className="bg-slate-200 my-1" />
+        <DropdownMenuItem
+          onClick={onViewDeliveries}
+          className="flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer text-slate-700 hover:bg-slate-100 hover:text-slate-900 focus:bg-slate-100 focus:text-slate-900 transition-colors group"
+        >
+          <MessageSquare className="w-4 h-4 text-slate-500 group-hover:text-slate-900 transition-colors" />
+          <span>View deliveries</span>
+        </DropdownMenuItem>
         <DropdownMenuItem
           onClick={onManageSenderIds}
           className="flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer text-slate-700 hover:bg-slate-100 hover:text-slate-900 focus:bg-slate-100 focus:text-slate-900 transition-colors group"
@@ -209,6 +246,7 @@ function ActionsMenu({
 }
 
 export default function SuperAdminAccounts() {
+  const router = useRouter()
   const [accounts, setAccounts] = useState<Account[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
@@ -824,7 +862,7 @@ export default function SuperAdminAccounts() {
           <div>
             <h1 className="text-2xl lg:text-3xl font-bold text-slate-900">Accounts</h1>
             <p className="text-slate-600 mt-1 text-sm">
-              Manage customer accounts, sender IDs, pricing overrides, and status.
+              Open a customer account to see whether SMS deliveries are working, plus pending, failed, and sent counts.
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -951,6 +989,9 @@ export default function SuperAdminAccounts() {
                     <th className="text-left py-3 px-6 text-xs font-semibold text-slate-700 uppercase tracking-wider">
                       Pricing
                     </th>
+                    <th className="text-left py-3 px-6 text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                      Deliveries
+                    </th>
                     <th className="text-right py-3 px-6 text-xs font-semibold text-slate-700 uppercase tracking-wider">
                       Credits
                     </th>
@@ -972,10 +1013,10 @@ export default function SuperAdminAccounts() {
                       className="hover:bg-slate-50 transition-colors"
                     >
                       <td className="py-3 px-6">
-                        <div>
+                        <Link href={`/super-admin/accounts/${account.id}`} className="hover:underline">
                           <div className="font-medium text-slate-900">{account.name}</div>
                           <div className="text-sm text-slate-500">{account.email}</div>
-                        </div>
+                        </Link>
                       </td>
                       <td className="py-3 px-6 text-sm text-slate-600">
                         {account.phone || '-'}
@@ -1054,6 +1095,9 @@ export default function SuperAdminAccounts() {
                           <span className="text-sm text-slate-500">Global</span>
                         )}
                       </td>
+                      <td className="py-3 px-6">
+                        <DeliveryCounts account={account} />
+                      </td>
                       <td className="text-right py-3 px-6 font-medium text-slate-900">
                         {account.credits.toLocaleString()}
                       </td>
@@ -1078,6 +1122,7 @@ export default function SuperAdminAccounts() {
                       <td className="text-right py-3 px-6">
                         <ActionsMenu
                           account={account}
+                          onViewDeliveries={() => router.push(`/super-admin/accounts/${account.id}`)}
                           onManageSenderIds={() => {
                             setSelectedAccount(account)
                             setSenderIdDrawerOpen(true)
@@ -1138,7 +1183,9 @@ export default function SuperAdminAccounts() {
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
-                      <h3 className="font-semibold text-slate-900">{account.name}</h3>
+                      <Link href={`/super-admin/accounts/${account.id}`} className="font-semibold text-slate-900 hover:underline">
+                        {account.name}
+                      </Link>
                       <StatusPill isActive={account.isActive} />
                       {account.routeAllSmsViaPhoneGateway && (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-sky-50 text-sky-700 border border-sky-200">
@@ -1154,6 +1201,7 @@ export default function SuperAdminAccounts() {
                   </div>
                   <ActionsMenu
                     account={account}
+                    onViewDeliveries={() => router.push(`/super-admin/accounts/${account.id}`)}
                     onManageSenderIds={() => {
                       setSelectedAccount(account)
                       setSenderIdDrawerOpen(true)
@@ -1191,6 +1239,10 @@ export default function SuperAdminAccounts() {
                         ? `KSh ${account.pricing.pricePerSms || account.pricing.pricePerPart}`
                         : 'Global'}
                     </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500 mb-1">Deliveries</p>
+                    <DeliveryCounts account={account} />
                   </div>
                   <div>
                     <p className="text-xs text-slate-500 mb-1">Credits</p>

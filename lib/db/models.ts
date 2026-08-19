@@ -1032,7 +1032,7 @@ const MpesaTransactionSchema = new Schema<IMpesaTransaction>(
     checkoutRequestId: { type: String },
     merchantRequestId: { type: String },
     amount: { type: Number, required: true },
-    phoneNumber: { type: String, required: true },
+    phoneNumber: { type: String, required: true, default: 'UNKNOWN' },
     accountReference: { type: String, required: true },
     status: { type: String, enum: ['pending', 'success', 'failed', 'cancelled', 'timeout'], default: 'pending' },
     responseCode: { type: String },

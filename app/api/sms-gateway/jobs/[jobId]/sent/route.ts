@@ -171,6 +171,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
           deliveryStatus: 'sent',
           deliveryMethod: 'android_phone_gateway',
           fallbackStatus: 'sent_via_phone',
+          fallbackQueued: false,
           fallbackSentAt: parsed.eventAt,
           fallbackProvider: 'android_phone_gateway',
           fallbackJobId: rawJobId,

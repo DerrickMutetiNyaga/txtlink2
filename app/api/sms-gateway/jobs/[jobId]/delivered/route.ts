@@ -163,6 +163,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
           deliveredAt: parsed.eventAt,
           deliveryMethod: 'android_phone_gateway',
           fallbackStatus: 'delivered_via_phone',
+          fallbackQueued: false,
           fallbackSentAt: job.phoneSentAt || job.sentAt || parsed.eventAt,
           fallbackDeliveredAt: parsed.eventAt,
           fallbackProvider: 'android_phone_gateway',

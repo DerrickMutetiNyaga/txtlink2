@@ -171,6 +171,7 @@ function getFallbackBadgeLabel(
     case 'sending_via_phone':
       return 'Sending via Phone'
     case 'sent_via_phone':
+      return 'Sent via Phone'
     case 'delivered_via_phone':
       return 'Delivered via Phone'
     case 'phone_requires_topup':

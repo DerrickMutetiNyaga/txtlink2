@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import connectDB from '@/lib/db/connect'
 import { User, HostPinnacleAccount, UserSenderId, SenderId, PricingRule } from '@/lib/db/models'
 import { requireOwner } from '@/lib/auth/middleware'
+import { getDeliveryStatsByUser, deliveryHealth } from '@/lib/services/sms-history/admin-delivery-stats'
 
 export async function GET(request: NextRequest) {
   try {
@@ -14,6 +15,7 @@ export async function GET(request: NextRequest) {
     await requireOwner(request)
 
     const users = await User.find({}).sort({ createdAt: -1 })
+    const deliveryByUser = await getDeliveryStatsByUser()
 
     // Get global pricing rule
     const globalPricing = await PricingRule.findOne({ scope: 'global' })
@@ -48,6 +50,16 @@ export async function GET(request: NextRequest) {
           userId: user._id,
         })
 
+        const delivery =
+          deliveryByUser.get(user._id.toString()) || {
+            total: 0,
+            delivered: 0,
+            sent: 0,
+            pending: 0,
+            failed: 0,
+            lastSmsAt: null,
+          }
+
         return {
           id: user._id.toString(),
           name: user.name,
@@ -62,6 +74,9 @@ export async function GET(request: NextRequest) {
           hpUserLoginName: hpAccount?.hpUserLoginName || null,
           senderIds,
           senderIdCount: senderIds.length,
+          delivery,
+          deliveryHealth: deliveryHealth(delivery),
+          lastActivity: delivery.lastSmsAt,
           pricing: userPricing
             ? {
                 mode: userPricing.mode,

@@ -75,6 +75,15 @@ export default function MpesaTransactionsPage() {
     total: 0,
     pages: 0,
   })
+  const [recordOpen, setRecordOpen] = useState(false)
+  const [recording, setRecording] = useState(false)
+  const [recordMessage, setRecordMessage] = useState<{ type: 'ok' | 'error'; text: string } | null>(null)
+  const [recordForm, setRecordForm] = useState({
+    receipt: '',
+    amountKes: '',
+    accountNumber: '',
+    phone: '',
+  })
 
   // Ensure component is mounted before making API calls
   useEffect(() => {
@@ -187,6 +196,36 @@ export default function MpesaTransactionsPage() {
     window.URL.revokeObjectURL(url)
   }
 
+  const recordPaybill = async () => {
+    try {
+      setRecording(true)
+      setRecordMessage(null)
+      const token = localStorage.getItem('token')
+      const response = await fetch('/api/super-admin/mpesa-transactions/record-paybill', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          receipt: recordForm.receipt,
+          amountKes: Number(recordForm.amountKes),
+          accountNumber: recordForm.accountNumber,
+          phone: recordForm.phone,
+        }),
+      })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error || 'Could not record PayBill')
+      setRecordMessage({ type: 'ok', text: result.message || 'PayBill recorded' })
+      setRecordForm({ receipt: '', amountKes: '', accountNumber: '', phone: '' })
+      await fetchTransactions()
+    } catch (error: any) {
+      setRecordMessage({ type: 'error', text: error.message || 'Could not record PayBill' })
+    } finally {
+      setRecording(false)
+    }
+  }
+
   const getStatusBadge = (status: string) => {
     const variants: Record<string, string> = {
       success: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
@@ -227,9 +266,18 @@ export default function MpesaTransactionsPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-[#020617]">M-Pesa Transactions</h1>
-            <p className="text-[#64748B] mt-1">View and manage all M-Pesa payment transactions</p>
+            <p className="text-slate-700 mt-1">
+              STK prompts appear here automatically. Lipa na M-Pesa Pay Bill (C2B) appears only after
+              Safaricom has posted it to TXTLINK.
+            </p>
           </div>
           <div className="flex gap-3">
+            <button
+              onClick={() => setRecordOpen((open) => !open)}
+              className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 text-white rounded-xl shadow-sm hover:bg-emerald-700"
+            >
+              Record PayBill
+            </button>
             <button
               onClick={handleExportCSV}
               className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-xl shadow-sm text-slate-700 hover:bg-slate-100 hover:text-slate-900 active:scale-95 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-all duration-200"
@@ -246,6 +294,76 @@ export default function MpesaTransactionsPage() {
             </button>
           </div>
         </div>
+
+        <Card className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-sm text-amber-950">
+          <p className="font-medium">If a Lipa na M-Pesa Pay Bill SMS is not listed here, Safaricom never posted it to TXTLINK.</p>
+          <p className="mt-1">
+            STK Push (the in-app prompt) is a different channel — that is why you only see STK rows.
+            Register C2B URLs in Platform Settings, and pay the TXTLINK Paybill shown on Billing.
+            Use Record PayBill below for a missed receipt like UHJQ53CR15.
+          </p>
+        </Card>
+
+        {recordOpen && (
+          <Card className="bg-white border border-slate-200 rounded-2xl shadow-sm p-5 space-y-4">
+            <h2 className="text-lg font-semibold text-slate-900">Record a missed PayBill payment</h2>
+            <p className="text-sm text-slate-700">
+              Enter the M-Pesa receipt, amount, and the account number the customer typed (usually last 5
+              digits of their TXTLINK phone). Credits are added if that account or paying phone matches a user.
+            </p>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <div>
+                <Label className="text-sm font-medium text-slate-900 mb-1.5 block">Receipt</Label>
+                <Input
+                  value={recordForm.receipt}
+                  onChange={(e) => setRecordForm({ ...recordForm, receipt: e.target.value.toUpperCase() })}
+                  placeholder="UHJQ53CR15"
+                  className="bg-white"
+                />
+              </div>
+              <div>
+                <Label className="text-sm font-medium text-slate-900 mb-1.5 block">Amount (KSh)</Label>
+                <Input
+                  type="number"
+                  value={recordForm.amountKes}
+                  onChange={(e) => setRecordForm({ ...recordForm, amountKes: e.target.value })}
+                  placeholder="10"
+                  className="bg-white"
+                />
+              </div>
+              <div>
+                <Label className="text-sm font-medium text-slate-900 mb-1.5 block">Account number</Label>
+                <Input
+                  value={recordForm.accountNumber}
+                  onChange={(e) => setRecordForm({ ...recordForm, accountNumber: e.target.value })}
+                  placeholder="30992"
+                  className="bg-white"
+                />
+              </div>
+              <div>
+                <Label className="text-sm font-medium text-slate-900 mb-1.5 block">Paying phone</Label>
+                <Input
+                  value={recordForm.phone}
+                  onChange={(e) => setRecordForm({ ...recordForm, phone: e.target.value })}
+                  placeholder="07XXXXXXXX"
+                  className="bg-white"
+                />
+              </div>
+            </div>
+            {recordMessage && (
+              <p className={`text-sm font-medium ${recordMessage.type === 'ok' ? 'text-emerald-700' : 'text-red-700'}`}>
+                {recordMessage.text}
+              </p>
+            )}
+            <button
+              onClick={recordPaybill}
+              disabled={recording}
+              className="px-4 py-2.5 rounded-xl bg-emerald-600 text-white font-medium hover:bg-emerald-700 disabled:opacity-50"
+            >
+              {recording ? 'Saving...' : 'Save and credit'}
+            </button>
+          </Card>
+        )}
 
         {/* Filters */}
         <Card className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4">

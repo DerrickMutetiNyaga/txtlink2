@@ -22,15 +22,12 @@ export function getDisplayStatus(msg: ISmsMessage): string {
   if (msg.deliveryMethod === 'android_phone_gateway_failed') return 'Failed via Phone'
   if (msg.fallbackStatus === 'phone_requires_topup') return 'Phone Needs Reload'
   if (
-    (msg.deliveryMethod === 'android_phone_gateway' &&
-      (msg.status === 'delivered' ||
-        msg.fallbackStatus === 'delivered_via_phone' ||
-        msg.fallbackStatus === 'sent_via_phone')) ||
     msg.fallbackStatus === 'delivered_via_phone' ||
-    msg.fallbackStatus === 'sent_via_phone'
+    (msg.deliveryMethod === 'android_phone_gateway' && msg.status === 'delivered')
   ) {
     return 'Delivered via Phone'
   }
+  if (msg.fallbackStatus === 'sent_via_phone') return 'Sent via Phone'
   if (msg.fallbackStatus === 'queued_for_phone') return 'Queued for Phone'
   if (msg.fallbackStatus === 'sending_via_phone') return 'Sending via Phone'
   if (msg.fallbackStatus === 'retrying_provider') return 'Retrying Provider'

@@ -15,29 +15,34 @@ import { topupProfitMetadata } from '@/lib/services/profit'
 import { queueLowBalanceAlertSync } from '@/lib/services/sms/low-balance-alert'
 import { findUserIdForC2bPayment } from '@/lib/services/mpesa/match-c2b-user'
 import { ensureUserPaybillAccount } from '@/lib/services/mpesa/allocate-paybill-account'
+import {
+  c2bPhoneOrUnknown,
+  normalizeC2bPayload,
+  readC2bRequestBody,
+} from '@/lib/services/mpesa/parse-c2b-payload'
+
+export async function GET() {
+  return NextResponse.json({
+    success: true,
+    message: 'TXTLINK C2B confirmation URL is active',
+  })
+}
 
 export async function POST(request: NextRequest) {
   try {
     await connectDB()
 
-    const body = await request.json()
-
-    // M-Pesa C2B confirmation structure (PayBill format)
+    const rawBody = await readC2bRequestBody(request)
+    const parsed = normalizeC2bPayload(rawBody)
     const {
-      TransactionType,
-      TransID,
-      TransTime,
-      TransAmount,
-      BusinessShortCode,
-      BillRefNumber,
-      InvoiceNumber,
-      OrgAccountBalance,
-      ThirdPartyTransID,
-      MSISDN,
-      FirstName,
-      MiddleName,
-      LastName,
-    } = body
+      transactionType: TransactionType,
+      transId: TransID,
+      transAmount: TransAmount,
+      businessShortCode: BusinessShortCode,
+      billRefNumber: BillRefNumber,
+      invoiceNumber: InvoiceNumber,
+      msisdn: MSISDN,
+    } = parsed
 
     console.log('C2B Confirmation received (PayBill):', {
       TransactionType,
@@ -46,8 +51,7 @@ export async function POST(request: NextRequest) {
       BusinessShortCode,
       BillRefNumber,
       InvoiceNumber,
-      MSISDN: MSISDN ? `${MSISDN.substring(0, 10)}...` : 'N/A', // Log partial for security
-      FirstName,
+      MSISDN: MSISDN ? `${MSISDN.substring(0, 8)}...` : 'N/A',
     })
 
     // Credits are keyed by M-Pesa TransID. If this receipt already became a top-up,
@@ -84,13 +88,13 @@ export async function POST(request: NextRequest) {
         transactionType: modelTransactionType,
         transactionId: TransID,
         amount: parseFloat(TransAmount),
-        phoneNumber: MSISDN || '', // May be encrypted/hashed in PayBill
+        phoneNumber: c2bPhoneOrUnknown(MSISDN),
         accountReference: accountReference,
         status: 'success',
         responseCode: '0',
         resultDesc: 'Payment confirmed',
         mpesaReceiptNumber: TransID,
-        rawResponse: body, // Contains all M-Pesa data including TransactionType: 'Pay Bill'
+        rawResponse: parsed.raw,
       })
     } else {
       // Update existing transaction
@@ -99,7 +103,7 @@ export async function POST(request: NextRequest) {
       mpesaTransaction.resultDesc = 'Payment confirmed'
       mpesaTransaction.mpesaReceiptNumber = TransID
       mpesaTransaction.accountReference = accountReference
-      mpesaTransaction.rawResponse = body // Contains all M-Pesa data including TransactionType: 'Pay Bill'
+      mpesaTransaction.rawResponse = parsed.raw
       await mpesaTransaction.save()
     }
 

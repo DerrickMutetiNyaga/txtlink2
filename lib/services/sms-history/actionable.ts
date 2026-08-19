@@ -7,6 +7,9 @@ import {
 
 export const PHONE_ATTENTION_STATUSES = ['phone_failed', 'phone_requires_topup'] as const
 
+/** Phone already handed the SMS off — these must not appear on Pending & Failed. */
+export const RESOLVED_PHONE_FALLBACK_STATUSES = ['delivered_via_phone', 'sent_via_phone'] as const
+
 /** Fallback states that still need attention / can be manually completed */
 export const ACTIONABLE_FALLBACK_STATUSES = [
   ...ACTIVE_FALLBACK_STATUSES,
@@ -22,19 +25,28 @@ export function normalizeActionableView(value: unknown): ActionableView {
   return 'all'
 }
 
+function notResolvedYet() {
+  return {
+    status: { $ne: 'delivered' },
+    fallbackStatus: { $nin: [...RESOLVED_PHONE_FALLBACK_STATUSES] },
+  }
+}
+
 /**
  * Pending / failed SMS eligible for manual retry.
- * Do NOT exclude android_phone_gateway — phone-gateway failures use that
- * deliveryMethod and were previously hidden (0 in Retry desk while KPIs showed hundreds).
+ * Phone-sent and phone-delivered messages are excluded so they cannot sit
+ * on this desk after the Android gateway has already sent them.
  */
 export function buildActionableSmsFilter(
   userId: mongoose.Types.ObjectId,
   view: ActionableView = 'all'
 ): Record<string, unknown> {
+  const resolved = notResolvedYet()
+
   if (view === 'pending') {
     return {
       userId,
-      status: { $ne: 'delivered' },
+      ...resolved,
       $or: [
         { status: { $in: [...SMS_PENDING_STATUSES] } },
         { fallbackStatus: { $in: [...ACTIVE_FALLBACK_STATUSES] } },
@@ -46,7 +58,7 @@ export function buildActionableSmsFilter(
   if (view === 'failed') {
     return {
       userId,
-      status: { $ne: 'delivered' },
+      ...resolved,
       $or: [
         { status: { $in: [...FAILED_LIKE_STATUSES] } },
         { fallbackStatus: { $in: [...PHONE_ATTENTION_STATUSES] } },
@@ -57,7 +69,7 @@ export function buildActionableSmsFilter(
 
   return {
     userId,
-    status: { $ne: 'delivered' },
+    ...resolved,
     $or: [
       { status: { $in: [...SMS_PENDING_STATUSES] } },
       { status: { $in: [...FAILED_LIKE_STATUSES] } },

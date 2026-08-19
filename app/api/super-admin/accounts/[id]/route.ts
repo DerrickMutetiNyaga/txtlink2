@@ -14,6 +14,50 @@ import { adjustUserCredits } from '@/lib/services/credits/adjust-balance'
 import { convertKesToCredits } from '@/lib/utils/credits'
 import { resolvePricePerCreditKes } from '@/lib/utils/resolve-price-per-credit'
 import { clearPhoneGatewayRoutingCache } from '@/lib/services/sms-fallback/route-via-phone'
+import { getUserDeliveryStats, deliveryHealth } from '@/lib/services/sms-history/admin-delivery-stats'
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> | { id: string } }
+) {
+  try {
+    await connectDB()
+    await requireOwner(request)
+    const resolvedParams = await Promise.resolve(params)
+    const user = await User.findById(resolvedParams.id).select(
+      'name email phone creditsBalance isActive routeAllSmsViaPhoneGateway createdAt'
+    )
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    }
+
+    const delivery = await getUserDeliveryStats(user._id)
+    return NextResponse.json({
+      success: true,
+      account: {
+        id: user._id.toString(),
+        name: user.name,
+        email: user.email,
+        phone: user.phone || '',
+        credits: user.creditsBalance ?? 0,
+        isActive: user.isActive,
+        routeAllSmsViaPhoneGateway: user.routeAllSmsViaPhoneGateway === true,
+        createdAt: user.createdAt,
+        delivery,
+        deliveryHealth: deliveryHealth(delivery),
+      },
+    })
+  } catch (error: any) {
+    if (error.message === 'Unauthorized' || error.message?.includes('Forbidden')) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: error.message.includes('Forbidden') ? 403 : 401 }
+      )
+    }
+    console.error('Get account error:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}
 
 export async function PUT(
   request: NextRequest,
